@@ -40,10 +40,14 @@ function VRMModel({ data, frame, animate }: VRMModelProps) {
     // This VRM 1.0 model already faces +Z (toward the camera); no flip needed.
   }, [vrm])
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!vrm) return
     if (animate && data) applyPoseToVRM(vrm, data, frame)
     else restPoseVRM(vrm)
+    // Periodic auto-blink for a touch of life (every ~4s, ~150ms close).
+    const phase = state.clock.elapsedTime % 4
+    const blink = phase > 3.85 ? Math.sin(((phase - 3.85) / 0.15) * Math.PI) : 0
+    vrm.expressionManager?.setValue('blink', blink)
     vrm.update(delta)
   })
 

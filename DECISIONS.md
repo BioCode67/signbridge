@@ -43,6 +43,30 @@
   미포함. Globe 컴포넌트가 텍스처 부재 시 시안 셰이딩의 절차적 지구로 자동 폴백하므로 빈 화면 없이
   동작합니다(원하면 텍스처만 추가하면 사진 지구로 업그레이드).
 
+## 3D 아바타 업그레이드 (밤샘 작업)
+
+- **GitHub 연동은 `gh` 없이 처리** — `gh` CLI·brew 미설치. 키체인에 저장된 HTTPS 자격증명(계정
+  `BioCode67`, `repo` scope)으로 GitHub API 레포 확인 + HTTPS push. 레포는 이미 빈 상태로 존재해
+  덮어쓸 내용 없었음. git author는 로컬 설정(DavidLee197)로 기록.
+
+- **3D 모델: VRM 채택** ("알아서" 위임 → 최고 품질·웹통합 기준 선택) — `@pixiv/three-vrm`. 표준
+  휴머노이드 본 + 정규화 T포즈로 2D→본 리타게팅이 가장 깔끔하고 손가락 본이 규격으로 보장됨.
+  AI Hub 제공 아바타는 Unity 빌드(`player.exe` + 625MB `resources.assets`) 내부에 임베드돼 있어
+  웹에서 바로 못 쓰고, 리핑은 윈도우 툴+재배포 라이선스 불명확이라 제외(BLOCKERS.md 참고).
+
+- **모델 파일: pixiv/three-vrm 샘플 VRM 1.0** (`VRM1_Constraint_Twist_Sample.vrm`)을
+  `public/models/avatar.vrm`로 동봉. 클론 즉시 동작하도록 레포에 포함(13MB). Mixamo식 Xbot GLB도
+  `fallback-xbot.glb`로 캐시(대체용). 정식 데모용으론 VRoid Studio로 만든 자체 모델로 교체 권장.
+
+- **VRM 로더 타입 충돌 우회** — drei(useGLTF)는 three-stdlib GLTF 타입, three-vrm은 @types/three
+  타입을 요구해 `register`에서 타입 불일치. 런타임 동일하므로 `any` 시드 함수(`extendWithVRM`)로 우회.
+
+- **3D 모드는 lazy 청크 + 토글 추가** — Three.js/VRM 번들이 무거워 `Avatar3D`를 `React.lazy`로 분리,
+  3D 모드 선택 시에만 로드. 기존 2D 아바타/스켈레톤은 "비교용"으로 유지하고 3-way 토글로 전환.
+
+- **VRM1 모델은 +Z(정면)을 향함** — 처음 `rotation.y=π`로 뒤집었더니 뒤통수가 보여서 회전 제거.
+  (VRM0는 -Z라 회전 필요하지만 이 VRM1 샘플은 기본이 정면.)
+
 - **참고용 원본 데모 동봉** — 이식 정합성 비교를 위해 원본 `signbridge_demo.html`을
   `public/reference_demo.html`로 함께 두었습니다(앱 번들과 무관, `/reference_demo.html`로 열람 가능).
 

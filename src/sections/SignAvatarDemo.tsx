@@ -1,8 +1,20 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
+
+// 3D avatar (Three.js + VRM) is heavy — load it only when the user opens 3D mode.
+const Avatar3D = lazy(() => import('./sign/Avatar3D'))
+
+/** 2D comparison modes + the rigged 3D mode. */
+type DisplayMode = ViewMode | '3d'
+const MODE_LABELS: Record<DisplayMode, string> = {
+  avatar: '아바타',
+  skeleton: '스켈레톤',
+  '3d': '3D',
+}
+const MODES: DisplayMode[] = ['avatar', 'skeleton', '3d']
 
 const SPEEDS = [0.5, 1, 1.5] as const
 
@@ -19,7 +31,7 @@ export default function SignAvatarDemo() {
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<number>(1)
-  const [mode, setMode] = useState<ViewMode>('avatar')
+  const [mode, setMode] = useState<DisplayMode>('avatar')
 
   const data = sentences[index]
 
@@ -53,6 +65,7 @@ export default function SignAvatarDemo() {
 
   // --- The single redraw path: any change to frame/mode/data repaints. ---
   const paint = useCallback(() => {
+    if (mode === '3d') return // 3D is rendered by its own R3F canvas
     const cv = canvasRef.current
     if (!cv || !data) return
     drawFrame(cv, data, frameRef.current, mode)
@@ -208,10 +221,10 @@ export default function SignAvatarDemo() {
                 }}
               >
                 <span className="absolute left-3 top-3 z-10 rounded-md border border-cyan-glow/30 bg-cyan-glow/10 px-2.5 py-1 text-[10.5px] tracking-wide text-cyan-soft">
-                  REAL KEYPOINT · OpenPose
+                  {mode === '3d' ? 'VRM · 3D 아바타' : 'REAL KEYPOINT · OpenPose'}
                 </span>
                 <div className="absolute right-3 top-3 z-10 flex gap-1">
-                  {(['avatar', 'skeleton'] as const).map((m) => (
+                  {MODES.map((m) => (
                     <button
                       key={m}
                       type="button"
@@ -222,11 +235,26 @@ export default function SignAvatarDemo() {
                           : 'border-white/10 bg-space-900/80 text-slate-400 hover:text-slate-200'
                       }`}
                     >
-                      {m === 'avatar' ? '아바타' : '스켈레톤'}
+                      {MODE_LABELS[m]}
                     </button>
                   ))}
                 </div>
-                <canvas ref={canvasRef} className="block h-full w-full" />
+
+                {/* 3D mode renders its own R3F canvas; 2D modes use the 2D canvas. */}
+                {mode === '3d' ? (
+                  <Suspense
+                    fallback={
+                      <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">
+                        <span className="animate-pulse">3D 아바타 모델을 불러오는 중…</span>
+                      </div>
+                    }
+                  >
+                    <Avatar3D data={data} frame={frame} animate />
+                  </Suspense>
+                ) : (
+                  <canvas ref={canvasRef} className="block h-full w-full" />
+                )}
+
                 {load.status === 'loading' && (
                   <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">
                     <span className="animate-pulse">키포인트 데이터를 불러오는 중…</span>

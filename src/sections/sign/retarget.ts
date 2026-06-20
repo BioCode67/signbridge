@@ -37,6 +37,36 @@ const _q = new THREE.Quaternion()
 const _inv = new THREE.Quaternion()
 const _identity = new THREE.Quaternion()
 
+// Reusable buffers for temporal keypoint smoothing (single avatar on screen).
+const _bufPose: number[] = []
+const _bufHR: number[] = []
+const _bufHL: number[] = []
+
+/**
+ * Confidence-weighted temporal average of frame f with its neighbours
+ * (0.25 / 0.5 / 0.25). Low-confidence neighbours are dropped, so smoothing
+ * never pulls a joint toward a garbage coordinate. Reduces keypoint jitter
+ * (especially fingers) at the source. Returns `buf` filled in place, or null.
+ */
+function smoothInto(frames: number[][], f: number, buf: number[]): number[] | null {
+  const cur = frames[f]
+  if (!cur) return null
+  const prev = frames[f - 1]
+  const next = frames[f + 1]
+  const n = cur.length
+  buf.length = n
+  for (let i = 0; i < n; i += 3) {
+    const cc = cur[i + 2]
+    let xs = 0, ys = 0, wsum = 0
+    if (cc >= CONF_MIN) { xs += cur[i] * 0.5; ys += cur[i + 1] * 0.5; wsum += 0.5 }
+    if (prev && prev[i + 2] >= CONF_MIN) { xs += prev[i] * 0.25; ys += prev[i + 1] * 0.25; wsum += 0.25 }
+    if (next && next[i + 2] >= CONF_MIN) { xs += next[i] * 0.25; ys += next[i + 1] * 0.25; wsum += 0.25 }
+    if (wsum > 0) { buf[i] = xs / wsum; buf[i + 1] = ys / wsum } else { buf[i] = cur[i]; buf[i + 1] = cur[i + 1] }
+    buf[i + 2] = cc
+  }
+  return buf
+}
+
 const stateOf = new WeakMap<VRM, Map<string, THREE.Quaternion>>()
 function smoothMap(vrm: VRM): Map<string, THREE.Quaternion> {
   let m = stateOf.get(vrm)
@@ -177,10 +207,10 @@ function applyExpression(vrm: VRM, data: SignData, f: number) {
 /** Retarget a frame of keypoints onto the VRM (upper body + fingers + face). */
 export function applyPoseToVRM(vrm: VRM, data: SignData, frame: number) {
   const f = Math.max(0, Math.min(frame, data.num_frames - 1))
-  const pose = data.keypoints.pose[f]
+  const pose = smoothInto(data.keypoints.pose, f, _bufPose)
   if (!pose) return
-  const hr = data.keypoints.hand_right?.[f]
-  const hl = data.keypoints.hand_left?.[f]
+  const hr = data.keypoints.hand_right ? smoothInto(data.keypoints.hand_right, f, _bufHR) ?? undefined : undefined
+  const hl = data.keypoints.hand_left ? smoothInto(data.keypoints.hand_left, f, _bufHL) ?? undefined : undefined
 
   const handWorldR = new THREE.Quaternion()
   const handWorldL = new THREE.Quaternion()

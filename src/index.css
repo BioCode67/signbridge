@@ -1,0 +1,102 @@
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-space-950 text-slate-100 font-sans antialiased;
+    margin: 0;
+    overflow-x: hidden;
+  }
+
+  /* Respect reduced-motion: kill non-essential animation */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Reusable glowing cyan text */
+  .text-glow {
+    text-shadow: 0 0 24px rgba(34, 211, 238, 0.45);
+  }
+
+  /* Frosted glass surface used by nav + cards */
+  .glass {
+    background: rgba(10, 14, 26, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  /* Section vertical rhythm */
+  .section-pad {
+    @apply px-6 py-24 sm:px-8 md:py-32 lg:px-12;
+  }
+
+  /* Cyan timeline scrubber used by the sign-avatar demo */
+  .seek {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 5px;
+    border-radius: 3px;
+    background: #1a2740;
+    cursor: pointer;
+  }
+  .seek::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #22d3ee;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  }
+  .seek::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: #22d3ee;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  }
+  .seek:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+/* Thin custom scrollbar to match the dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #03040a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

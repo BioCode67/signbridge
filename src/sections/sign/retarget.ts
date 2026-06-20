@@ -77,6 +77,47 @@ function smoothMap(vrm: VRM): Map<string, THREE.Quaternion> {
   return m
 }
 
+// Per-sentence true (in-plane) segment lengths, used to recover depth from
+// foreshortening. Cached per SignData.
+const lenCache = new WeakMap<SignData, Map<string, number>>()
+function restLen(data: SignData, frames: number[][], a: number, b: number, key: string): number {
+  let m = lenCache.get(data)
+  if (!m) {
+    m = new Map()
+    lenCache.set(data, m)
+  }
+  const hit = m.get(key)
+  if (hit !== undefined) return hit
+  // True length ≈ the longest high-confidence 2D length seen (limb in-plane).
+  let max = 0
+  for (let f = 0; f < frames.length; f++) {
+    const fr = frames[f]
+    if (!fr || fr[a * 3 + 2] < CONF_MIN || fr[b * 3 + 2] < CONF_MIN) continue
+    const l = Math.hypot(fr[b * 3] - fr[a * 3], fr[b * 3 + 1] - fr[a * 3 + 1])
+    if (l > max) max = l
+  }
+  m.set(key, max)
+  return max
+}
+
+/**
+ * Direction of segment a→b with depth recovered from foreshortening.
+ * If the 2D length is shorter than the true length `rest`, the missing length
+ * becomes a +z component (toward the camera) — signers gesture forward, so the
+ * sign is always positive. Falls back to the flat plane when `rest` is unknown.
+ */
+function segDir3D(kp: number[], a: number, b: number, rest: number): THREE.Vector3 | null {
+  const n = kp.length / 3
+  if (a >= n || b >= n || kp[a * 3 + 2] < CONF_MIN || kp[b * 3 + 2] < CONF_MIN) return null
+  const dx = kp[b * 3] - kp[a * 3]
+  const dy = kp[b * 3 + 1] - kp[a * 3 + 1]
+  const l2 = dx * dx + dy * dy
+  if (l2 < 1e-6) return null
+  const z = rest > 0 && l2 < rest * rest ? Math.sqrt(rest * rest - l2) : 0
+  _dir.set(dx, -dy, z)
+  return _dir.normalize().clone()
+}
+
 /** Direction of segment a→b in the given keypoint array, mapped to avatar XY (z=0). Null if low conf. */
 function segDir(kp: number[], a: number, b: number): THREE.Vector3 | null {
   const n = kp.length / 3
@@ -131,6 +172,7 @@ function aimBone(
 /** Drive one arm (upper + lower), returning the hand's world quaternion for finger chaining. */
 function aimArm(
   vrm: VRM,
+  data: SignData,
   pose: number[],
   hand: number[] | undefined,
   axis: THREE.Vector3,
@@ -142,8 +184,11 @@ function aimArm(
 ) {
   const worldU = new THREE.Quaternion()
   const worldL = new THREE.Quaternion()
-  aimBone(vrm, `${side}UpperArm` as VRMHumanBoneName, axis, segDir(pose, sh, el), _identity, worldU)
-  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir(pose, el, wr), worldU, worldL)
+  const frames = data.keypoints.pose
+  const restU = restLen(data, frames, sh, el, `${side}U`)
+  const restL = restLen(data, frames, el, wr, `${side}L`)
+  aimBone(vrm, `${side}UpperArm` as VRMHumanBoneName, axis, segDir3D(pose, sh, el, restU), _identity, worldU)
+  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir3D(pose, el, wr, restL), worldU, worldL)
   // Hand orientation from wrist(0)→middle-MCP(9) of the hand keypoints.
   const handDir = hand ? segDir(hand, 0, 9) : null
   aimBone(vrm, `${side}Hand` as VRMHumanBoneName, axis, handDir, worldL, outHandWorld)
@@ -214,8 +259,8 @@ export function applyPoseToVRM(vrm: VRM, data: SignData, frame: number) {
 
   const handWorldR = new THREE.Quaternion()
   const handWorldL = new THREE.Quaternion()
-  aimArm(vrm, pose, hr, AXIS_R, 'right', RSH, REL, RWR, handWorldR)
-  aimArm(vrm, pose, hl, AXIS_L, 'left', LSH, LEL, LWR, handWorldL)
+  aimArm(vrm, data, pose, hr, AXIS_R, 'right', RSH, REL, RWR, handWorldR)
+  aimArm(vrm, data, pose, hl, AXIS_L, 'left', LSH, LEL, LWR, handWorldL)
   aimFingers(vrm, hr, AXIS_R, 'right', handWorldR)
   aimFingers(vrm, hl, AXIS_L, 'left', handWorldL)
 

@@ -88,16 +88,21 @@ function restLen(data: SignData, frames: number[][], a: number, b: number, key: 
   }
   const hit = m.get(key)
   if (hit !== undefined) return hit
-  // True length ≈ the longest high-confidence 2D length seen (limb in-plane).
-  let max = 0
+  // True length ≈ a high percentile of high-confidence 2D lengths (limb nearly
+  // in-plane), which is robust to occasional over-long noise frames.
+  const lens: number[] = []
   for (let f = 0; f < frames.length; f++) {
     const fr = frames[f]
     if (!fr || fr[a * 3 + 2] < CONF_MIN || fr[b * 3 + 2] < CONF_MIN) continue
-    const l = Math.hypot(fr[b * 3] - fr[a * 3], fr[b * 3 + 1] - fr[a * 3 + 1])
-    if (l > max) max = l
+    lens.push(Math.hypot(fr[b * 3] - fr[a * 3], fr[b * 3 + 1] - fr[a * 3 + 1]))
   }
-  m.set(key, max)
-  return max
+  let val = 0
+  if (lens.length) {
+    lens.sort((p, q) => p - q)
+    val = lens[Math.min(lens.length - 1, Math.floor(lens.length * 0.92))]
+  }
+  m.set(key, val)
+  return val
 }
 
 /**

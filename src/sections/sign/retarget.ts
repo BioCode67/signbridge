@@ -28,6 +28,7 @@ const SMOOTH = 0.45 // slerp factor toward the target each frame (0..1)
 
 const AXIS_R = new THREE.Vector3(-1, 0, 0)
 const AXIS_L = new THREE.Vector3(1, 0, 0)
+const AXIS_UP = new THREE.Vector3(0, 1, 0) // head/neck rest points +Y
 
 // Scratch (avoid per-frame allocation).
 const _dir = new THREE.Vector3()
@@ -162,7 +163,18 @@ export function restPoseVRM(vrm: VRM) {
   setBone(vrm, 'rightLowerArm', 0, 0.2, 0.2)
 }
 
-/** Retarget a frame of keypoints onto the VRM (upper body + fingers). */
+/** Drive mouth + brows from the non-manual expression data. */
+function applyExpression(vrm: VRM, data: SignData, f: number) {
+  const em = vrm.expressionManager
+  if (!em) return
+  const e = data.expr?.[f]
+  const mouth = e ? Math.max(0, Math.min(1, (e.mo - 5) / 23)) : 0
+  const brow = e ? Math.max(0, Math.min(1, (e.br - 8) / 14)) : 0
+  em.setValue('aa', mouth) // mouth opening
+  em.setValue('surprised', brow * 0.4) // raised brows ≈ mild surprise
+}
+
+/** Retarget a frame of keypoints onto the VRM (upper body + fingers + face). */
 export function applyPoseToVRM(vrm: VRM, data: SignData, frame: number) {
   const f = Math.max(0, Math.min(frame, data.num_frames - 1))
   const pose = data.keypoints.pose[f]
@@ -176,4 +188,9 @@ export function applyPoseToVRM(vrm: VRM, data: SignData, frame: number) {
   aimArm(vrm, pose, hl, AXIS_L, 'left', LSH, LEL, LWR, handWorldL)
   aimFingers(vrm, hr, AXIS_R, 'right', handWorldR)
   aimFingers(vrm, hl, AXIS_L, 'left', handWorldL)
+
+  // Subtle head tilt from neck→nose, plus facial expression.
+  const headWorld = new THREE.Quaternion()
+  aimBone(vrm, 'neck', AXIS_UP, segDir(pose, 1, 0), _identity, headWorld)
+  applyExpression(vrm, data, f)
 }

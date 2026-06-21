@@ -3,7 +3,7 @@ import { Suspense, lazy } from 'react'
 import Button from '../ui/Button'
 
 // Lazy-load the WebGL scene so the text/LCP paints immediately.
-const GlobeScene = lazy(() => import('../three/GlobeScene'))
+const HeroScene = lazy(() => import('../three/HeroScene'))
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -16,7 +16,7 @@ export default function Hero() {
       {/* 3D globe — fills the section, sits behind the copy */}
       <div className="absolute inset-0 z-0">
         <Suspense fallback={<div className="h-full w-full bg-space-950" />}>
-          <GlobeScene />
+          <HeroScene />
         </Suspense>
       </div>
 

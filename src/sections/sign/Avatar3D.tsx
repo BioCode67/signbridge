@@ -37,7 +37,9 @@ function VRMModel({ data, frame, animate }: VRMModelProps) {
     vrm.scene.traverse((o) => {
       o.frustumCulled = false
     })
-    // This VRM 1.0 model already faces +Z (toward the camera); no flip needed.
+    // VRM 0.x models face -Z; rotate them to face the camera (+Z).
+    // No-op for VRM 1.0, so this is safe for any model we drop in.
+    VRMUtils.rotateVRM0(vrm)
   }, [vrm])
 
   useFrame((state, delta) => {

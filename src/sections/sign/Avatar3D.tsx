@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls, useGLTF } from '@react-three/drei'
+import { ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei'
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import type { SignData } from './signTypes'
 import { applyPoseToVRM, restPoseVRM } from './retarget'
@@ -86,17 +86,45 @@ export default function Avatar3D({ data, frame, animate }: Avatar3DProps) {
   return (
     <Canvas
       dpr={dpr}
+      shadows
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      camera={{ fov: 30, near: 0.1, far: 20, position: [0, 1.25, 1.45] }}
+      camera={{ fov: 28, near: 0.1, far: 20, position: [0, 1.2, 1.5] }}
       style={{ width: '100%', height: '100%' }}
     >
       <Rig />
-      <ambientLight intensity={1.1} color="#cfe8ff" />
-      <directionalLight position={[2, 3, 2]} intensity={1.8} color="#ffffff" />
-      <directionalLight position={[-3, 1, -1]} intensity={0.9} color="#22d3ee" />
-      <pointLight position={[0, 1.4, 1.6]} intensity={0.5} color="#67e8f9" />
+
+      {/* Studio rig: warm key, cyan rim from behind for separation, soft fill. */}
+      <ambientLight intensity={0.55} color="#dceaff" />
+      <directionalLight
+        position={[2.5, 3.5, 2.5]}
+        intensity={2.4}
+        color="#fff6ec"
+        castShadow
+        shadow-mapSize={[1024, 1024]}
+        shadow-bias={-0.0004}
+      />
+      <directionalLight position={[-3, 1.6, -2.2]} intensity={1.6} color="#22d3ee" />
+      <directionalLight position={[3, 1.2, -2]} intensity={0.8} color="#a5f3fc" />
+      <pointLight position={[0, 1.5, 1.8]} intensity={0.4} color="#ffffff" />
+
+      {/* Image-based lighting for clean speculars on eyes / glossy bits. */}
+      <Environment resolution={64}>
+        <Lightformer intensity={2.2} color="#ffffff" position={[2, 3, 2]} scale={[4, 4, 1]} />
+        <Lightformer intensity={1.1} color="#22d3ee" position={[-4, 1, -2]} scale={[5, 5, 1]} />
+        <Lightformer intensity={0.7} color="#67e8f9" position={[0, 2, -4]} scale={[6, 3, 1]} />
+      </Environment>
+
       <Suspense fallback={null}>
         <VRMModel data={data} frame={frame} animate={animate} />
+        {/* Soft contact shadow grounds the figure. */}
+        <ContactShadows
+          position={[0, 0.0, 0]}
+          opacity={0.45}
+          scale={4}
+          blur={2.6}
+          far={2}
+          color="#04111a"
+        />
       </Suspense>
       <OrbitControls
         target={[0, 1.15, 0]}

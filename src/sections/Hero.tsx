@@ -66,10 +66,31 @@ export default function Hero() {
             <Button href="#demo" variant="primary">
               수어 데모 보기
             </Button>
-            <Button href="#how" variant="ghost">
-              작동 원리
+            <Button href="#why" variant="ghost">
+              왜 필요한가
             </Button>
           </motion.div>
+
+          {/* Quick stats — the case at a glance */}
+          <motion.dl
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.55, ease }}
+            className="mt-12 grid max-w-lg grid-cols-3 gap-4 border-t border-white/10 pt-6"
+          >
+            {[
+              { v: '42만 명+', l: '국내 등록 청각장애인' },
+              { v: '법정 공용어', l: '한국수어 (수어법 2016)' },
+              { v: '24시간', l: '실시간 자동 수어 송출' },
+            ].map((s) => (
+              <div key={s.l}>
+                <dt className="text-xl font-extrabold tracking-tight text-cyan-soft sm:text-2xl">
+                  {s.v}
+                </dt>
+                <dd className="mt-1 text-[11px] leading-snug text-slate-400 sm:text-xs">{s.l}</dd>
+              </div>
+            ))}
+          </motion.dl>
         </div>
       </div>
 

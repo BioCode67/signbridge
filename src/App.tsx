@@ -1,5 +1,6 @@
 import Navbar from './navigation/Navbar'
 import Hero from './sections/Hero'
+import WhySection from './sections/WhySection'
 import SignAvatarDemo from './sections/SignAvatarDemo'
 import HowItWorks from './sections/HowItWorks'
 import Footer from './sections/Footer'
@@ -10,6 +11,7 @@ export default function App() {
       <Navbar />
       <main>
         <Hero />
+        <WhySection />
         <SignAvatarDemo />
         <HowItWorks />
       </main>

@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Button from '../ui/Button'
 
 const LINKS = [
+  { label: '왜 필요한가', href: '#why' },
   { label: '수어 데모', href: '#demo' },
   { label: '작동 원리', href: '#how' },
 ]

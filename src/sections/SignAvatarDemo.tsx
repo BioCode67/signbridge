@@ -255,6 +255,12 @@ export default function SignAvatarDemo() {
                   <canvas ref={canvasRef} className="block h-full w-full" />
                 )}
 
+                {mode === '3d' && (
+                  <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-space-900/70 px-3 py-1 text-[10.5px] text-slate-400 backdrop-blur-sm">
+                    드래그로 360° 회전 · 휠로 확대
+                  </span>
+                )}
+
                 {load.status === 'loading' && (
                   <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">
                     <span className="animate-pulse">키포인트 데이터를 불러오는 중…</span>

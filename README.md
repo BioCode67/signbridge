@@ -27,11 +27,14 @@ npm run preview  # 빌드 결과 미리보기
 
 ## 화면 구성
 
-1. **히어로** — 자전하는 3D 지구 + KOREN 네트워크 노드/펄스(시안 글로우), 큰 타이포.
-2. **수어 아바타 데모 `#demo`** (핵심) — 실제 키포인트 기반 아바타 재생. 문장 탭 ·
-   **아바타(2D) / 스켈레톤 / 3D 3-way 토글** · 타임라인 스크럽 · 0.5/1/1.5배속 · 글로스 하이라이트 · 한국어 원문.
-3. **작동 원리 `#how`** — 방송 입력 → KOREN 저지연망 → HPC 수어 변환 → 전국 동시 송출 파이프라인.
-4. **푸터** — 서비스명, 데이터 출처(AI Hub) 표기.
+1. **히어로** — 'Signal Field' 발광 네트워크(노드+데이터 펄스, 마우스 시차·bloom) + 회전 태그라인 + 핵심 통계 스트립.
+2. **왜 필요한가 `#why`** — 청각장애 통계(약 42만·한국수어 법정 공용어) + 정보격차·골든타임·해법 카드.
+3. **수어 아바타 데모 `#demo`** (핵심) — 실제 키포인트 기반 아바타 재생, 재난 17종. 문장 탭 ·
+   **아바타(2D) / 스켈레톤 / 3D 3-way 토글** · 타임라인 · 0.5/1/1.5배속 · 글로스 하이라이트 · 한국어 원문.
+4. **작동 원리 `#how`** — 재난입력 → KOREN 저지연망 → HPC·GPU AI 변환 → 수어 아바타 → 전국 다채널 송출.
+   KOREN 활용 칩 + **시스템 구성도(SVG)** 포함.
+5. **기대효과·상용화 `#impact`** — 공익적 가치·상용화(B2G)·확장성 + 지표.
+6. **푸터** — 서비스명, 데이터 출처(AI Hub), 넷 챌린지 캠프 컨텍스트.
 
 ---
 
@@ -108,28 +111,34 @@ signbridge-app/
 ├─ public/
 │  ├─ data/
 │  │  ├─ manifest.json          # 문장 파일 목록 (동적 탭 소스)
-│  │  └─ sign_1~6.json          # 재난 문장 + 키포인트 데이터
+│  │  └─ sign_1~17.json         # 재난 문장 17종 (2D/3D 키포인트 + 표정)
 │  ├─ models/
-│  │  ├─ avatar.vrm             # 3D 아바타 모델 (VRM 1.0) — 교체 가능
+│  │  ├─ avatar.vrm             # 3D 아바타 모델 (VRM, 교체 가능)
 │  │  └─ fallback-xbot.glb      # Mixamo식 GLB 대체 모델(캐시)
+│  ├─ textures/                 # earth_daymap/earth_lights (구 지구본 자산)
 │  └─ reference_demo.html       # 이식 원본 데모 (참고용, 앱과 무관)
 ├─ src/
 │  ├─ sections/
-│  │  ├─ Hero.tsx               # 3D 히어로 + 카피
-│  │  ├─ SignAvatarDemo.tsx     # ★ 수어 아바타 데모 (핵심 화면, 2D/스켈레톤/3D 토글)
-│  │  ├─ HowItWorks.tsx         # 작동 원리 파이프라인
+│  │  ├─ Hero.tsx               # 히어로(회전 태그라인·통계) + HeroScene
+│  │  ├─ WhySection.tsx         # 왜 필요한가 (통계·문제·해법)
+│  │  ├─ SignAvatarDemo.tsx     # ★ 수어 아바타 데모 (핵심, 2D/스켈레톤/3D 토글)
+│  │  ├─ HowItWorks.tsx         # 작동 원리(KOREN 파이프라인 + 칩)
+│  │  ├─ SystemDiagram.tsx      # 시스템 구성도(SVG)
+│  │  ├─ ImpactSection.tsx      # 기대효과·상용화
 │  │  ├─ Footer.tsx
 │  │  └─ sign/
-│  │     ├─ renderSign.ts       # Canvas 2D 아바타/스켈레톤 렌더러 (데모 로직 이식)
-│  │     ├─ Avatar3D.tsx        # ★ R3F VRM 3D 아바타 (조명·카메라·OrbitControls)
-│  │     ├─ retarget.ts         # ★ 키포인트 → VRM 본 회전 리타게팅 + 표정
+│  │     ├─ renderSign.ts       # Canvas 2D 아바타/스켈레톤 렌더러
+│  │     ├─ Avatar3D.tsx        # ★ R3F VRM 3D 아바타 (스튜디오 라이팅·그림자)
+│  │     ├─ retarget.ts         # ★ 키포인트→VRM 본 회전 (3D 직접/2D 폴백) + 표정
 │  │     ├─ useSignData.ts      # manifest 기반 동적 데이터 로더
 │  │     └─ signTypes.ts
-│  ├─ three/                    # Globe / NetworkArcs / NetworkNodes / Starfield
+│  ├─ three/
+│  │  ├─ HeroScene.tsx          # ★ 히어로 'Signal Field' 네트워크
+│  │  └─ Globe/NetworkArcs/...  # (구 지구본 컴포넌트, 미사용)
 │  ├─ navigation/Navbar.tsx
 │  ├─ ui/                       # Button / SectionHeading
-│  ├─ hooks/useResponsive.ts    # 브레이크포인트 + reduced-motion → 3D 품질 스케일
-│  └─ data/networkNodes.ts      # KOREN 네트워크 노드 좌표
+│  ├─ hooks/useResponsive.ts    # 브레이크포인트 + reduced-motion
+│  └─ data/networkNodes.ts
 ├─ DECISIONS.md                 # 자율 작업 중 내린 판단 기록
 └─ BLOCKERS.md                  # 막혔거나 보류한 항목
 ```

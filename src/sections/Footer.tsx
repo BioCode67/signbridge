@@ -47,6 +47,7 @@ export default function Footer() {
               </a>{' '}
               「재난 안전 정보 전달을 위한 수어영상 데이터」
             </span>
+            <span>K-디지털 챌린지 · 넷 챌린지 캠프 시즌13 — AI·네트워크 응용 서비스</span>
             <span className="text-slate-600">
               © 2026 SignBridge. KOREN 기반 실시간 재난방송 AI 수어 통역 시스템.
             </span>

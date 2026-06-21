@@ -1,5 +1,5 @@
-import { motion } from 'framer-motion'
-import { Suspense, lazy } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import Button from '../ui/Button'
 
 // Lazy-load the WebGL scene so the text/LCP paints immediately.
@@ -7,7 +7,21 @@ const HeroScene = lazy(() => import('../three/HeroScene'))
 
 const ease = [0.22, 1, 0.36, 1] as const
 
+// Rotating sub-headline — each line frames the value from a different angle.
+const TAGLINES = [
+  '재난의 순간, AI 수어가 모두에게 도달하는 가장 빠른 길.',
+  '재난문자를 한국수어로 — 실시간으로 변환해 송출합니다.',
+  'KOREN 저지연망으로 전국에, 골든타임 안에 닿습니다.',
+  '들을 수 없어 늦게 아는 격차를, 기술로 메웁니다.',
+]
+
 export default function Hero() {
+  const [line, setLine] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setLine((l) => (l + 1) % TAGLINES.length), 3800)
+    return () => clearInterval(id)
+  }, [])
+
   return (
     <section
       id="top"
@@ -48,14 +62,25 @@ export default function Hero() {
             <span className="text-cyan-soft text-glow">닿습니다.</span>
           </motion.h1>
 
-          <motion.p
+          <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25, ease }}
-            className="mt-6 max-w-md text-lg leading-relaxed text-slate-300 sm:text-xl"
+            className="mt-6 h-16 max-w-md sm:h-14"
           >
-            재난의 순간, AI 수어가 모두에게 도달하는 가장 빠른 길.
-          </motion.p>
+            <AnimatePresence mode="wait">
+              <motion.p
+                key={line}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.5, ease }}
+                className="text-lg leading-relaxed text-slate-300 sm:text-xl"
+              >
+                {TAGLINES[line]}
+              </motion.p>
+            </AnimatePresence>
+          </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 24 }}

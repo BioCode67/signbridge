@@ -77,10 +77,12 @@ interface Avatar3DProps {
 
 /** R3F canvas hosting the rigged VRM avatar. Fills its parent. */
 export default function Avatar3D({ data, frame, animate }: Avatar3DProps) {
-  const dpr = useMemo<[number, number]>(
-    () => [1, Math.min(2, typeof window !== 'undefined' ? window.devicePixelRatio : 1.5)],
-    [],
-  )
+  const dpr = useMemo<[number, number]>(() => {
+    if (typeof window === 'undefined') return [1, 1.5]
+    // Cap pixel ratio lower on phones to keep the WebGL frame budget healthy.
+    const isMobile = window.innerWidth < 768
+    return [1, Math.min(isMobile ? 1.5 : 2, window.devicePixelRatio)]
+  }, [])
   return (
     <Canvas
       dpr={dpr}

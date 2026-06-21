@@ -68,7 +68,7 @@ function SceneContents({ quality, animate }: { quality: Quality; animate: boolea
       <Starfield count={quality.stars} animate={animate} />
 
       {/* Shifted right so the globe sits clear of the left-side copy. */}
-      <group ref={groupRef} position={[0.85, 0, 0]}>
+      <group ref={groupRef} position={[0.8, 0, 0]}>
         <Globe />
         <NetworkArcs animate={animate} segments={quality.arcSegments} />
         <NetworkNodes animate={animate} />
@@ -113,7 +113,7 @@ export default function GlobeScene() {
     <Canvas
       dpr={quality.dpr}
       gl={{ antialias: true, powerPreference: 'high-performance', alpha: true }}
-      camera={{ position: [0, 0, 4.6], fov: 45 }}
+      camera={{ position: [0, 0, 4.7], fov: 45 }}
       style={{ width: '100%', height: '100%' }}
     >
       <Suspense fallback={null}>

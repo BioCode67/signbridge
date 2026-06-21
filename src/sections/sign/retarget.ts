@@ -24,7 +24,9 @@ const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
 
 const CONF_MIN = 0.15
-const SMOOTH = 0.45 // slerp factor toward the target each frame (0..1)
+const SMOOTH = 0.45 // slerp factor for arms/body (0..1; higher = snappier)
+const SMOOTH_FINGER = 0.22 // fingers move gentler to kill jitter/popping
+const CONF_FINGER = 0.3 // fingers need higher confidence before they move
 
 const AXIS_R = new THREE.Vector3(-1, 0, 0)
 const AXIS_L = new THREE.Vector3(1, 0, 0)
@@ -124,10 +126,10 @@ function segDir3D(kp: number[], a: number, b: number, rest: number): THREE.Vecto
 }
 
 /** Direction of segment a→b in the given keypoint array, mapped to avatar XY (z=0). Null if low conf. */
-function segDir(kp: number[], a: number, b: number): THREE.Vector3 | null {
+function segDir(kp: number[], a: number, b: number, conf = CONF_MIN): THREE.Vector3 | null {
   const n = kp.length / 3
   if (a >= n || b >= n) return null
-  if (kp[a * 3 + 2] < CONF_MIN || kp[b * 3 + 2] < CONF_MIN) return null
+  if (kp[a * 3 + 2] < conf || kp[b * 3 + 2] < conf) return null
   const dx = kp[b * 3] - kp[a * 3]
   const dy = kp[b * 3 + 1] - kp[a * 3 + 1]
   _dir.set(dx, -dy, 0)
@@ -146,6 +148,7 @@ function aimBone(
   worldDir: THREE.Vector3 | null,
   parentWorld: THREE.Quaternion,
   out: THREE.Quaternion,
+  smooth = SMOOTH,
 ) {
   const node = vrm.humanoid.getNormalizedBoneNode(name)
   if (!node) {
@@ -165,7 +168,7 @@ function aimBone(
     if (_tp.lengthSq() > 1e-8) {
       _q.setFromUnitVectors(axis, _tp.normalize())
       if (Number.isFinite(_q.x + _q.y + _q.z + _q.w)) {
-        local.slerp(_q, SMOOTH) // smooth toward target; low-conf frames just hold `local`
+        local.slerp(_q, smooth) // smooth toward target; low-conf frames just hold `local`
       }
     }
   }
@@ -223,7 +226,7 @@ function aimFingers(
       const name = `${side}${finger.bones[i]}` as VRMHumanBoneName
       const [a, b] = finger.segs[i]
       const world = new THREE.Quaternion()
-      aimBone(vrm, name, axis, segDir(hand, a, b), parentWorld, world)
+      aimBone(vrm, name, axis, segDir(hand, a, b, CONF_FINGER), parentWorld, world, SMOOTH_FINGER)
       carry.copy(world)
       parentWorld = carry
     }

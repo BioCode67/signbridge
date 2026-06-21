@@ -45,7 +45,9 @@ function useEarthMaterial(day: THREE.Texture | null, night: THREE.Texture | null
         uDay: { value: day },
         uNight: { value: night },
         uHasNight: { value: night ? 1 : 0 },
-        uSun: { value: new THREE.Vector3(0.45, 0.32, 1.0).normalize() },
+        // Sun mostly toward the camera so the front of the globe always reads
+        // as lit (no black hemisphere sweeping past as it rotates).
+        uSun: { value: new THREE.Vector3(0.18, 0.25, 1.0).normalize() },
         uAtmo: { value: new THREE.Color('#3fc6e8') },
       },
       vertexShader: /* glsl */ `
@@ -71,19 +73,28 @@ function useEarthMaterial(day: THREE.Texture | null, night: THREE.Texture | null
         varying vec3 vWorldPos;
         void main() {
           vec3 N = normalize(vWorldNormal);
-          float sun = dot(N, normalize(uSun));
-          float dayAmt = smoothstep(-0.12, 0.30, sun);
-          vec3 day = texture2D(uDay, vUv).rgb;
-          // gentle day shading so the lit side has form
-          day *= 0.55 + 0.65 * clamp(sun, 0.0, 1.0);
-          vec3 night = uHasNight > 0.5
-            ? texture2D(uNight, vUv).rgb * vec3(1.15, 1.0, 0.7) * 1.4
-            : day * 0.04;
-          vec3 color = mix(night, day, dayAmt);
-          // cyan atmosphere rim toward the camera
           vec3 V = normalize(cameraPosition - vWorldPos);
-          float rim = pow(1.0 - max(dot(N, V), 0.0), 2.6);
-          color += uAtmo * rim * 0.55;
+          // View-based lighting: the hemisphere facing the viewer is always lit,
+          // so the globe never turns black as it rotates. Only the grazing limbs
+          // fall into night (city lights).
+          float facing = max(dot(N, V), 0.0);
+          vec3 key = normalize(uSun); // reused as a soft key for surface form
+          float form = 0.55 + 0.45 * clamp(dot(N, key), 0.0, 1.0);
+          vec3 tex = texture2D(uDay, vUv).rgb;
+          vec3 lit = tex * (0.7 + 0.6 * form);
+          vec3 cities = uHasNight > 0.5
+            ? texture2D(uNight, vUv).rgb * vec3(1.2, 1.0, 0.65) * 1.6
+            : vec3(0.0);
+          vec3 limb = tex * 0.16 + cities;
+          float t = smoothstep(0.02, 0.5, facing);
+          vec3 color = mix(limb, lit, t);
+          // soft ocean specular for a premium sheen
+          vec3 H = normalize(key + V);
+          float spec = pow(max(dot(N, H), 0.0), 26.0) * t * 0.22;
+          color += vec3(0.5, 0.7, 0.9) * spec;
+          // cyan atmosphere rim toward the camera
+          float rim = pow(1.0 - facing, 2.6);
+          color += uAtmo * rim * 0.6;
           gl_FragColor = vec4(color, 1.0);
         }
       `,

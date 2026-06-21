@@ -92,6 +92,9 @@ export default function Avatar3D({ data, frame, animate }: Avatar3DProps) {
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
       camera={{ fov: 28, near: 0.1, far: 20, position: [0, 1.2, 1.5] }}
       style={{ width: '100%', height: '100%' }}
+      onCreated={({ gl }) => {
+        gl.toneMappingExposure = 1.12 // slightly brighter, more cinematic
+      }}
     >
       <Rig />
 

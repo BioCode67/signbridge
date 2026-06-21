@@ -165,12 +165,32 @@ export default function SignAvatarDemo() {
           }
           description={
             <>
-              AI Hub「재난 안전 정보 전달을 위한 수어영상」데이터의 실제 OpenPose 키포인트를
-              아바타로 렌더링했습니다. 농인이 직접 수어한 동작이며, 표정(입·눈썹)은 비수지 정보를
-              반영합니다.
+              AI Hub「재난 안전 정보 전달을 위한 수어영상」데이터의 실제 키포인트를 아바타로
+              렌더링했습니다. 농인이 직접 수어한 동작이며, 표정(입·눈썹)은 비수지 정보를 반영합니다.
+              지진·태풍·호우·대설·산불·미세먼지 등 다양한 재난 유형을 수록했습니다.
             </>
           }
         />
+
+        {load.status === 'ready' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.5 }}
+            className="mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-2 text-xs text-slate-400"
+          >
+            <span className="rounded-full border border-cyan-glow/30 bg-cyan-glow/10 px-3 py-1 font-semibold text-cyan-soft">
+              재난 문장 {sentences.length}종
+            </span>
+            <span className="rounded-full border border-white/10 bg-space-800 px-3 py-1">
+              AI Hub 실데이터
+            </span>
+            <span className="rounded-full border border-white/10 bg-space-800 px-3 py-1">
+              2D · 스켈레톤 · 3D 비교
+            </span>
+          </motion.div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 32 }}

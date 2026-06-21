@@ -125,6 +125,22 @@ function segDir3D(kp: number[], a: number, b: number, rest: number): THREE.Vecto
   return _dir.normalize().clone()
 }
 
+/**
+ * Direction of segment a→b from TRUE 3D camera-space landmarks, mapped to the
+ * avatar frame: camera X→+X, camera Y(down)→-Y, camera Z(depth)→-Z (toward
+ * camera = +Z). No confidence channel; (0,0,0) means a missing joint.
+ */
+function segDir3Dreal(kp: number[], a: number, b: number): THREE.Vector3 | null {
+  const n = kp.length / 3
+  if (a >= n || b >= n) return null
+  const ax = kp[a * 3], ay = kp[a * 3 + 1], az = kp[a * 3 + 2]
+  const bx = kp[b * 3], by = kp[b * 3 + 1], bz = kp[b * 3 + 2]
+  if ((ax === 0 && ay === 0 && az === 0) || (bx === 0 && by === 0 && bz === 0)) return null
+  _dir.set(bx - ax, -(by - ay), -(bz - az))
+  if (_dir.lengthSq() < 1e-6) return null
+  return _dir.normalize().clone()
+}
+
 /** Direction of segment a→b in the given keypoint array, mapped to avatar XY (z=0). Null if low conf. */
 function segDir(kp: number[], a: number, b: number, conf = CONF_MIN): THREE.Vector3 | null {
   const n = kp.length / 3
@@ -211,12 +227,15 @@ const FINGERS: { bones: string[]; segs: [number, number][] }[] = [
   { bones: ['LittleProximal', 'LittleIntermediate', 'LittleDistal'], segs: [[17, 18], [18, 19], [19, 20]] },
 ]
 
+type SegFn = (kp: number[], a: number, b: number) => THREE.Vector3 | null
+
 function aimFingers(
   vrm: VRM,
   hand: number[] | undefined,
   axis: THREE.Vector3,
   side: 'left' | 'right',
   handWorld: THREE.Quaternion,
+  segFn: SegFn,
 ) {
   if (!hand) return
   for (const finger of FINGERS) {
@@ -226,11 +245,31 @@ function aimFingers(
       const name = `${side}${finger.bones[i]}` as VRMHumanBoneName
       const [a, b] = finger.segs[i]
       const world = new THREE.Quaternion()
-      aimBone(vrm, name, axis, segDir(hand, a, b, CONF_FINGER), parentWorld, world, SMOOTH_FINGER)
+      aimBone(vrm, name, axis, segFn(hand, a, b), parentWorld, world, SMOOTH_FINGER)
       carry.copy(world)
       parentWorld = carry
     }
   }
+}
+
+/** Drive one arm + hand from TRUE 3D landmarks (accurate depth). */
+function aimArm3D(
+  vrm: VRM,
+  pose: number[],
+  hand: number[] | undefined,
+  axis: THREE.Vector3,
+  side: 'left' | 'right',
+  sh: number,
+  el: number,
+  wr: number,
+  outHandWorld: THREE.Quaternion,
+) {
+  const worldU = new THREE.Quaternion()
+  const worldL = new THREE.Quaternion()
+  aimBone(vrm, `${side}UpperArm` as VRMHumanBoneName, axis, segDir3Dreal(pose, sh, el), _identity, worldU)
+  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir3Dreal(pose, el, wr), worldU, worldL)
+  const handDir = hand ? segDir3Dreal(hand, 0, 9) : null
+  aimBone(vrm, `${side}Hand` as VRMHumanBoneName, axis, handDir, worldL, outHandWorld)
 }
 
 /** Arms lowered from the T-pose into a relaxed rest pose (idle / no data). */
@@ -257,23 +296,48 @@ function applyExpression(vrm: VRM, data: SignData, f: number) {
   em.setValue('surprised', brow * 0.4) // raised brows ≈ mild surprise
 }
 
+const seg2dFinger: SegFn = (h, a, b) => segDir(h, a, b, CONF_FINGER)
+const seg3dFinger: SegFn = (h, a, b) => segDir3Dreal(h, a, b)
+
+/** Pull the neck most of the way back to upright so the face stays visible. */
+function dampHead(vrm: VRM) {
+  const neck = vrm.humanoid.getNormalizedBoneNode('neck')
+  if (neck) neck.quaternion.slerp(_identity, 0.6)
+}
+
 /** Retarget a frame of keypoints onto the VRM (upper body + fingers + face). */
 export function applyPoseToVRM(vrm: VRM, data: SignData, frame: number) {
   const f = Math.max(0, Math.min(frame, data.num_frames - 1))
+  const handWorldR = new THREE.Quaternion()
+  const handWorldL = new THREE.Quaternion()
+
+  if (data.keypoints3d) {
+    // Accurate path: drive bones from true 3D landmarks (real depth).
+    const k = data.keypoints3d
+    const pose = k.pose[f]
+    if (!pose) return
+    const hr = k.hand_right?.[f]
+    const hl = k.hand_left?.[f]
+    aimArm3D(vrm, pose, hr, AXIS_R, 'right', RSH, REL, RWR, handWorldR)
+    aimArm3D(vrm, pose, hl, AXIS_L, 'left', LSH, LEL, LWR, handWorldL)
+    aimFingers(vrm, hr, AXIS_R, 'right', handWorldR, seg3dFinger)
+    aimFingers(vrm, hl, AXIS_L, 'left', handWorldL, seg3dFinger)
+    aimBone(vrm, 'neck', AXIS_UP, segDir3Dreal(pose, 1, 0), _identity, new THREE.Quaternion())
+    dampHead(vrm)
+    applyExpression(vrm, data, f)
+    return
+  }
+
+  // Fallback path: 2D keypoints with foreshortening-based depth estimate.
   const pose = smoothInto(data.keypoints.pose, f, _bufPose)
   if (!pose) return
   const hr = data.keypoints.hand_right ? smoothInto(data.keypoints.hand_right, f, _bufHR) ?? undefined : undefined
   const hl = data.keypoints.hand_left ? smoothInto(data.keypoints.hand_left, f, _bufHL) ?? undefined : undefined
-
-  const handWorldR = new THREE.Quaternion()
-  const handWorldL = new THREE.Quaternion()
   aimArm(vrm, data, pose, hr, AXIS_R, 'right', RSH, REL, RWR, handWorldR)
   aimArm(vrm, data, pose, hl, AXIS_L, 'left', LSH, LEL, LWR, handWorldL)
-  aimFingers(vrm, hr, AXIS_R, 'right', handWorldR)
-  aimFingers(vrm, hl, AXIS_L, 'left', handWorldL)
-
-  // Subtle head tilt from neck→nose, plus facial expression.
-  const headWorld = new THREE.Quaternion()
-  aimBone(vrm, 'neck', AXIS_UP, segDir(pose, 1, 0), _identity, headWorld)
+  aimFingers(vrm, hr, AXIS_R, 'right', handWorldR, seg2dFinger)
+  aimFingers(vrm, hl, AXIS_L, 'left', handWorldL, seg2dFinger)
+  aimBone(vrm, 'neck', AXIS_UP, segDir(pose, 1, 0), _identity, new THREE.Quaternion())
+  dampHead(vrm)
   applyExpression(vrm, data, f)
 }

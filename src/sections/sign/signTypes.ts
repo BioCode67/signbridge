@@ -30,5 +30,15 @@ export interface SignData {
     hand_left: number[][]
     hand_right: number[][]
   }
+  /**
+   * True 3D landmarks in camera space (mm), present when the source clip had
+   * them. Used by the 3D avatar for accurate depth instead of guessing from 2D.
+   * Same joint layout as `keypoints`, but [x, y, z] (no confidence).
+   */
+  keypoints3d?: {
+    pose: number[][]
+    hand_left: number[][]
+    hand_right: number[][]
+  }
   expr?: Expr[]
 }

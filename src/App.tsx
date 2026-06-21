@@ -3,6 +3,7 @@ import Hero from './sections/Hero'
 import WhySection from './sections/WhySection'
 import SignAvatarDemo from './sections/SignAvatarDemo'
 import HowItWorks from './sections/HowItWorks'
+import ImpactSection from './sections/ImpactSection'
 import Footer from './sections/Footer'
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
         <WhySection />
         <SignAvatarDemo />
         <HowItWorks />
+        <ImpactSection />
       </main>
       <Footer />
     </div>

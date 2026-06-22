@@ -1,29 +1,32 @@
 /**
  * Selectable 3D avatars.
  *
- * `default` is the bundled VRoid VRM. The rest are CC0 (public-domain) VRMs
- * from Polygonal Mind's "100 Avatars" set, loaded on demand from a CDN so they
- * don't bloat the repo. Drop a custom `.vrm` into public/models and add it here
- * (e.g. a photorealistic suited anchor exported from VRoid Studio / RPM).
+ * Realistic humans (Ready Player Me, GLB) lead — bundled locally so they load
+ * fast and work offline at the live demo. The stylized VRMs (CC0 "100 Avatars")
+ * remain as extra variety. Drop a custom suited/anchor avatar into
+ * public/models and add it here to extend.
  */
-export const DEFAULT_MODEL_URL = `${import.meta.env.BASE_URL}models/avatar.vrm`
+const BASE = import.meta.env.BASE_URL
+
+export const DEFAULT_MODEL_URL = `${BASE}models/anchor-naoki.glb`
 
 export interface AvatarOption {
   id: string
   label: string
   url: string
+  /** realistic (RPM/GLB human) vs stylized (VRM) — for a small UI hint */
+  real?: boolean
 }
 
 export const AVATARS: AvatarOption[] = [
-  { id: 'default', label: '기본', url: DEFAULT_MODEL_URL },
-  { id: 'anchor', label: '앵커', url: 'https://arweave.net/GhML2d0T_lBZvRA_S28LWVg9wFCWJWqc0cFsVulQQlo' },
-  { id: 'reporter', label: '기자', url: 'https://arweave.net/EgFSDc6Kbh0lrNWARVqwg7PxqrxfK1wluuxzLWFsNLM' },
+  { id: 'naoki', label: '기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: true },
+  { id: 'nanami', label: '앵커(여)', url: `${BASE}models/anchor-nanami.glb`, real: true },
+  { id: 'person', label: '인물', url: `${BASE}models/person-rpm.glb`, real: true },
+  { id: 'vroid', label: '기본(VRoid)', url: `${BASE}models/avatar.vrm` },
   { id: 'suit', label: '정장', url: 'https://arweave.net/MRYB-qSnrV11_Sa6BwMOqTEpH7n_bczN_pNY_1q7DOs' },
   { id: 'mister', label: '신사', url: 'https://arweave.net/elvlpN6jefoDXqqCWMxCBVZnl6Z2lLD7-wC8N5z1bVk' },
-  { id: 'robert', label: '로버트', url: 'https://arweave.net/gwG7w4bY-A5c3R6A6GOz3xBCgbPvkFQmqPIDtvnNsYI' },
   { id: 'olivia', label: '올리비아', url: 'https://arweave.net/MgsNlTetzAoVEC6E-lswj65vp7StkOZXXd5OjjqzYZI' },
   { id: 'kate', label: '케이트', url: 'https://arweave.net/1q4IQwLQXJVS0JGSpeXlRdazmZYdwJbmLbTv7o0s5Y8' },
   { id: 'david', label: '데이비드', url: 'https://arweave.net/H3cBhsOEoiQ8XZiwG31SyCUtiDewBZRccxIDztyHfSY' },
-  { id: 'hugo', label: '휴고', url: 'https://arweave.net/iYaEdMdq8faogyRdgF4plnZIq40oOERENie94XmEdvQ' },
   { id: 'agnes', label: '아그네스', url: 'https://arweave.net/c8mrbRq29sfQdovW1l_D2JYGOaCNF3JxTaUsmHTSNAg' },
 ]

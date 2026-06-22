@@ -52,7 +52,7 @@ const _bufHL: number[] = []
  * never pulls a joint toward a garbage coordinate. Reduces keypoint jitter
  * (especially fingers) at the source. Returns `buf` filled in place, or null.
  */
-function smoothInto(frames: number[][], f: number, buf: number[]): number[] | null {
+export function smoothInto(frames: number[][], f: number, buf: number[]): number[] | null {
   const cur = frames[f]
   if (!cur) return null
   const prev = frames[f - 1]
@@ -84,7 +84,7 @@ function smoothMap(vrm: VRM): Map<string, THREE.Quaternion> {
 // Per-sentence true (in-plane) segment lengths, used to recover depth from
 // foreshortening. Cached per SignData.
 const lenCache = new WeakMap<SignData, Map<string, number>>()
-function restLen(data: SignData, frames: number[][], a: number, b: number, key: string): number {
+export function restLen(data: SignData, frames: number[][], a: number, b: number, key: string): number {
   let m = lenCache.get(data)
   if (!m) {
     m = new Map()
@@ -115,7 +115,7 @@ function restLen(data: SignData, frames: number[][], a: number, b: number, key: 
  * becomes a +z component (toward the camera) — signers gesture forward, so the
  * sign is always positive. Falls back to the flat plane when `rest` is unknown.
  */
-function segDir3D(kp: number[], a: number, b: number, rest: number): THREE.Vector3 | null {
+export function segDir3D(kp: number[], a: number, b: number, rest: number): THREE.Vector3 | null {
   const n = kp.length / 3
   if (a >= n || b >= n || kp[a * 3 + 2] < CONF_MIN || kp[b * 3 + 2] < CONF_MIN) return null
   const dx = kp[b * 3] - kp[a * 3]
@@ -132,7 +132,7 @@ function segDir3D(kp: number[], a: number, b: number, rest: number): THREE.Vecto
  * avatar frame: camera X→+X, camera Y(down)→-Y, camera Z(depth)→-Z (toward
  * camera = +Z). No confidence channel; (0,0,0) means a missing joint.
  */
-function segDir3Dreal(kp: number[], a: number, b: number): THREE.Vector3 | null {
+export function segDir3Dreal(kp: number[], a: number, b: number): THREE.Vector3 | null {
   const n = kp.length / 3
   if (a >= n || b >= n) return null
   const ax = kp[a * 3], ay = kp[a * 3 + 1], az = kp[a * 3 + 2]
@@ -144,7 +144,7 @@ function segDir3Dreal(kp: number[], a: number, b: number): THREE.Vector3 | null 
 }
 
 /** Direction of segment a→b in the given keypoint array, mapped to avatar XY (z=0). Null if low conf. */
-function segDir(kp: number[], a: number, b: number, conf = CONF_MIN): THREE.Vector3 | null {
+export function segDir(kp: number[], a: number, b: number, conf = CONF_MIN): THREE.Vector3 | null {
   const n = kp.length / 3
   if (a >= n || b >= n) return null
   if (kp[a * 3 + 2] < conf || kp[b * 3 + 2] < conf) return null

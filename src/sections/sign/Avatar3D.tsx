@@ -1,11 +1,29 @@
-import { Suspense, useEffect, useMemo } from 'react'
+import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei'
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
 import { applyPoseToVRM, restPoseVRM } from './retarget'
+import { prepareGLBRig, applyPoseToGLB, type GLBRig } from './glbRetarget'
 import { DEFAULT_MODEL_URL } from './avatars'
+
+/** Frame any humanoid so its head sits at a canonical height + upper body fills the stage. */
+function frameScene(scene: THREE.Object3D, head: THREE.Object3D, hips: THREE.Object3D) {
+  scene.scale.setScalar(1)
+  scene.position.set(0, 0, 0)
+  scene.updateWorldMatrix(true, true)
+  const hp = head.getWorldPosition(new THREE.Vector3())
+  const pp = hips.getWorldPosition(new THREE.Vector3())
+  const TARGET_HEAD = 1.5, TARGET_HIPS = 0.92
+  const s = (TARGET_HEAD - TARGET_HIPS) / Math.max(0.05, hp.y - pp.y)
+  scene.scale.setScalar(s)
+  scene.updateWorldMatrix(true, true)
+  const hp2 = head.getWorldPosition(new THREE.Vector3())
+  scene.position.x -= hp2.x
+  scene.position.y += TARGET_HEAD - hp2.y
+  scene.position.z -= hp2.z
+}
 
 const MODEL_URL = DEFAULT_MODEL_URL
 
@@ -30,61 +48,49 @@ interface VRMModelProps {
 
 function VRMModel({ url, data, frame, animate }: VRMModelProps) {
   const gltf = useGLTF(url, true, true, extendWithVRM)
-  const vrm = (gltf.userData as { vrm: VRM }).vrm
+  const vrm = (gltf.userData as { vrm?: VRM }).vrm
+  const rigRef = useRef<GLBRig | null>(null)
 
-  // One-time setup: optimise, face the camera, relax into a rest pose.
+  // One-time setup: VRM vs plain-GLB (Ready Player Me / Mixamo) humanoid.
   useMemo(() => {
-    if (!vrm) return
-    VRMUtils.removeUnnecessaryVertices(vrm.scene)
-    VRMUtils.combineSkeletons(vrm.scene)
-    vrm.scene.traverse((o) => {
-      o.frustumCulled = false
-    })
-    // VRM 0.x models face -Z; rotate them to face the camera (+Z).
-    // No-op for VRM 1.0, so this is safe for any model we drop in.
-    VRMUtils.rotateVRM0(vrm)
-
-    // Normalise framing: scale + translate so every avatar's head sits at a
-    // canonical height and the upper body fills the stage, regardless of the
-    // model's native scale (otherwise tall/short models are mis-framed).
-    const h = vrm.humanoid
-    const head = h.getNormalizedBoneNode('head')
-    const hips = h.getNormalizedBoneNode('hips')
-    if (head && hips) {
-      vrm.scene.scale.setScalar(1)
-      vrm.scene.position.set(0, 0, 0)
-      vrm.scene.updateWorldMatrix(true, true)
-      const hp = head.getWorldPosition(new THREE.Vector3())
-      const pp = hips.getWorldPosition(new THREE.Vector3())
-      const TARGET_HEAD = 1.5
-      const TARGET_HIPS = 0.92
-      const s = (TARGET_HEAD - TARGET_HIPS) / Math.max(0.05, hp.y - pp.y)
-      vrm.scene.scale.setScalar(s)
-      vrm.scene.updateWorldMatrix(true, true)
-      const hp2 = head.getWorldPosition(new THREE.Vector3())
-      vrm.scene.position.x -= hp2.x
-      vrm.scene.position.y += TARGET_HEAD - hp2.y
-      vrm.scene.position.z -= hp2.z
+    if (vrm) {
+      rigRef.current = null
+      VRMUtils.removeUnnecessaryVertices(vrm.scene)
+      VRMUtils.combineSkeletons(vrm.scene)
+      vrm.scene.traverse((o) => { o.frustumCulled = false })
+      VRMUtils.rotateVRM0(vrm) // VRM0 faces -Z → face camera; no-op for VRM1
+      const head = vrm.humanoid.getNormalizedBoneNode('head')
+      const hips = vrm.humanoid.getNormalizedBoneNode('hips')
+      if (head && hips) frameScene(vrm.scene, head, hips)
+      return
     }
-  }, [vrm])
+    // Realistic GLB humanoid
+    const scene = gltf.scene
+    scene.rotation.set(0, 0, 0)
+    scene.traverse((o) => { o.frustumCulled = false })
+    const rig = prepareGLBRig(scene)
+    rigRef.current = rig
+    if (rig.head && rig.hips) frameScene(scene, rig.head, rig.hips)
+  }, [vrm, gltf])
 
   useFrame((state, delta) => {
-    if (!vrm) return
-    if (animate && data) applyPoseToVRM(vrm, data, frame)
-    else restPoseVRM(vrm)
-    // Periodic auto-blink for a touch of life (every ~4s, ~150ms close).
     const t = state.clock.elapsedTime
-    const phase = t % 4
-    const blink = phase > 3.85 ? Math.sin(((phase - 3.85) / 0.15) * Math.PI) : 0
-    vrm.expressionManager?.setValue('blink', blink)
-    // Subtle breathing on the spine (retargeting leaves the spine untouched).
-    const spine = vrm.humanoid.getNormalizedBoneNode('spine')
-    if (spine) spine.rotation.x = Math.sin(t * 1.4) * 0.012
-    vrm.update(delta)
+    if (vrm) {
+      if (animate && data) applyPoseToVRM(vrm, data, frame)
+      else restPoseVRM(vrm)
+      const phase = t % 4
+      const blink = phase > 3.85 ? Math.sin(((phase - 3.85) / 0.15) * Math.PI) : 0
+      vrm.expressionManager?.setValue('blink', blink)
+      const spine = vrm.humanoid.getNormalizedBoneNode('spine')
+      if (spine) spine.rotation.x = Math.sin(t * 1.4) * 0.012
+      vrm.update(delta)
+      return
+    }
+    const rig = rigRef.current
+    if (rig && animate && data) applyPoseToGLB(rig, data, frame)
   })
 
-  if (!vrm) return null
-  return <primitive object={vrm.scene} />
+  return <primitive object={vrm ? vrm.scene : gltf.scene} />
 }
 
 /** Frames the upper body and gives a gentle cyan-lit studio look. */

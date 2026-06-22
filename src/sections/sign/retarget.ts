@@ -34,6 +34,47 @@ const AXIS_R = new THREE.Vector3(-1, 0, 0)
 const AXIS_L = new THREE.Vector3(1, 0, 0)
 const AXIS_UP = new THREE.Vector3(0, 1, 0) // head/neck rest points +Y
 
+// ---- Per-VRM rest axes (self-calibrating, like the GLB path) ----
+// A hardcoded ±X arm axis only holds for a T-pose bind; many VRoid/Booth models
+// bind in an A-pose (arms angled down), so aiming the wrong rest axis throws the
+// arms up. Instead, read each bone's TRUE rest direction (offset to its child)
+// from the normalized humanoid and aim that.
+function fingerChildPairs(side: 'left' | 'right'): [string, string][] {
+  const F = [
+    ['ThumbMetacarpal', 'ThumbProximal'], ['ThumbProximal', 'ThumbDistal'],
+    ['IndexProximal', 'IndexIntermediate'], ['IndexIntermediate', 'IndexDistal'],
+    ['MiddleProximal', 'MiddleIntermediate'], ['MiddleIntermediate', 'MiddleDistal'],
+    ['RingProximal', 'RingIntermediate'], ['RingIntermediate', 'RingDistal'],
+    ['LittleProximal', 'LittleIntermediate'], ['LittleIntermediate', 'LittleDistal'],
+  ]
+  return F.map(([a, b]) => [`${side}${a}`, `${side}${b}`])
+}
+const VRM_CHILD_MAP: [string, string][] = [
+  ['leftUpperArm', 'leftLowerArm'], ['leftLowerArm', 'leftHand'], ['leftHand', 'leftMiddleProximal'],
+  ['rightUpperArm', 'rightLowerArm'], ['rightLowerArm', 'rightHand'], ['rightHand', 'rightMiddleProximal'],
+  ['neck', 'head'],
+  ...fingerChildPairs('left'), ...fingerChildPairs('right'),
+]
+const _vrmRestAxes = new WeakMap<VRM, Map<string, THREE.Vector3>>()
+
+/** Capture each driven bone's rest direction (offset to its child) in bone-local
+ *  space, from the normalized humanoid at rest. Call once after the VRM loads. */
+export function prepareVRMRig(vrm: VRM) {
+  const map = new Map<string, THREE.Vector3>()
+  for (const [name, childName] of VRM_CHILD_MAP) {
+    const node = vrm.humanoid.getNormalizedBoneNode(name as VRMHumanBoneName)
+    const child = vrm.humanoid.getNormalizedBoneNode(childName as VRMHumanBoneName)
+    if (!node || !child || child.parent !== node) continue // need a direct child
+    const axis = child.position.clone() // child's local offset = bone rest direction
+    if (axis.lengthSq() < 1e-10) continue
+    map.set(name, axis.normalize())
+  }
+  _vrmRestAxes.set(vrm, map)
+}
+function restAxisOf(vrm: VRM, name: string): THREE.Vector3 | undefined {
+  return _vrmRestAxes.get(vrm)?.get(name)
+}
+
 // Scratch (avoid per-frame allocation).
 const _dir = new THREE.Vector3()
 const _tp = new THREE.Vector3()
@@ -175,6 +216,9 @@ function aimBone(
     out.copy(parentWorld)
     return
   }
+  // Prefer the bone's TRUE rest direction (captured at load) over the hardcoded
+  // axis — fixes A-pose-bound models whose arms otherwise fly up.
+  const restAxis = restAxisOf(vrm, name) ?? axis
   const m = smoothMap(vrm)
   let local = m.get(name)
   if (!local) {
@@ -186,7 +230,7 @@ function aimBone(
     _inv.copy(parentWorld).invert()
     _tp.copy(worldDir).applyQuaternion(_inv)
     if (_tp.lengthSq() > 1e-8) {
-      _q.setFromUnitVectors(axis, _tp.normalize())
+      _q.setFromUnitVectors(restAxis, _tp.normalize())
       // Clamp the rotation magnitude so noisy keypoints can't fold a joint
       // through itself (the cause of distorted / snapping fingers).
       const ang = 2 * Math.acos(Math.min(1, Math.abs(_q.w)))

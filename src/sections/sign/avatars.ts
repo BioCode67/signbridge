@@ -23,6 +23,7 @@ export const AVATARS: AvatarOption[] = [
   // Photoreal, clean
   { id: 'avaturn', label: '실사 앵커(여)', url: `${BASE}models/real-avaturn.glb`, real: true },
   { id: 'keito', label: '비즈니스 정장(VRM)', url: `${BASE}models/business-keito.vrm`, real: false },
+  { id: 'toma', label: '비즈니스 정장2(VRM)', url: `${BASE}models/business-toma.vrm`, real: false },
   { id: 'avatarsdk', label: '실사 인물(남)', url: `${BASE}models/real-avatarsdk.glb`, real: true },
   { id: 'david', label: '실사 인물(남2)', url: `${BASE}models/real-david.glb`, real: true },
   // Clean stylized characters

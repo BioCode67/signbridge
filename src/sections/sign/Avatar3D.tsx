@@ -4,7 +4,7 @@ import { ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
-import { applyPoseToVRM, restPoseVRM } from './retarget'
+import { applyPoseToVRM, restPoseVRM, prepareVRMRig } from './retarget'
 import { prepareGLBRig, applyPoseToGLB, setBlinkGLB, type GLBRig } from './glbRetarget'
 import { DEFAULT_MODEL_URL } from './avatars'
 
@@ -59,6 +59,7 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
       VRMUtils.combineSkeletons(vrm.scene)
       vrm.scene.traverse((o) => { o.frustumCulled = false })
       VRMUtils.rotateVRM0(vrm) // VRM0 faces -Z → face camera; no-op for VRM1
+      prepareVRMRig(vrm) // capture true rest axes so A-pose models retarget correctly
       const head = vrm.humanoid.getNormalizedBoneNode('head')
       const hips = vrm.humanoid.getNormalizedBoneNode('hips')
       if (head && hips) frameScene(vrm.scene, head, hips)

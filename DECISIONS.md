@@ -174,3 +174,10 @@
 
 ## 사용자 제공 VRM 추가 (Booth "business")
 - 사용자가 Booth에서 "VRM 무료 business" 검색해 받은 `keito_a.vrm`(VRM 0.x "けいとA", 20.5MB, 손가락 본 30·휴머노이드 54·블렌드셰이프) 제공 → `business-keito.vrm`로 번들, "비즈니스 정장(VRM)"으로 추가. VRM 경로(applyPoseToVRM)로 구동, 깔끔한 네이비 정장·손가락 자연 구동 확인. 파일 업로드 기능이 실제로 동작함을 입증한 첫 사용자 모델.
+
+## VRM 팔 위로 꺾임 버그 수정 + toma VRM 추가
+- 증상: 비즈니스 정장(VRM·keito) 정지 프레임에서 양팔이 머리 위로 곧게 꺾여 있음(실사 GLB는 정상).
+- 원인: VRM 경로(retarget.ts)가 어깨 rest 축을 **하드코딩 ±X(T-포즈 가정)**로 썼는데, VRoid/Booth VRM은 대부분 **A-포즈 바인드(팔이 아래로)**라 잘못된 rest 축을 향해 조준 → 팔이 위로 솟음. (GLB 경로는 본별 bind 방향을 읽어 self-calibrating이라 정상이었음.)
+- 수정: GLB와 동일하게 **VRM도 self-calibrating** — `prepareVRMRig(vrm)`가 로드 시 정규화 휴머노이드에서 각 본의 실제 rest 방향(자식 본 로컬 오프셋)을 캡처(`VRM_CHILD_MAP`: 상완·전완·손·목·손가락), `aimBone`이 하드코딩 축 대신 이 rest 축 사용(없으면 기존 축 폴백). Avatar3D VRM 셋업(rotateVRM0 직후)에서 호출.
+- 검증: keito·toma 모두 정지 시 팔 자연스럽게 내려옴, keito는 가슴 높이로 자연 수어 동작. 향후 사용자가 올리는 어떤 A-포즈 VRM도 자동 보정.
+- 추가: 사용자 제공 `toma_c.vrm`(VRM0 "とうまC", 정장 베스트) → "비즈니스 정장2(VRM)"로 번들. 아바타 8종.

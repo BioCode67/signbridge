@@ -269,6 +269,8 @@ export default function SignAvatarDemo() {
               {/* Stage */}
               <div
                 ref={stageRef}
+                role="img"
+                aria-label={data ? `수어 아바타가 표현하는 문장: ${data.korean_text}` : '수어 아바타'}
                 className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl border border-white/10"
                 style={{
                   background:
@@ -288,6 +290,7 @@ export default function SignAvatarDemo() {
                       key={m}
                       type="button"
                       onClick={() => setMode(m)}
+                      aria-pressed={mode === m}
                       className={`rounded-md border px-2.5 py-1.5 text-[11px] transition-colors ${
                         mode === m
                           ? 'border-cyan-glow bg-cyan-glow text-space-950 font-bold'

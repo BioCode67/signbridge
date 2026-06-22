@@ -191,3 +191,7 @@
 - **접근성**(접근성 앱답게): `<MotionConfig reducedMotion="user">`로 모든 framer-motion 애니메이션이 OS '동작 줄이기' 설정 존중(CSS는 기존 prefers-reduced-motion 처리). 키보드 **건너뛰기 링크**(.skip-link, 포커스 시 노출 → #demo), `<main id="main">`.
 - **양방향 Q&A 시나리오 3종 확장**(QnADemo): 🌧️호우(관악 신림)·🌐지진(경주, 규모5.8)·🔥화재(마포 합정) 탭 — 시나리오별 GPS·재난 톤(색)·맞춤 질문 4개·수어 응답·글로스. 단일 시나리오 → 다중으로 데모 설득력 강화. 검증: 지진 탭 GPS=경주·맞춤 응답 정상.
 - 모바일(390px) 점검: 가로 오버플로 없음, 전송 비교 막대·KOREN 칩·히어로 모두 정상.
+
+## 지속 개선 2: 내비 스크롤스파이 + 데모 접근성
+- **Navbar 스크롤스파이**: IntersectionObserver(중앙 -45/-50%)로 현재 섹션 nav 링크 활성 표시(시안 + 밑줄, aria-current). 검증: #qa 스크롤 시 "양방향 Q&A" 활성.
+- **데모 접근성**: 모드 토글 `aria-pressed`, 3D 스테이지 `role="img"` + 현재 문장 `aria-label`.

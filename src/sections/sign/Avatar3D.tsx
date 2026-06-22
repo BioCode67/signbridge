@@ -133,30 +133,30 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
       camera={{ fov: 30, near: 0.1, far: 20, position: [0, 1.15, 1.95] }}
       style={{ width: '100%', height: '100%' }}
       onCreated={({ gl }) => {
-        gl.toneMappingExposure = 1.12 // slightly brighter, more cinematic
+        gl.toneMappingExposure = 1.0 // neutral exposure for realistic skin (no wash-out)
       }}
     >
       <Rig />
 
-      {/* Studio rig: warm key, cyan rim from behind for separation, soft fill. */}
-      <ambientLight intensity={0.55} color="#dceaff" />
+      {/* Neutral studio rig tuned for realistic PBR skin: soft white key + fill,
+          and only a faint cyan rim for separation (no cyan cast on the face). */}
+      <ambientLight intensity={0.8} color="#eef4ff" />
       <directionalLight
-        position={[2.5, 3.5, 2.5]}
-        intensity={2.4}
-        color="#fff6ec"
+        position={[2, 3, 3]}
+        intensity={2.0}
+        color="#fff4ea"
         castShadow
         shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0004}
       />
-      <directionalLight position={[-3, 1.6, -2.2]} intensity={1.6} color="#22d3ee" />
-      <directionalLight position={[3, 1.2, -2]} intensity={0.8} color="#a5f3fc" />
-      <pointLight position={[0, 1.5, 1.8]} intensity={0.4} color="#ffffff" />
+      <directionalLight position={[-2.5, 1.4, 1.5]} intensity={0.7} color="#ffffff" />
+      <directionalLight position={[-3, 1.8, -2.5]} intensity={0.5} color="#22d3ee" />
 
-      {/* Image-based lighting for clean speculars on eyes / glossy bits. */}
-      <Environment resolution={64}>
-        <Lightformer intensity={2.2} color="#ffffff" position={[2, 3, 2]} scale={[4, 4, 1]} />
-        <Lightformer intensity={1.1} color="#22d3ee" position={[-4, 1, -2]} scale={[5, 5, 1]} />
-        <Lightformer intensity={0.7} color="#67e8f9" position={[0, 2, -4]} scale={[6, 3, 1]} />
+      {/* Image-based lighting for soft, realistic skin + clean eye speculars. */}
+      <Environment resolution={128}>
+        <Lightformer intensity={1.6} color="#ffffff" position={[2, 3, 2]} scale={[5, 5, 1]} />
+        <Lightformer intensity={1.0} color="#fff0e6" position={[-3, 1, 2]} scale={[5, 5, 1]} />
+        <Lightformer intensity={0.5} color="#22d3ee" position={[0, 2, -4]} scale={[6, 3, 1]} />
       </Environment>
 
       <Suspense fallback={null}>

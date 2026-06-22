@@ -395,8 +395,10 @@ const scratchHL3: number[] = []
 
 /**
  * Temporal smoothing for TRUE 3D landmarks (x,y,z triplets, no confidence):
- * weighted ±1-frame average per joint, skipping missing (0,0,0) joints so they
- * don't drag a valid joint toward the origin. Reduces jitter at the source.
+ * weighted ±2-frame average per joint (current frame dominant, so hand-shapes
+ * stay crisp), skipping missing (0,0,0) joints so they don't drag a valid joint
+ * toward the origin. The wider window reduces frame-to-frame jitter for more
+ * fluid, natural-looking motion.
  */
 function smooth3d(frames: number[][] | undefined, f: number, buf: number[]): number[] | undefined {
   if (!frames) return undefined
@@ -404,6 +406,8 @@ function smooth3d(frames: number[][] | undefined, f: number, buf: number[]): num
   if (!cur) return undefined
   const a = frames[f - 1]
   const b = frames[f + 1]
+  const a2 = frames[f - 2]
+  const b2 = frames[f + 2]
   const n = cur.length
   buf.length = n
   for (let j = 0; j < n; j += 3) {
@@ -414,8 +418,10 @@ function smooth3d(frames: number[][] | undefined, f: number, buf: number[]): num
       x += fr[j] * wt; y += fr[j + 1] * wt; z += fr[j + 2] * wt; w += wt
     }
     valid(cur, 0.5)
-    valid(a, 0.25)
-    valid(b, 0.25)
+    valid(a, 0.24)
+    valid(b, 0.24)
+    valid(a2, 0.1)
+    valid(b2, 0.1)
     if (w > 0) { buf[j] = x / w; buf[j + 1] = y / w; buf[j + 2] = z / w } else { buf[j] = 0; buf[j + 1] = 0; buf[j + 2] = 0 }
   }
   return buf

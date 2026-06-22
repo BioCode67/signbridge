@@ -332,23 +332,22 @@ export default function QnADemo() {
                           </span>
                         </div>
                         <p className="text-sm leading-relaxed text-slate-100">{active.a}</p>
-                        <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                          <span className="mr-1 text-[10px] text-slate-500">수어 글로스</span>
-                          {active.gloss.map((g) => (
-                            <span
-                              key={g}
-                              className="rounded-full border border-cyan-glow/30 bg-cyan-glow/[0.07] px-2.5 py-0.5 text-[11px] text-cyan-soft"
-                            >
-                              {g}
-                            </span>
-                          ))}
+                        <div className="mt-3.5 border-t border-white/10 pt-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="mr-1 text-[10px] text-slate-500">↳ 수어 변환(글로스)</span>
+                            {active.gloss.map((g, i) => (
+                              <span key={g} className="flex items-center gap-1.5">
+                                <span className="rounded-full border border-cyan-glow/30 bg-cyan-glow/[0.07] px-2.5 py-0.5 text-[11px] text-cyan-soft">
+                                  {g}
+                                </span>
+                                {i < active.gloss.length - 1 && <span className="text-[9px] text-slate-600">›</span>}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="mt-2 text-[10.5px] leading-relaxed text-slate-500">
+                            이 답변을 한국수어 동작 시퀀스로 변환한 결과입니다 — 수어 변환 에이전트가 3D 관절 좌표로 생성해 아바타로 송출합니다.
+                          </p>
                         </div>
-                        <a
-                          href="#demo"
-                          className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-cyan-glow/40 bg-cyan-glow/10 px-3.5 py-2 text-xs font-semibold text-cyan-soft transition-colors hover:bg-cyan-glow/20"
-                        >
-                          수어 아바타로 보기 →
-                        </a>
                       </motion.div>
                     )}
                   </AnimatePresence>

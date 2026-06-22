@@ -35,7 +35,7 @@ export default function Hero() {
       </div>
 
       {/* Left-side vignette so the white type stays legible over the globe */}
-      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-space-950 via-space-950/70 to-transparent md:via-space-950/40" />
+      <div className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-r from-space-950 via-space-950/80 to-transparent md:via-space-950/55" />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-40 bg-gradient-to-t from-space-950 to-transparent" />
 
       {/* Copy */}
@@ -75,7 +75,8 @@ export default function Hero() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.5, ease }}
-                className="text-lg leading-relaxed text-slate-300 sm:text-xl"
+                className="text-lg leading-relaxed text-slate-200 sm:text-xl"
+                style={{ textShadow: '0 2px 16px rgba(3,4,10,0.85)' }}
               >
                 {TAGLINES[line]}
               </motion.p>

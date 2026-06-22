@@ -143,6 +143,76 @@ export default function HowItWorks() {
           </div>
         </motion.div>
 
+        {/* Core-tech comparison — bandwidth + latency (proposal / 발표자료) */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-60px' }}
+          transition={{ duration: 0.6, ease }}
+          className="mt-8 grid gap-4 sm:grid-cols-2"
+        >
+          {/* Bandwidth */}
+          <div className="rounded-2xl border border-white/10 bg-space-900/40 p-6">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-soft">
+              전송 대역폭 — 영상이 아닌 관절 좌표
+            </span>
+            <div className="mt-4 flex items-end gap-4">
+              <div className="flex-1">
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>수어 영상 (FHD)</span>
+                  <span>4~8 Mbps</span>
+                </div>
+                <div className="mt-1 h-2.5 w-full rounded-full bg-slate-600/60" />
+                <div className="mt-3 flex items-center justify-between text-[11px] text-cyan-soft">
+                  <span>관절 좌표 전송</span>
+                  <span>≈ 0.1 Mbps</span>
+                </div>
+                <div className="mt-1 h-2.5 w-[2%] min-w-[6px] rounded-full bg-cyan-glow" />
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-3xl font-extrabold tracking-tight text-cyan-soft">40~80×</div>
+                <div className="text-[11px] text-slate-400">대역폭 절감</div>
+              </div>
+            </div>
+            <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
+              67개 관절(자세 25 + 양손 42)의 3D 좌표 × 30fps만 전송 — 렌더링은 수신 단말이 담당합니다.
+            </p>
+          </div>
+
+          {/* Latency */}
+          <div className="rounded-2xl border border-white/10 bg-space-900/40 p-6">
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-soft">
+              종단 지연 — 0.5초 골든타임 사수
+            </span>
+            <div className="mt-4 space-y-2.5">
+              {[
+                { n: 'HLS', v: '3~10초', w: '100%', dim: true },
+                { n: 'LL-HLS', v: '2~5초', w: '52%', dim: true },
+                { n: 'SRT', v: '0.3~0.8초', w: '12%', dim: false },
+                { n: 'WebRTC', v: '0.2~0.5초', w: '7%', dim: false },
+              ].map((b) => (
+                <div key={b.n} className="flex items-center gap-3 text-[11px]">
+                  <span className={`w-16 shrink-0 ${b.dim ? 'text-slate-500' : 'font-semibold text-cyan-soft'}`}>
+                    {b.n}
+                  </span>
+                  <div className="h-2.5 flex-1 rounded-full bg-space-800">
+                    <div
+                      className={`h-full rounded-full ${b.dim ? 'bg-slate-600/70' : 'bg-cyan-glow'}`}
+                      style={{ width: b.w }}
+                    />
+                  </div>
+                  <span className={`w-20 shrink-0 text-right ${b.dim ? 'text-slate-500' : 'text-cyan-soft'}`}>
+                    {b.v}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-[11px] leading-relaxed text-slate-500">
+              SignBridge는 WebRTC·SRT 채택 (SRT 방송 전송 1위 77%). HLS의 3~10초 버퍼링 지연을 피합니다.
+            </p>
+          </div>
+        </motion.div>
+
         {/* KOREN utilisation strip — the network is the backbone of this service */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}

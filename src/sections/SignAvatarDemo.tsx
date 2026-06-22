@@ -35,6 +35,15 @@ export default function SignAvatarDemo() {
   const [speed, setSpeed] = useState<number>(1)
   const [mode, setMode] = useState<DisplayMode>('3d')
   const [avatarUrl, setAvatarUrl] = useState(AVATARS[0].url)
+  const [customUrl, setCustomUrl] = useState('')
+
+  // Load a user-supplied model (RPM/Avaturn/VRoid .glb or .vrm). The avatar's
+  // ErrorBoundary catches a bad URL/CORS failure and shows a friendly message.
+  const loadCustom = useCallback(() => {
+    const url = customUrl.trim()
+    if (/^https?:\/\/.+\.(glb|vrm)(\?.*)?$/i.test(url)) setAvatarUrl(url)
+  }, [customUrl])
+  const customActive = !AVATARS.some((a) => a.url === avatarUrl)
 
   const data = sentences[index]
 
@@ -319,7 +328,43 @@ export default function SignAvatarDemo() {
                         {a.label}
                       </button>
                     ))}
+                    {customActive && (
+                      <span className="rounded-lg border border-cyan-glow bg-cyan-glow/10 px-3 py-1.5 text-xs text-cyan-soft">
+                        내 아바타 ✓
+                      </span>
+                    )}
                   </div>
+
+                  {/* Custom model loader — paste any rigged .glb / .vrm URL */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      loadCustom()
+                    }}
+                    className="mt-3 flex flex-col gap-2 rounded-xl border border-white/10 bg-space-800/40 p-3 sm:flex-row sm:items-center"
+                  >
+                    <div className="flex-1">
+                      <label className="mb-1 block text-[11px] font-semibold text-slate-400">
+                        내 아바타 불러오기 — 리깅된 <span className="text-cyan-soft">.glb / .vrm</span> 주소 붙여넣기
+                      </label>
+                      <input
+                        type="url"
+                        value={customUrl}
+                        onChange={(e) => setCustomUrl(e.target.value)}
+                        placeholder="https://models.readyplayer.me/…​.glb  ·  VRoid/Avaturn .vrm·.glb"
+                        className="w-full rounded-lg border border-white/10 bg-space-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-glow/50"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="shrink-0 rounded-lg bg-cyan-glow px-4 py-2 text-xs font-bold text-space-950 transition-colors hover:bg-cyan-soft sm:mt-4"
+                    >
+                      불러오기
+                    </button>
+                  </form>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">
+                    Ready Player Me·Avaturn·VRoid 등에서 만든 아바타를 그대로 붙여 넣으면 즉시 수어로 구동됩니다. (표준 휴머노이드 본 + 손가락 필요)
+                  </p>
                 </div>
               )}
 

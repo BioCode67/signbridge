@@ -150,3 +150,8 @@
 - **QnADemo 신설**(`src/sections/QnADemo.tsx`, App·Navbar에 #qa 추가): GPS(관악구 신림동)+재난(호우경보) 컨텍스트 바 → 자주 묻는 질문 4종 버튼 → **Q&A 에이전트 분석 애니메이션**(위치 확인→재난 분석→대피소 조회→수어 생성) → 맞춤 대피 안내 + 수어 글로스 칩 + KOREN 0.4s + "수어 아바타로 보기(#demo)". 기획안의 "1차 버튼·텍스트 FAQ" 형태와 정확히 일치.
 - **구현 방식**: 정적 gh-pages 안정성 위해 **응답 사전 번들**(키 노출/네트워크 의존 0, 시연 무중단). 실서비스 전환은 `ask()`를 라이브 LLM(서버리스 프록시) 호출로 교체만 하면 됨 — UI 하단에 그 취지 명시.
 - **포토리얼 아바타(옵션①) 슬롯 대기**: 사용자가 RPM/Avaturn .glb URL/파일 주는 즉시 public/models에 넣고 avatars.ts에 추가하면 바로 구동.
+
+## 오픈소스 VTuber 검토 + 커스텀 아바타 URL 로더
+- **사용자 제안(Open-LLM-VTuber, Project AIRI 등) 검토**: Open-LLM-VTuber는 Live2D(2D 퍼펫, 팔·손 관절 없음→수어 불가), AIRI는 VRM을 런타임 로드(번들 없음), GitHub의 .vrm은 대부분 Git LFS 포인터(샌드박스에서 실파일 수신 불가). 결론: 대화형 VTuber 스택은 전부 *자체 모션 생성*이라 우리 수어 키포인트 구동과 맞지 않음 — 단, 그들이 쓰는 리깅 VRM/GLB '모델'은 우리가 구동 가능.
+- **근본 해결책 = 커스텀 아바타 URL 로더**(SignAvatarDemo): 사용자가 RPM·Avaturn·VRoid·AIRI 등 어디서 만든 `.glb`/`.vrm` 주소든 붙여넣으면 **즉시 로드되어 수어로 구동**. `loadCustom()`이 URL 검증 후 setAvatarUrl → Avatar3D가 VRM/GLB 자동 분기 → AvatarErrorBoundary가 실패(잘못된 URL·CORS·LFS) 시 "불러오지 못했습니다"로 폴백. '내 아바타 ✓' 칩 표시. 검증: 유효 URL 입력→커스텀 활성+폴백 정상(샌드박스는 RPM 차단이라 실로드는 사용자 브라우저에서).
+- **효과**: 샌드박스 CDN 차단이라는 내 제약을 우회 — 사용자가 직접 어떤 모델이든 즉시 시험/적용. 아바타 품질 향상의 병목(내가 못 받음)을 사용자 셀프서비스로 해소.

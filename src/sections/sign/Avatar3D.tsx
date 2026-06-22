@@ -2,10 +2,12 @@ import { Suspense, useEffect, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei'
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
+import * as THREE from 'three'
 import type { SignData } from './signTypes'
 import { applyPoseToVRM, restPoseVRM } from './retarget'
+import { DEFAULT_MODEL_URL } from './avatars'
 
-const MODEL_URL = `${import.meta.env.BASE_URL}models/avatar.vrm`
+const MODEL_URL = DEFAULT_MODEL_URL
 
 // drei's loader uses three-stdlib's GLTF types while three-vrm expects the
 // @types/three flavour; they're structurally identical at runtime, so we
@@ -19,14 +21,15 @@ const extendWithVRM = (loader: any) =>
 useGLTF.preload(MODEL_URL, true, true, extendWithVRM)
 
 interface VRMModelProps {
+  url: string
   data?: SignData
   frame: number
   /** When false, the avatar holds a neutral rest pose (no retargeting). */
   animate: boolean
 }
 
-function VRMModel({ data, frame, animate }: VRMModelProps) {
-  const gltf = useGLTF(MODEL_URL, true, true, extendWithVRM)
+function VRMModel({ url, data, frame, animate }: VRMModelProps) {
+  const gltf = useGLTF(url, true, true, extendWithVRM)
   const vrm = (gltf.userData as { vrm: VRM }).vrm
 
   // One-time setup: optimise, face the camera, relax into a rest pose.
@@ -40,6 +43,29 @@ function VRMModel({ data, frame, animate }: VRMModelProps) {
     // VRM 0.x models face -Z; rotate them to face the camera (+Z).
     // No-op for VRM 1.0, so this is safe for any model we drop in.
     VRMUtils.rotateVRM0(vrm)
+
+    // Normalise framing: scale + translate so every avatar's head sits at a
+    // canonical height and the upper body fills the stage, regardless of the
+    // model's native scale (otherwise tall/short models are mis-framed).
+    const h = vrm.humanoid
+    const head = h.getNormalizedBoneNode('head')
+    const hips = h.getNormalizedBoneNode('hips')
+    if (head && hips) {
+      vrm.scene.scale.setScalar(1)
+      vrm.scene.position.set(0, 0, 0)
+      vrm.scene.updateWorldMatrix(true, true)
+      const hp = head.getWorldPosition(new THREE.Vector3())
+      const pp = hips.getWorldPosition(new THREE.Vector3())
+      const TARGET_HEAD = 1.5
+      const TARGET_HIPS = 0.92
+      const s = (TARGET_HEAD - TARGET_HIPS) / Math.max(0.05, hp.y - pp.y)
+      vrm.scene.scale.setScalar(s)
+      vrm.scene.updateWorldMatrix(true, true)
+      const hp2 = head.getWorldPosition(new THREE.Vector3())
+      vrm.scene.position.x -= hp2.x
+      vrm.scene.position.y += TARGET_HEAD - hp2.y
+      vrm.scene.position.z -= hp2.z
+    }
   }, [vrm])
 
   useFrame((state, delta) => {
@@ -75,10 +101,12 @@ interface Avatar3DProps {
   data?: SignData
   frame: number
   animate: boolean
+  /** Which avatar model to load (defaults to the bundled VRoid). */
+  modelUrl?: string
 }
 
 /** R3F canvas hosting the rigged VRM avatar. Fills its parent. */
-export default function Avatar3D({ data, frame, animate }: Avatar3DProps) {
+export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }: Avatar3DProps) {
   const dpr = useMemo<[number, number]>(() => {
     if (typeof window === 'undefined') return [1, 1.5]
     // Cap pixel ratio lower on phones to keep the WebGL frame budget healthy.
@@ -120,7 +148,7 @@ export default function Avatar3D({ data, frame, animate }: Avatar3DProps) {
       </Environment>
 
       <Suspense fallback={null}>
-        <VRMModel data={data} frame={frame} animate={animate} />
+        <VRMModel key={modelUrl} url={modelUrl} data={data} frame={frame} animate={animate} />
         {/* Soft contact shadow grounds the figure. */}
         <ContactShadows
           position={[0, 0.0, 0]}

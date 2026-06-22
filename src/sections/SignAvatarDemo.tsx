@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
+import { AVATARS } from './sign/avatars'
 
 // 3D avatar (Three.js + VRM) is heavy — load it only when the user opens 3D mode.
 const Avatar3D = lazy(() => import('./sign/Avatar3D'))
@@ -32,6 +33,7 @@ export default function SignAvatarDemo() {
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<number>(1)
   const [mode, setMode] = useState<DisplayMode>('avatar')
+  const [avatarUrl, setAvatarUrl] = useState(AVATARS[0].url)
 
   const data = sentences[index]
 
@@ -269,7 +271,7 @@ export default function SignAvatarDemo() {
                       </div>
                     }
                   >
-                    <Avatar3D data={data} frame={frame} animate />
+                    <Avatar3D data={data} frame={frame} animate modelUrl={avatarUrl} />
                   </Suspense>
                 ) : (
                   <canvas ref={canvasRef} className="block h-full w-full" />
@@ -287,6 +289,32 @@ export default function SignAvatarDemo() {
                   </div>
                 )}
               </div>
+
+              {/* Avatar picker (3D mode) */}
+              {mode === '3d' && (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-wide text-slate-500">
+                    <span>아바타 선택</span>
+                    <span className="text-slate-600">· 정장·앵커 등 {AVATARS.length}종</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {AVATARS.map((a) => (
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setAvatarUrl(a.url)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs transition-all ${
+                          avatarUrl === a.url
+                            ? 'border-cyan-glow bg-cyan-glow/10 text-cyan-soft'
+                            : 'border-white/10 bg-space-800 text-slate-400 hover:border-cyan-glow/40 hover:text-slate-200'
+                        }`}
+                      >
+                        {a.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Korean source text */}
               <div className="mt-4 rounded-xl border border-white/10 bg-space-800 px-4 py-3.5 text-[15px] leading-relaxed">

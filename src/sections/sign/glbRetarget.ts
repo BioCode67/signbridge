@@ -291,18 +291,8 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
         dirs, SMOOTH_FINGER, FINGER_MAX, handWorld)
     }
   }
-
-  // mouth (ARKit blendshape) from expr
-  const e = data.expr?.[f]
-  if (e) {
-    const mouth = Math.max(0, Math.min(1, (e.mo - 5) / 23))
-    for (const m of rig.faceMeshes) {
-      const d = m.morphTargetDictionary!
-      const inf = m.morphTargetInfluences!
-      const idx = d['mouthOpen'] ?? d['jawOpen'] ?? d['viseme_aa']
-      if (idx !== undefined) inf[idx] = mouth
-    }
-  }
+  // Mouth/expression intentionally not driven from data — keypoint-derived
+  // mouth looked unnatural; only the periodic eye-blink (in Avatar3D) remains.
 }
 
 const scratchPose: number[] = []

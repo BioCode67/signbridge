@@ -297,14 +297,13 @@ export function restPoseVRM(vrm: VRM) {
 }
 
 /** Drive mouth + brows from the non-manual expression data. */
-function applyExpression(vrm: VRM, data: SignData, f: number) {
+function applyExpression(vrm: VRM, _data: SignData, _f: number) {
   const em = vrm.expressionManager
   if (!em) return
-  const e = data.expr?.[f]
-  const mouth = e ? Math.max(0, Math.min(1, (e.mo - 5) / 23)) : 0
-  const brow = e ? Math.max(0, Math.min(1, (e.br - 8) / 14)) : 0
-  em.setValue('aa', mouth) // mouth opening
-  em.setValue('surprised', brow * 0.4) // raised brows ≈ mild surprise
+  // Mouth/brow intentionally not driven from data — keypoint-derived expression
+  // looked unnatural. Keep them neutral; the subtle eye-blink (Avatar3D) stays.
+  em.setValue('aa', 0)
+  em.setValue('surprised', 0)
 }
 
 const seg2dFinger: SegFn = (h, a, b) => segDir(h, a, b, CONF_FINGER)

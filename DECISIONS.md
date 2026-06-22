@@ -155,3 +155,10 @@
 - **사용자 제안(Open-LLM-VTuber, Project AIRI 등) 검토**: Open-LLM-VTuber는 Live2D(2D 퍼펫, 팔·손 관절 없음→수어 불가), AIRI는 VRM을 런타임 로드(번들 없음), GitHub의 .vrm은 대부분 Git LFS 포인터(샌드박스에서 실파일 수신 불가). 결론: 대화형 VTuber 스택은 전부 *자체 모션 생성*이라 우리 수어 키포인트 구동과 맞지 않음 — 단, 그들이 쓰는 리깅 VRM/GLB '모델'은 우리가 구동 가능.
 - **근본 해결책 = 커스텀 아바타 URL 로더**(SignAvatarDemo): 사용자가 RPM·Avaturn·VRoid·AIRI 등 어디서 만든 `.glb`/`.vrm` 주소든 붙여넣으면 **즉시 로드되어 수어로 구동**. `loadCustom()`이 URL 검증 후 setAvatarUrl → Avatar3D가 VRM/GLB 자동 분기 → AvatarErrorBoundary가 실패(잘못된 URL·CORS·LFS) 시 "불러오지 못했습니다"로 폴백. '내 아바타 ✓' 칩 표시. 검증: 유효 URL 입력→커스텀 활성+폴백 정상(샌드박스는 RPM 차단이라 실로드는 사용자 브라우저에서).
 - **효과**: 샌드박스 CDN 차단이라는 내 제약을 우회 — 사용자가 직접 어떤 모델이든 즉시 시험/적용. 아바타 품질 향상의 병목(내가 못 받음)을 사용자 셀프서비스로 해소.
+
+## 손가락 정확도 2차 — 손가락 벌림(abduction/spread) 추가
+- 기존 곡률(curl) 전용 방식은 굽힘만 재현하고 **좌우 벌림(spread)**이 없어 펼친 손(5수형 등)이 모은 손(B형)처럼 보였음. 이를 보완:
+  - **키포인트 손 프레임** 생성(`buildKpHandFrame`): 손목·중지/검지/새끼 MCP로 fwd(→중지)·side(검지→새끼)·normal 축을 아바타 손 프레임과 동일 규칙으로 구성 → 좌우각 비교 가능.
+  - prepareGLBRig에서 4지 MCP 본에 **abduct 축(손바닥 normal, 본 로컬)** + **restLat(정지 좌우각)** 저장.
+  - 런타임: 너클(MCP)에서 `curLat = atan2(cur·side, cur·fwd)` 측정 → `spread = clamp(curLat - restLat, ±0.42rad)`을 abduct 축으로 회전, 기존 curl과 합성(bind·spread·flex). **엄지 제외**, **3D 키포인트일 때만** 적용, ±24° 클램프로 왜곡 방지.
+- 검증: 펼친 손에서 손가락이 자연스럽게 부채꼴로 벌어지고 왜곡/역꺾임 없음(프레임 308·220 확인). 곡률만 쓰던 기존 대비 핸드셰이프 판독성 향상.

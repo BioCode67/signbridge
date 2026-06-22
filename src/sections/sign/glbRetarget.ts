@@ -32,8 +32,11 @@ interface BoneInfo {
   bind: THREE.Quaternion
   smooth: THREE.Quaternion
   flex?: THREE.Vector3 // finger flexion axis (knuckle axis) in bone-local frame
+  abduct?: THREE.Vector3 // MCP spread axis (palm normal) in bone-local frame
+  restLat?: number // rest lateral angle of this finger in the hand plane (rad)
 }
 const FINGER_FLEX_MAX = 1.5 // cap per-joint curl (~86°)
+const FINGER_SPREAD_MAX = 0.42 // cap MCP lateral spread (~24°)
 
 export interface GLBRig {
   get(key: string): BoneInfo | undefined
@@ -129,16 +132,25 @@ export function prepareGLBRig(root: THREE.Object3D): GLBRig {
     const hq = hand.getWorldQuaternion(new THREE.Quaternion())
     const normalWorld = hf.normal.clone().applyQuaternion(hq).normalize()
     const sideWorldFallback = hf.side.clone().applyQuaternion(hq).normalize()
+    const fwdWorld = hf.fwd.clone().applyQuaternion(hq).normalize()
+    const sideWorld = hf.side.clone().applyQuaternion(hq).normalize()
     for (const fg of FINGERS) {
       for (const k of [1, 2, 3]) {
         const info = infos.get(`${s}Hand${fg}${k}`)
         if (!info) continue
         const bwq = info.bone.getWorldQuaternion(new THREE.Quaternion())
+        const bwInv = bwq.clone().invert()
         const restWorld = info.axis.clone().applyQuaternion(bwq).normalize()
         const flexWorld = new THREE.Vector3().crossVectors(normalWorld, restWorld)
         if (flexWorld.lengthSq() < 1e-6) flexWorld.copy(sideWorldFallback)
         flexWorld.normalize()
-        info.flex = flexWorld.applyQuaternion(bwq.clone().invert()).normalize()
+        info.flex = flexWorld.applyQuaternion(bwInv).normalize()
+        // Spread (abduction) only at the knuckle (k=1) of the four fingers —
+        // the palm-normal axis in bone-local + this finger's rest lateral angle.
+        if (k === 1 && fg !== 'Thumb') {
+          info.abduct = normalWorld.clone().applyQuaternion(bwInv).normalize()
+          info.restLat = Math.atan2(restWorld.dot(sideWorld), restWorld.dot(fwdWorld))
+        }
       }
     }
   }
@@ -158,6 +170,36 @@ const _q = new THREE.Quaternion()
 const _qc = new THREE.Quaternion()
 const _fq = new THREE.Quaternion()
 const _bq = new THREE.Quaternion()
+const _sq = new THREE.Quaternion()
+// keypoint-derived hand frame (for finger spread), reused per hand
+const _kFwd = new THREE.Vector3()
+const _kSide = new THREE.Vector3()
+const _kNormal = new THREE.Vector3()
+
+/**
+ * Build the keypoint hand frame (fwd → middle MCP, side index→pinky, palm
+ * normal) from a 3D hand keypoint array into _kFwd/_kSide/_kNormal. Mirrors how
+ * the avatar hand frame is built, so lateral angles are directly comparable.
+ * Returns false if the needed joints are missing/degenerate.
+ */
+function buildKpHandFrame(h: number[]): boolean {
+  const wx = h[0], wy = h[1], wz = h[2]
+  const mx = h[27], my = h[28], mz = h[29] // middle MCP (joint 9)
+  const ix = h[15], iy = h[16], iz = h[17] // index MCP (joint 5)
+  const px = h[51], py = h[52], pz = h[53] // pinky MCP (joint 17)
+  if ((mx === 0 && my === 0 && mz === 0) || (ix === 0 && iy === 0 && iz === 0) || (px === 0 && py === 0 && pz === 0)) {
+    return false
+  }
+  _kFwd.set(mx - wx, my - wy, mz - wz)
+  _kSide.set(px - ix, py - iy, pz - iz)
+  if (_kFwd.lengthSq() < 1e-9 || _kSide.lengthSq() < 1e-9) return false
+  _kFwd.normalize()
+  _kNormal.crossVectors(_kFwd, _kSide)
+  if (_kNormal.lengthSq() < 1e-9) return false
+  _kNormal.normalize()
+  _kSide.crossVectors(_kNormal, _kFwd).normalize()
+  return true
+}
 
 function aim(
   info: BoneInfo | undefined,
@@ -306,9 +348,12 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     const handWorld = new THREE.Quaternion()
     aimHand(rig, side, foreWorld, h ? handDir(h, 0, 9) : null, h ? handDir(h, 5, 17) : null, handWorld)
     if (!h) continue
-    // Curl-based fingers: measure each joint's BEND ANGLE from the keypoints and
-    // rotate the bone purely around its flexion axis. Magnitude from data, axis
-    // fixed → natural curl with zero lateral twist (no distorted fingers).
+    // Build a keypoint-derived hand frame (3D only) so we can measure each
+    // finger's lateral SPREAD, not just its curl.
+    const spreadOK = use3d && buildKpHandFrame(h)
+    // Curl-based fingers: per joint, curl by the measured bend angle around the
+    // fixed knuckle axis (zero twist → no distortion). At the knuckle we ALSO
+    // add a clamped lateral spread so open/spread hand-shapes read correctly.
     for (const fg of FINGERS) {
       const segs = HAND_SEGS[fg]
       let prev = handDir(h, 0, segs[0][0]) // metacarpal reference (wrist→first joint)
@@ -319,7 +364,17 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
         if (info && info.flex && cur && prev) {
           const ang = Math.min(FINGER_FLEX_MAX, Math.acos(Math.max(-1, Math.min(1, prev.dot(cur)))))
           _fq.setFromAxisAngle(info.flex, -ang) // curl toward the palm
-          _bq.copy(info.bind).multiply(_fq)
+          let spread = 0
+          if (spreadOK && k === 0 && fg !== 'Thumb' && info.abduct && info.restLat != null) {
+            const curLat = Math.atan2(cur.dot(_kSide), cur.dot(_kFwd))
+            spread = Math.max(-FINGER_SPREAD_MAX, Math.min(FINGER_SPREAD_MAX, curLat - info.restLat))
+          }
+          if (spread !== 0 && info.abduct) {
+            _sq.setFromAxisAngle(info.abduct, spread)
+            _bq.copy(info.bind).multiply(_sq).multiply(_fq)
+          } else {
+            _bq.copy(info.bind).multiply(_fq)
+          }
           if (Number.isFinite(_bq.x + _bq.y + _bq.z + _bq.w)) info.smooth.slerp(_bq, SMOOTH_FINGER)
           info.bone.quaternion.copy(info.smooth)
         }

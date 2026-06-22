@@ -16,7 +16,7 @@ const MODE_LABELS: Record<DisplayMode, string> = {
   skeleton: '스켈레톤',
   '3d': '3D 아바타',
 }
-const MODES: DisplayMode[] = ['3d', 'avatar', 'skeleton']
+const MODES: DisplayMode[] = ['3d', 'skeleton']
 
 const SPEEDS = [0.5, 1, 1.5] as const
 

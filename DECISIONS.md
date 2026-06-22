@@ -207,3 +207,6 @@
 
 ## OG 미리보기 이미지 제작
 - 공모 링크 공유 시 미리보기용 `public/og.png`(1200×630) 제작 — 다크+시안 브랜드, 네트워크 모티프, "들리지 않아도, 닿습니다" 헤드라인+서브카피+URL. resvg-js로 SVG→PNG 렌더, 한글은 시스템 `AppleGothic.ttf` 사용(토푸 없이 정상). meta를 og.png + twitter summary_large_image로 갱신. 소스/재생성법은 scripts/og.svg·gen-og.md.
+
+## 비즈니스 정장 VRM 2종 제거 (사용자 요청)
+- "비즈니스 정장(VRM)"·"비즈니스 정장2(VRM)"(keito·toma) 제거 — 사용자 선호도. 파일 삭제로 모델 70→35MB 경량화. 아바타 6종(실사 3 + 캐릭터 2 + 만화풍 기자). 파일 업로드 기능은 유지되어 사용자가 원하면 언제든 다시 VRM 추가 가능.

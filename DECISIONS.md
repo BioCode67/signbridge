@@ -195,3 +195,9 @@
 ## 지속 개선 2: 내비 스크롤스파이 + 데모 접근성
 - **Navbar 스크롤스파이**: IntersectionObserver(중앙 -45/-50%)로 현재 섹션 nav 링크 활성 표시(시안 + 밑줄, aria-current). 검증: #qa 스크롤 시 "양방향 Q&A" 활성.
 - **데모 접근성**: 모드 토글 `aria-pressed`, 3D 스테이지 `role="img"` + 현재 문장 `aria-label`.
+
+## 로딩 성능: GLB 텍스처 최적화 (WebP + 리사이즈)
+- gltf-transform 4.4로 표준 GLB 아바타 텍스처를 max 1024 리사이즈 + WebP(q85)로 재인코딩 — **본/모프 무손상**(검증), three.js GLTFLoader 네이티브 WebP 지원이라 런타임 디코더 불필요·Draco 미사용(리그 안전).
+  - avaturn(기본) 13.8→11.4MB, avatarsdk 12.3→11MB, david 4.6→3.8, julia 4.5→3.3 (naoki 이미 최적). 총 78→70MB, 특히 **기본 아바타 초기 로딩 단축**.
+- VRM(keito·toma)·char-vroid는 VRM 확장/MToon 보호 위해 미변경.
+- 검증: 최적화된 avaturn·avatarsdk 렌더 동일 품질(로고 텍스트까지 선명), 수어 정상 구동.

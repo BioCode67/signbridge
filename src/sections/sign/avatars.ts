@@ -20,12 +20,11 @@ export interface AvatarOption {
 }
 
 export const AVATARS: AvatarOption[] = [
+  // Photoreal, clean
   { id: 'avaturn', label: '실사 앵커(여)', url: `${BASE}models/real-avaturn.glb`, real: true },
   { id: 'avatarsdk', label: '실사 인물(남)', url: `${BASE}models/real-avatarsdk.glb`, real: true },
-  { id: 'jiwoo', label: '실사 인물(남2)', url: `${BASE}models/real-jiwoo.glb`, real: true },
-  { id: 'emma', label: '실사 캐주얼(여)', url: `${BASE}models/real-emma.glb`, real: true },
-  { id: 'david', label: '데이비드', url: `${BASE}models/real-david.glb`, real: true },
-  { id: 'julia', label: '줄리아', url: `${BASE}models/real-julia.glb`, real: true },
-  { id: 'naoki', label: '정장 기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: true },
-  { id: 'yuna', label: '캐릭터 안내원(여)', url: `${BASE}models/real-yuna.glb`, real: false },
+  { id: 'david', label: '실사 인물(남2)', url: `${BASE}models/real-david.glb`, real: true },
+  // Clean stylized characters
+  { id: 'julia', label: '캐릭터(여)', url: `${BASE}models/real-julia.glb`, real: false },
+  { id: 'naoki', label: '만화풍 기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: false },
 ]

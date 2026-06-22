@@ -206,39 +206,76 @@ function renderAvatar(
 ) {
   const fr = data.keypoints.pose[frame]
   const d = dpr
-  const SKIN: [string, string] = ['#ffe0bd', '#f0c89e']
-  const SHIRT: [string, string] = ['#34d0e8', '#1a7d99']
-  const SHIRT_DK: [string, string] = ['#2596b0', '#14637a']
+  // Clean professional flat palette — a news-anchor look that matches the site.
+  const SKIN: [string, string] = ['#f4cfa9', '#e3aa7e']
+  const SUIT: [string, string] = ['#28374f', '#161e2e'] // navy jacket
+  const SUIT_DK: [string, string] = ['#1e2940', '#10172a'] // shaded sleeve
+  const SHIRT_WHITE = '#eef3fb'
+  const TIE: [string, string] = ['#22d3ee', '#0e7490']
+  const HAIR = '#241b14'
 
-  // Torso (rounded shirt)
+  // Torso — suit jacket with white shirt V + cyan tie
   if (C(fr, NECK) > 0.1 && C(fr, RSH) > 0.1 && C(fr, LSH) > 0.1) {
     const neck = P(cv, fr, NECK)
     const rsh = P(cv, fr, RSH)
     const lsh = P(cv, fr, LSH)
     const hip = C(fr, MIDHIP) > 0.1 ? P(cv, fr, MIDHIP) : [neck[0], neck[1] + 230 * d]
     const shMidX = (rsh[0] + lsh[0]) / 2
-    const wr = [shMidX + (rsh[0] - shMidX) * 0.78, hip[1]]
-    const wl = [shMidX + (lsh[0] - shMidX) * 0.78, hip[1]]
+    const wr = [shMidX + (rsh[0] - shMidX) * 0.82, hip[1]]
+    const wl = [shMidX + (lsh[0] - shMidX) * 0.82, hip[1]]
     const g = ctx.createLinearGradient(shMidX, rsh[1], shMidX, hip[1])
-    g.addColorStop(0, SHIRT[0])
-    g.addColorStop(1, SHIRT[1])
+    g.addColorStop(0, SUIT[0])
+    g.addColorStop(1, SUIT[1])
     ctx.fillStyle = g
     ctx.beginPath()
     ctx.moveTo(rsh[0], rsh[1])
-    ctx.quadraticCurveTo((rsh[0] + lsh[0]) / 2, rsh[1] - 10 * d, lsh[0], lsh[1])
+    ctx.quadraticCurveTo(shMidX, rsh[1] - 10 * d, lsh[0], lsh[1])
     ctx.quadraticCurveTo(lsh[0] + 10 * d, (lsh[1] + wl[1]) / 2, wl[0], wl[1])
-    ctx.quadraticCurveTo(shMidX, hip[1] + 14 * d, wr[0], wr[1])
+    ctx.quadraticCurveTo(shMidX, hip[1] + 16 * d, wr[0], wr[1])
     ctx.quadraticCurveTo(rsh[0] - 10 * d, (rsh[1] + wr[1]) / 2, rsh[0], rsh[1])
     ctx.closePath()
     ctx.fill()
+
+    // White shirt collar V
+    const cy0 = (rsh[1] + lsh[1]) / 2
+    const chestY = cy0 + (hip[1] - cy0) * 0.6
+    ctx.fillStyle = SHIRT_WHITE
+    ctx.beginPath()
+    ctx.moveTo(shMidX - 23 * d, cy0 + 1 * d)
+    ctx.lineTo(shMidX + 23 * d, cy0 + 1 * d)
+    ctx.lineTo(shMidX, chestY)
+    ctx.closePath()
+    ctx.fill()
+    // Cyan tie
+    const tg = ctx.createLinearGradient(shMidX, cy0, shMidX, chestY)
+    tg.addColorStop(0, TIE[0])
+    tg.addColorStop(1, TIE[1])
+    ctx.fillStyle = tg
+    ctx.beginPath()
+    ctx.moveTo(shMidX - 5 * d, cy0 + 5 * d)
+    ctx.lineTo(shMidX + 5 * d, cy0 + 5 * d)
+    ctx.lineTo(shMidX + 8 * d, chestY - 3 * d)
+    ctx.lineTo(shMidX, chestY + 7 * d)
+    ctx.lineTo(shMidX - 8 * d, chestY - 3 * d)
+    ctx.closePath()
+    ctx.fill()
+    // Subtle lapels
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)'
+    ctx.lineWidth = 2 * d
+    ctx.beginPath()
+    ctx.moveTo(shMidX - 23 * d, cy0 + 1 * d)
+    ctx.lineTo(shMidX - 5 * d, chestY + 26 * d)
+    ctx.moveTo(shMidX + 23 * d, cy0 + 1 * d)
+    ctx.lineTo(shMidX + 5 * d, chestY + 26 * d)
+    ctx.stroke()
   }
 
-  // Arms (gradient + rounded caps)
-  ctx.shadowColor = 'rgba(34,211,238,.35)'
-  ctx.shadowBlur = 10 * d
-  smoothLimb(ctx, cv, dpr, fr, RSH, REL, 17, 12, SHIRT_DK)
+  // Arms — jacket sleeve (upper) + skin forearm, soft cyan glow
+  ctx.shadowColor = 'rgba(34,211,238,.26)'
+  ctx.shadowBlur = 9 * d
+  smoothLimb(ctx, cv, dpr, fr, RSH, REL, 18, 13, SUIT_DK)
   smoothLimb(ctx, cv, dpr, fr, REL, RWR, 12, 9, SKIN)
-  smoothLimb(ctx, cv, dpr, fr, LSH, LEL, 17, 12, SHIRT_DK)
+  smoothLimb(ctx, cv, dpr, fr, LSH, LEL, 18, 13, SUIT_DK)
   smoothLimb(ctx, cv, dpr, fr, LEL, LWR, 12, 9, SKIN)
   ctx.shadowBlur = 0
 
@@ -255,14 +292,13 @@ function renderAvatar(
   handShape(ctx, cv, dpr, data.keypoints.hand_left[frame], SKIN)
   handShape(ctx, cv, dpr, data.keypoints.hand_right[frame], SKIN)
 
-  // Head
+  // Head — clean, static neutral face (expression is fixed)
   if (C(fr, NECK) > 0.1) {
     const neck = P(cv, fr, NECK)
     const head = C(fr, NOSE) > 0.1 ? P(cv, fr, NOSE) : [neck[0], neck[1] - 70 * d]
-    const ex = data.expr && data.expr[frame] ? data.expr[frame] : { mo: 12, br: 15 }
     // Neck
     ctx.fillStyle = SKIN[1]
-    ctx.lineWidth = 15 * d
+    ctx.lineWidth = 16 * d
     ctx.strokeStyle = SKIN[1]
     ctx.lineCap = 'round'
     ctx.beginPath()
@@ -270,71 +306,66 @@ function renderAvatar(
     ctx.lineTo(head[0], head[1] + 18 * d)
     ctx.stroke()
     const hx = head[0]
-    const hy = head[1] - 20 * d
-    // Face (gradient sphere)
-    const fg = ctx.createRadialGradient(hx - 8 * d, hy - 8 * d, 4, hx, hy, 42 * d)
-    fg.addColorStop(0, '#ffe8cf')
-    fg.addColorStop(1, '#eebf94')
+    const hy = head[1] - 22 * d
+    // Face
+    const fg = ctx.createRadialGradient(hx - 9 * d, hy - 10 * d, 4, hx, hy, 44 * d)
+    fg.addColorStop(0, '#ffe9d2')
+    fg.addColorStop(1, '#e7b489')
     ctx.fillStyle = fg
     ctx.beginPath()
-    ctx.ellipse(hx, hy, 33 * d, 39 * d, 0, 0, 7)
+    ctx.ellipse(hx, hy, 32 * d, 38 * d, 0, 0, 7)
     ctx.fill()
     // Ears
-    ctx.fillStyle = '#eebf94'
+    ctx.fillStyle = '#e7b489'
     ctx.beginPath()
-    ctx.arc(hx - 32 * d, hy + 2 * d, 6 * d, 0, 7)
+    ctx.arc(hx - 31 * d, hy + 3 * d, 5.5 * d, 0, 7)
     ctx.fill()
     ctx.beginPath()
-    ctx.arc(hx + 32 * d, hy + 2 * d, 6 * d, 0, 7)
+    ctx.arc(hx + 31 * d, hy + 3 * d, 5.5 * d, 0, 7)
     ctx.fill()
-    // Hair
-    ctx.fillStyle = '#4a3528'
+    // Hair (neat side-part)
+    ctx.fillStyle = HAIR
     ctx.beginPath()
-    ctx.ellipse(hx, hy - 16 * d, 36 * d, 27 * d, 0, Math.PI * 1.05, Math.PI * 1.95)
+    ctx.moveTo(hx - 34 * d, hy + 4 * d)
+    ctx.quadraticCurveTo(hx - 40 * d, hy - 34 * d, hx - 2 * d, hy - 38 * d)
+    ctx.quadraticCurveTo(hx + 40 * d, hy - 36 * d, hx + 34 * d, hy + 2 * d)
+    ctx.quadraticCurveTo(hx + 18 * d, hy - 19 * d, hx + 2 * d, hy - 18 * d)
+    ctx.quadraticCurveTo(hx - 18 * d, hy - 17 * d, hx - 34 * d, hy + 4 * d)
+    ctx.closePath()
     ctx.fill()
-    ctx.beginPath()
-    ctx.moveTo(hx - 34 * d, hy - 8 * d)
-    ctx.quadraticCurveTo(hx - 38 * d, hy - 30 * d, hx, hy - 34 * d)
-    ctx.quadraticCurveTo(hx + 38 * d, hy - 30 * d, hx + 34 * d, hy - 8 * d)
-    ctx.quadraticCurveTo(hx, hy - 26 * d, hx - 34 * d, hy - 8 * d)
-    ctx.fill()
-    // Brows (expression-driven)
-    const bl = Math.max(0, Math.min(1, (ex.br - 8) / 14)) * 4 * d
-    ctx.strokeStyle = '#4a3528'
-    ctx.lineWidth = 2.8 * d
+    // Brows (static, neutral)
+    ctx.strokeStyle = HAIR
+    ctx.lineWidth = 2.6 * d
     ctx.lineCap = 'round'
     ctx.beginPath()
-    ctx.moveTo(hx - 17 * d, hy - 6 * d - bl)
-    ctx.quadraticCurveTo(hx - 11 * d, hy - 9 * d - bl, hx - 5 * d, hy - 7 * d - bl)
+    ctx.moveTo(hx - 17 * d, hy - 6 * d)
+    ctx.quadraticCurveTo(hx - 11 * d, hy - 9 * d, hx - 5 * d, hy - 7 * d)
+    ctx.moveTo(hx + 5 * d, hy - 7 * d)
+    ctx.quadraticCurveTo(hx + 11 * d, hy - 9 * d, hx + 17 * d, hy - 6 * d)
     ctx.stroke()
-    ctx.beginPath()
-    ctx.moveTo(hx + 5 * d, hy - 7 * d - bl)
-    ctx.quadraticCurveTo(hx + 11 * d, hy - 9 * d - bl, hx + 17 * d, hy - 6 * d - bl)
-    ctx.stroke()
-    // Eyes (white + iris + glint)
+    // Eyes
     for (const eo of [-11, 11]) {
       ctx.fillStyle = '#fff'
       ctx.beginPath()
-      ctx.ellipse(hx + eo * d, hy + 3 * d, 5 * d, 6 * d, 0, 0, 7)
+      ctx.ellipse(hx + eo * d, hy + 3 * d, 4.6 * d, 5.6 * d, 0, 0, 7)
       ctx.fill()
-      ctx.fillStyle = '#3a2a1e'
+      ctx.fillStyle = '#33261b'
       ctx.beginPath()
-      ctx.arc(hx + eo * d, hy + 4 * d, 3 * d, 0, 7)
+      ctx.arc(hx + eo * d, hy + 4 * d, 2.7 * d, 0, 7)
       ctx.fill()
       ctx.fillStyle = '#fff'
       ctx.beginPath()
-      ctx.arc(hx + eo * d - 1 * d, hy + 2.5 * d, 1 * d, 0, 7)
+      ctx.arc(hx + eo * d - 1 * d, hy + 2.6 * d, 0.9 * d, 0, 7)
       ctx.fill()
     }
-    // Mouth (expression-driven)
-    const mh = Math.max(2, Math.min(11, ((ex.mo - 5) / 23) * 11)) * d
-    const mg = ctx.createLinearGradient(hx, hy + 20 * d, hx, hy + 20 * d + mh)
-    mg.addColorStop(0, '#c5685a')
-    mg.addColorStop(1, '#9c4a3e')
-    ctx.fillStyle = mg
+    // Mouth — gentle neutral curve (static)
+    ctx.strokeStyle = '#b56a5b'
+    ctx.lineWidth = 2.6 * d
+    ctx.lineCap = 'round'
     ctx.beginPath()
-    ctx.ellipse(hx, hy + 22 * d, 10 * d, mh, 0, 0, 7)
-    ctx.fill()
+    ctx.moveTo(hx - 8 * d, hy + 21 * d)
+    ctx.quadraticCurveTo(hx, hy + 24 * d, hx + 8 * d, hy + 21 * d)
+    ctx.stroke()
   }
 }
 

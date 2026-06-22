@@ -12,11 +12,11 @@ const Avatar3D = lazy(() => import('./sign/Avatar3D'))
 /** Rigged 3D avatar (primary) + skeleton keypoint view (comparison). */
 type DisplayMode = ViewMode | '3d'
 const MODE_LABELS: Record<DisplayMode, string> = {
-  avatar: '아바타',
+  avatar: '2D 아바타',
   skeleton: '스켈레톤',
   '3d': '3D 아바타',
 }
-const MODES: DisplayMode[] = ['3d', 'skeleton']
+const MODES: DisplayMode[] = ['3d', 'avatar', 'skeleton']
 
 const SPEEDS = [0.5, 1, 1.5] as const
 
@@ -244,7 +244,11 @@ export default function SignAvatarDemo() {
                 }}
               >
                 <span className="absolute left-3 top-3 z-10 rounded-md border border-cyan-glow/30 bg-cyan-glow/10 px-2.5 py-1 text-[10.5px] tracking-wide text-cyan-soft">
-                  {mode === '3d' ? '실사 3D 아바타 · 관절 리타게팅' : 'REAL KEYPOINT · OpenPose'}
+                  {mode === '3d'
+                    ? '실사 3D 아바타 · 관절 리타게팅'
+                    : mode === 'avatar'
+                      ? '클린 2D 아바타 · 관절 구동'
+                      : 'REAL KEYPOINT · OpenPose'}
                 </span>
                 <div className="absolute right-3 top-3 z-10 flex gap-1">
                   {MODES.map((m) => (

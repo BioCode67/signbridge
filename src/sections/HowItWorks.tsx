@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import SystemDiagram from './SystemDiagram'
+import NetworkPanel from './NetworkPanel'
 
 const ease = [0.22, 1, 0.36, 1] as const
 
@@ -125,6 +126,7 @@ export default function HowItWorks() {
         </motion.div>
 
         <SystemDiagram />
+        <NetworkPanel />
       </div>
     </section>
   )

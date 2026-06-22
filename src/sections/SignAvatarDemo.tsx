@@ -405,6 +405,12 @@ export default function SignAvatarDemo() {
                 </div>
               )}
 
+              {/* Roadmap note — honest framing of the demo avatar's current limits */}
+              <p className="mt-4 rounded-xl border border-white/10 bg-space-800/40 px-4 py-3 text-[12px] leading-relaxed text-slate-400">
+                <span className="font-semibold text-slate-300">참고 </span>· 현재 아바타는 데모용으로 직접 제작해 손동작·표정의 완성도가
+                제한적입니다. 본 과제 선정 시 지원금으로 더 정교한 전문 아바타를 도입해 수어 전달의 정확도와 디자인을 고도화할 예정입니다.
+              </p>
+
               {/* Korean source text */}
               <div className="mt-4 rounded-xl border border-white/10 bg-space-800 px-4 py-3.5 text-[15px] leading-relaxed">
                 <span className="mb-1.5 block text-[11px] font-bold tracking-[0.1em] text-cyan-soft">

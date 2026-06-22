@@ -232,6 +232,19 @@ function aimHand(
   out.copy(parentWorld).multiply(info.smooth).normalize()
 }
 
+/** Drive eye-blink via ARKit blendshapes (RPM/Avaturn). amount 0..1. */
+export function setBlinkGLB(rig: GLBRig, amount: number) {
+  for (const m of rig.faceMeshes) {
+    const d = m.morphTargetDictionary
+    const inf = m.morphTargetInfluences
+    if (!d || !inf) continue
+    for (const key of ['eyeBlinkLeft', 'eyeBlinkRight', 'blink', 'eyesClosed']) {
+      const i = d[key]
+      if (i !== undefined) inf[i] = amount
+    }
+  }
+}
+
 /** Apply a keypoint frame to a GLB humanoid rig. */
 export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
   const f = Math.max(0, Math.min(frame, data.num_frames - 1))

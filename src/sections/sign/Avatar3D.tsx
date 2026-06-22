@@ -5,7 +5,7 @@ import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
 import { applyPoseToVRM, restPoseVRM } from './retarget'
-import { prepareGLBRig, applyPoseToGLB, type GLBRig } from './glbRetarget'
+import { prepareGLBRig, applyPoseToGLB, setBlinkGLB, type GLBRig } from './glbRetarget'
 import { DEFAULT_MODEL_URL } from './avatars'
 
 /** Frame any humanoid so its head sits at a canonical height + upper body fills the stage. */
@@ -87,7 +87,12 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
       return
     }
     const rig = rigRef.current
-    if (rig && animate && data) applyPoseToGLB(rig, data, frame)
+    if (rig) {
+      if (animate && data) applyPoseToGLB(rig, data, frame)
+      const phase = t % 4.2
+      const blink = phase > 4.05 ? Math.sin(((phase - 4.05) / 0.15) * Math.PI) : 0
+      setBlinkGLB(rig, blink)
+    }
   })
 
   return <primitive object={vrm ? vrm.scene : gltf.scene} />

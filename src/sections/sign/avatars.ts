@@ -8,7 +8,7 @@
  */
 const BASE = import.meta.env.BASE_URL
 
-export const DEFAULT_MODEL_URL = `${BASE}models/real-avatarsdk.glb`
+export const DEFAULT_MODEL_URL = `${BASE}models/real-avaturn.glb`
 
 export interface AvatarOption {
   id: string
@@ -19,10 +19,10 @@ export interface AvatarOption {
 }
 
 export const AVATARS: AvatarOption[] = [
-  { id: 'avatarsdk', label: '실사 인물', url: `${BASE}models/real-avatarsdk.glb`, real: true },
+  { id: 'avaturn', label: '실사 앵커(여)', url: `${BASE}models/real-avaturn.glb`, real: true },
+  { id: 'avatarsdk', label: '실사 인물(남)', url: `${BASE}models/real-avatarsdk.glb`, real: true },
+  { id: 'naoki', label: '정장 기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: true },
+  { id: 'nanami', label: '정장 앵커(여)', url: `${BASE}models/anchor-nanami.glb`, real: true },
   { id: 'brunette', label: '실사 여성', url: `${BASE}models/real-brunette.glb`, real: true },
-  { id: 'naoki', label: '기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: true },
-  { id: 'nanami', label: '앵커(여)', url: `${BASE}models/anchor-nanami.glb`, real: true },
-  { id: 'person', label: '인물', url: `${BASE}models/person-rpm.glb`, real: true },
   { id: 'vroid', label: '기본(VRoid)', url: `${BASE}models/avatar.vrm` },
 ]

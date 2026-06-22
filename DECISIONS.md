@@ -171,3 +171,6 @@
 - 문제: 사용자가 VRoid/RPM 등에서 모델을 받아도 *파일*이지 *URL*이 아니라, URL 전용 로더로는 못 썼음("사이트 접속/사용 불가"의 실제 원인).
 - 해결: SignAvatarDemo 로더에 **로컬 파일 업로드** 추가(`onFile` → `URL.createObjectURL` → setModel). `.glb`/`.vrm` 파일을 컴퓨터에서 선택하면 blob URL로 즉시 로드·수어 구동. 어떤 사이트(VRoid Hub·Booth·Sketchfab 등)에서 받은 파일이든 호스팅 없이 사용 가능. 파일은 브라우저 내에서만 처리(업로드 없음). 이전 blob URL은 모델 변경 시 revoke(누수 방지). URL 입력은 보조로 유지.
 - 검증: 번들 모델을 File로 만들어 input에 주입→change→blob URL로 렌더 성공("내 아바타 ✓"), 정상 수어 구동.
+
+## 사용자 제공 VRM 추가 (Booth "business")
+- 사용자가 Booth에서 "VRM 무료 business" 검색해 받은 `keito_a.vrm`(VRM 0.x "けいとA", 20.5MB, 손가락 본 30·휴머노이드 54·블렌드셰이프) 제공 → `business-keito.vrm`로 번들, "비즈니스 정장(VRM)"으로 추가. VRM 경로(applyPoseToVRM)로 구동, 깔끔한 네이비 정장·손가락 자연 구동 확인. 파일 업로드 기능이 실제로 동작함을 입증한 첫 사용자 모델.

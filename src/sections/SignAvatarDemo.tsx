@@ -4,6 +4,7 @@ import SectionHeading from '../ui/SectionHeading'
 import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
 import { AVATARS } from './sign/avatars'
+import AvatarErrorBoundary from './sign/AvatarErrorBoundary'
 
 // 3D avatar (Three.js + VRM) is heavy — load it only when the user opens 3D mode.
 const Avatar3D = lazy(() => import('./sign/Avatar3D'))
@@ -167,9 +168,9 @@ export default function SignAvatarDemo() {
           }
           description={
             <>
-              AI Hub「재난 안전 정보 전달을 위한 수어영상」데이터의 실제 키포인트를 아바타로
-              렌더링했습니다. 농인이 직접 수어한 동작이며, 표정(입·눈썹)은 비수지 정보를 반영합니다.
-              지진·태풍·호우·대설·산불·미세먼지 등 다양한 재난 유형을 수록했습니다.
+              AI Hub「재난 안전 정보 전달을 위한 수어영상」데이터의 실제 손·팔 관절 좌표를 3D 아바타로
+              리타게팅해 재현했습니다. 농인이 직접 수어한 동작이며, 무거운 영상이 아니라 관절 좌표만
+              전송해 렌더링합니다. 지진·태풍·호우·대설·산불·미세먼지 등 다양한 재난 유형을 수록했습니다.
             </>
           }
         />
@@ -243,7 +244,7 @@ export default function SignAvatarDemo() {
                 }}
               >
                 <span className="absolute left-3 top-3 z-10 rounded-md border border-cyan-glow/30 bg-cyan-glow/10 px-2.5 py-1 text-[10.5px] tracking-wide text-cyan-soft">
-                  {mode === '3d' ? 'VRM · 3D 아바타' : 'REAL KEYPOINT · OpenPose'}
+                  {mode === '3d' ? '실사 3D 아바타 · 관절 리타게팅' : 'REAL KEYPOINT · OpenPose'}
                 </span>
                 <div className="absolute right-3 top-3 z-10 flex gap-1">
                   {MODES.map((m) => (
@@ -264,15 +265,17 @@ export default function SignAvatarDemo() {
 
                 {/* 3D mode renders its own R3F canvas; 2D modes use the 2D canvas. */}
                 {mode === '3d' ? (
-                  <Suspense
-                    fallback={
-                      <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">
-                        <span className="animate-pulse">3D 아바타 모델을 불러오는 중…</span>
-                      </div>
-                    }
-                  >
-                    <Avatar3D data={data} frame={frame} animate modelUrl={avatarUrl} />
-                  </Suspense>
+                  <AvatarErrorBoundary resetKey={avatarUrl}>
+                    <Suspense
+                      fallback={
+                        <div className="absolute inset-0 grid place-items-center text-sm text-slate-500">
+                          <span className="animate-pulse">3D 아바타 모델을 불러오는 중…</span>
+                        </div>
+                      }
+                    >
+                      <Avatar3D data={data} frame={frame} animate modelUrl={avatarUrl} />
+                    </Suspense>
+                  </AvatarErrorBoundary>
                 ) : (
                   <canvas ref={canvasRef} className="block h-full w-full" />
                 )}
@@ -296,7 +299,6 @@ export default function SignAvatarDemo() {
                   <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-wide text-slate-500">
                     <span>아바타 선택</span>
                     <span className="text-slate-600">· 실사·앵커 등 {AVATARS.length}종</span>
-                    <span className="text-slate-600">· ↗는 온라인 스트리밍</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {AVATARS.map((a) => (
@@ -311,7 +313,6 @@ export default function SignAvatarDemo() {
                         }`}
                       >
                         {a.label}
-                        {a.remote && <span className="ml-1 text-[9px] text-slate-500">↗</span>}
                       </button>
                     ))}
                   </div>
@@ -402,9 +403,10 @@ export default function SignAvatarDemo() {
 
               <p className="mt-6 border-t border-white/10 pt-5 text-xs leading-relaxed text-slate-500">
                 재난 안전 공지(텍스트)를 한국수어로 변환해 아바타로 표현하는 데모입니다. 실제 농인이
-                수어한 동작을 OpenPose로 추출한 2D 키포인트에 형태를 입혀 렌더링했으며, 표정(입·눈썹)은
-                데이터의 비수지 정보를 반영합니다. 본 과제의 목표는 재난 공지 발생 즉시 이 변환을 수행해
-                KOREN 저지연망으로 전국 다채널에 실시간 송출하는 것입니다.
+                수어한 동작을 OpenPose로 추출한 관절 키포인트에 형태를 입혀 3D로 리타게팅했습니다. 본
+                과제의 목표는 재난 공지 발생 즉시 이 변환을 수행해, 영상이 아닌 경량 관절 좌표(약
+                0.1Mbps)만 KOREN 저지연망으로 보내 전국 다채널에 실시간 송출하는 것입니다. 비수지(표정·
+                입모양)는 전체 시스템에서 단계적으로 정밀화합니다.
               </p>
             </>
           )}

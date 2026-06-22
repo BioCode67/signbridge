@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
 
 /**
- * Lightweight system architecture diagram (responsive SVG) showing the
- * KOREN-centred data flow: disaster input → KOREN low-latency backbone →
- * HPC/GPU AI conversion → sign avatar → nationwide multi-channel output.
- * Built to make the technical structure legible at a glance for reviewers.
+ * System architecture diagram (responsive SVG): disaster text + Deaf question
+ * (GPS) → KOREN HPC 4-agent cluster → KOREN low-latency transport (joint
+ * coordinates, ~0.1Mbps) → terminal 3D avatar, with the bidirectional Q&A loop
+ * returning from the terminal back to the agents. Built to make the Agentic AI
+ * + KOREN structure legible at a glance for reviewers.
  */
 
 const C = {
@@ -15,19 +16,9 @@ const C = {
   sub: '#7c8ba1',
 }
 
-const stages = [
-  { x: 40, t: '재난 입력', s: ['재난문자(CBS)', '재난방송·속보'] },
-  { x: 248, t: 'KOREN 저지연망', s: ['초저지연 연구망', '전국 백본'], koren: true },
-  { x: 456, t: 'AI 수어 변환', s: ['HPC · GPU', 'AI Network Lab'] },
-  { x: 664, t: '수어 아바타', s: ['KSL 실시간', '아바타 생성'] },
-  { x: 872, t: '다채널 송출', s: ['방송·앱', '전광판·키오스크'] },
-]
-
-const BW = 168
-const BH = 96
-const BY = 40
-
 export default function SystemDiagram() {
+  const BY = 44
+  const BH = 132
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -37,10 +28,10 @@ export default function SystemDiagram() {
       className="mt-12"
     >
       <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-        시스템 구성
+        시스템 구성도
       </p>
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-space-900/40 p-4 sm:p-6">
-        <svg viewBox="0 0 1080 220" className="h-auto w-full" role="img" aria-label="SignBridge 시스템 구성도">
+        <svg viewBox="0 0 1080 280" className="h-auto w-full" role="img" aria-label="SignBridge 시스템 구성도">
           <defs>
             <linearGradient id="koren" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0" stopColor="#0e7490" />
@@ -49,16 +40,21 @@ export default function SystemDiagram() {
             <marker id="arrow" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
               <path d="M0 0 L6 3 L0 6 z" fill={C.accent} />
             </marker>
+            <marker id="arrowBack" markerWidth="9" markerHeight="9" refX="6" refY="3" orient="auto">
+              <path d="M0 0 L6 3 L0 6 z" fill="#f0abfc" />
+            </marker>
           </defs>
 
-          {/* connectors */}
-          {stages.slice(0, -1).map((st, i) => {
-            const x1 = st.x + BW
-            const x2 = stages[i + 1].x
+          {/* ---- forward connectors ---- */}
+          {[
+            [234, 292],
+            [560, 612],
+            [806, 858],
+          ].map(([x1, x2], i) => {
             const y = BY + BH / 2
             return (
               <g key={`c${i}`}>
-                <line x1={x1} y1={y} x2={x2 - 2} y2={y} stroke={C.accent} strokeWidth="1.5" opacity="0.5" markerEnd="url(#arrow)" />
+                <line x1={x1} y1={y} x2={x2 - 2} y2={y} stroke={C.accent} strokeWidth="1.6" opacity="0.55" markerEnd="url(#arrow)" />
                 <circle r="3.5" fill="#a5f3fc">
                   <animate attributeName="cx" from={x1} to={x2 - 2} dur="2.2s" begin={`${i * 0.4}s`} repeatCount="indefinite" />
                   <animate attributeName="cy" values={`${y};${y}`} dur="2.2s" repeatCount="indefinite" />
@@ -68,62 +64,70 @@ export default function SystemDiagram() {
             )
           })}
 
-          {/* boxes */}
-          {stages.map((st) => (
-            <g key={st.t}>
-              <rect
-                x={st.x}
-                y={BY}
-                width={BW}
-                height={BH}
-                rx="14"
-                fill={st.koren ? 'url(#koren)' : C.box}
-                stroke={st.koren ? C.accent : C.stroke}
-                strokeWidth={st.koren ? 2 : 1.2}
-                opacity={st.koren ? 0.95 : 1}
-              />
-              <text
-                x={st.x + BW / 2}
-                y={BY + 38}
-                textAnchor="middle"
-                fontSize="20"
-                fontWeight="700"
-                fill={st.koren ? '#04111a' : C.text}
-              >
-                {st.t}
-              </text>
-              {st.s.map((line, j) => (
-                <text
-                  key={line}
-                  x={st.x + BW / 2}
-                  y={BY + 60 + j * 18}
-                  textAnchor="middle"
-                  fontSize="13"
-                  fill={st.koren ? '#06303a' : C.sub}
-                >
-                  {line}
-                </text>
-              ))}
-            </g>
-          ))}
-
-          {/* nationwide POPs under the output stage */}
-          <text x={872 + BW / 2} y={170} textAnchor="middle" fontSize="12" fill={C.sub}>
-            전국 NIA POP 10개소
+          {/* ---- bidirectional Q&A return path: terminal → agents ---- */}
+          <path
+            d={`M 962 ${BY + BH} C 962 250, 432 250, 432 ${BY + BH}`}
+            fill="none"
+            stroke="#f0abfc"
+            strokeWidth="1.5"
+            strokeDasharray="5 5"
+            opacity="0.7"
+            markerEnd="url(#arrowBack)"
+          />
+          <text x="697" y="244" textAnchor="middle" fontSize="12.5" fill="#f0abfc">
+            양방향 Q&amp;A — 농인 질문 → 맞춤 수어 응답
           </text>
-          {['서울', '대전', '대구', '부산', '광주'].map((city, i) => {
-            const cx = 872 + 14 + i * 35
-            return (
-              <g key={city}>
-                <circle cx={cx} cy={192} r="4" fill={C.accent} />
-                <text x={cx} y={210} textAnchor="middle" fontSize="10" fill={C.sub}>
-                  {city}
-                </text>
-              </g>
-            )
-          })}
+
+          {/* ---- 1. Input ---- */}
+          <g>
+            <rect x={24} y={BY} width={210} height={BH} rx="14" fill={C.box} stroke={C.stroke} strokeWidth="1.2" />
+            <text x={129} y={BY + 30} textAnchor="middle" fontSize="19" fontWeight="700" fill={C.text}>입력</text>
+            {['재난문자(CBS)·방송', '농인 질문 (버튼/텍스트)', '+ GPS 위치'].map((t, j) => (
+              <text key={t} x={129} y={BY + 58 + j * 22} textAnchor="middle" fontSize="13" fill={C.sub}>{t}</text>
+            ))}
+          </g>
+
+          {/* ---- 2. KOREN HPC 4-agent cluster ---- */}
+          <g>
+            <rect x={292} y={BY} width={268} height={BH} rx="14" fill="#0a1626" stroke={C.accent} strokeWidth="1.6" opacity="0.95" />
+            <text x={426} y={BY + 28} textAnchor="middle" fontSize="17" fontWeight="700" fill={C.accent}>KOREN HPC · 4-에이전트</text>
+            {[
+              '① 재난 판단',
+              '② 수어 변환',
+              '③ Q&A 대응 (판단)',
+              '④ 송출 제어',
+            ].map((t, j) => {
+              const col = j % 2
+              const row = Math.floor(j / 2)
+              return (
+                <text key={t} x={306 + col * 132} y={BY + 60 + row * 30} fontSize="13.5" fill={C.text}>{t}</text>
+              )
+            })}
+            <text x={426} y={BY + BH - 12} textAnchor="middle" fontSize="11.5" fill={C.sub}>H200 GPU · KoGPT2 · Transformer</text>
+          </g>
+
+          {/* ---- 3. KOREN transport ---- */}
+          <g>
+            <rect x={612} y={BY} width={194} height={BH} rx="14" fill="url(#koren)" stroke={C.accent} strokeWidth="2" opacity="0.95" />
+            <text x={709} y={BY + 34} textAnchor="middle" fontSize="18" fontWeight="700" fill="#04111a">KOREN망 송출</text>
+            {['SRT · WebRTC', '관절 좌표 ≈ 0.1Mbps', '다채널 동시 송출'].map((t, j) => (
+              <text key={t} x={709} y={BY + 62 + j * 22} textAnchor="middle" fontSize="12.5" fill="#06303a">{t}</text>
+            ))}
+          </g>
+
+          {/* ---- 4. Terminal ---- */}
+          <g>
+            <rect x={858} y={BY} width={198} height={BH} rx="14" fill={C.box} stroke={C.stroke} strokeWidth="1.2" />
+            <text x={957} y={BY + 30} textAnchor="middle" fontSize="19" fontWeight="700" fill={C.text}>출력 단말</text>
+            {['3D 수어 아바타', '웹·모바일·방송', '정보 표출 + 질의응답'].map((t, j) => (
+              <text key={t} x={957} y={BY + 58 + j * 22} textAnchor="middle" fontSize="13" fill={C.sub}>{t}</text>
+            ))}
+          </g>
         </svg>
       </div>
+      <p className="mx-auto mt-3 max-w-2xl text-center text-xs leading-relaxed text-slate-500">
+        무거운 영상이 아닌 경량 관절 좌표만 전송 — KOREN 저지연망에서 다채널 동시 송출과 양방향 질의응답을 모두 초저지연으로 처리합니다.
+      </p>
     </motion.div>
   )
 }

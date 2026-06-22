@@ -104,9 +104,9 @@ export default function Hero() {
             className="mt-12 grid max-w-lg grid-cols-3 gap-4 border-t border-white/10 pt-6"
           >
             {[
-              { v: '42만 명+', l: '국내 등록 청각장애인' },
-              { v: '법정 공용어', l: '한국수어 (수어법 2016)' },
-              { v: '24시간', l: '실시간 자동 수어 송출' },
+              { v: '약 44만 명', l: '국내 등록 청각장애인 (복지부 2024)' },
+              { v: '수어방송 5%', l: '자막 100% 대비 편성 비율' },
+              { v: '1초 이내', l: '목표 종단 지연 (KOREN)' },
             ].map((s) => (
               <div key={s.l}>
                 <dt className="text-xl font-extrabold tracking-tight text-cyan-soft sm:text-2xl">

@@ -11,7 +11,9 @@ import { segDir, segDir3D, segDir3Dreal, restLen, smoothInto } from './retarget'
 
 const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
-const SMOOTH = 0.4, SMOOTH_FINGER = 0.16
+// Higher = tighter tracking of the actual sign (less lag), lower = smoother.
+// Tuned up from 0.4/0.16 so hand-shapes reach the keypoint pose more faithfully.
+const SMOOTH = 0.46, SMOOTH_FINGER = 0.26
 const ARM_MAX = 2.7
 
 // Map our logical bone keys → RPM/Mixamo bone-name suffix.
@@ -113,21 +115,30 @@ export function prepareGLBRig(root: THREE.Object3D): GLBRig {
     handFrame.set(s.toLowerCase(), { fwd, normal, side })
   }
 
-  // Per finger bone: flexion axis (the knuckle/side axis in WORLD at bind),
-  // expressed in that bone's local frame. Fingers only rotate around this →
-  // pure flexion, never lateral twist (the cause of distorted fingers).
+  // Per finger bone: flexion (knuckle) axis, expressed in that bone's local
+  // frame. Computed geometrically as palmNormal × boneRestDirection so each
+  // bone only rotates around its own knuckle → pure flexion, never lateral
+  // twist (the cause of distorted fingers). Unlike a single shared hand-side
+  // axis, this gives the THUMB its correct, distinct curl axis too. For the
+  // four fingers it equals the hand-side axis, preserving the proven sign.
   root.updateWorldMatrix(true, true)
   for (const s of ['Left', 'Right']) {
     const hand = byName.get(`${s}Hand`)
     const hf = handFrame.get(s.toLowerCase())
     if (!hand || !hf) continue
-    const sideWorld = hf.side.clone().applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()))
+    const hq = hand.getWorldQuaternion(new THREE.Quaternion())
+    const normalWorld = hf.normal.clone().applyQuaternion(hq).normalize()
+    const sideWorldFallback = hf.side.clone().applyQuaternion(hq).normalize()
     for (const fg of FINGERS) {
       for (const k of [1, 2, 3]) {
         const info = infos.get(`${s}Hand${fg}${k}`)
         if (!info) continue
-        const bwInv = info.bone.getWorldQuaternion(new THREE.Quaternion()).invert()
-        info.flex = sideWorld.clone().applyQuaternion(bwInv).normalize()
+        const bwq = info.bone.getWorldQuaternion(new THREE.Quaternion())
+        const restWorld = info.axis.clone().applyQuaternion(bwq).normalize()
+        const flexWorld = new THREE.Vector3().crossVectors(normalWorld, restWorld)
+        if (flexWorld.lengthSq() < 1e-6) flexWorld.copy(sideWorldFallback)
+        flexWorld.normalize()
+        info.flex = flexWorld.applyQuaternion(bwq.clone().invert()).normalize()
       }
     }
   }

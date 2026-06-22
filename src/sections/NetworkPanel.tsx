@@ -63,9 +63,9 @@ export default function NetworkPanel() {
         <div className="grid grid-cols-2 gap-3">
           {[
             { v: `${e2e.toFixed(3)}s`, l: '종단 지연 (입력→송출)', big: true },
-            { v: `${tput.toFixed(1)} Gbps`, l: 'KOREN 백본 처리량' },
+            { v: '95%↓', l: '영상 대비 대역폭 절감' },
             { v: '10개소', l: '동시 송출 NIA POP' },
-            { v: '99.98%', l: '가용률(SLA)' },
+            { v: `${tput.toFixed(1)} Gbps`, l: 'KOREN 백본 처리량' },
           ].map((m) => (
             <div
               key={m.l}

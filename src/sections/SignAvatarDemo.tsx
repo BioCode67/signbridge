@@ -8,14 +8,14 @@ import { AVATARS } from './sign/avatars'
 // 3D avatar (Three.js + VRM) is heavy — load it only when the user opens 3D mode.
 const Avatar3D = lazy(() => import('./sign/Avatar3D'))
 
-/** 2D comparison modes + the rigged 3D mode. */
+/** Rigged 3D avatar (primary) + skeleton keypoint view (comparison). */
 type DisplayMode = ViewMode | '3d'
 const MODE_LABELS: Record<DisplayMode, string> = {
   avatar: '아바타',
   skeleton: '스켈레톤',
-  '3d': '3D',
+  '3d': '3D 아바타',
 }
-const MODES: DisplayMode[] = ['avatar', 'skeleton', '3d']
+const MODES: DisplayMode[] = ['3d', 'skeleton']
 
 const SPEEDS = [0.5, 1, 1.5] as const
 
@@ -32,7 +32,7 @@ export default function SignAvatarDemo() {
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<number>(1)
-  const [mode, setMode] = useState<DisplayMode>('avatar')
+  const [mode, setMode] = useState<DisplayMode>('3d')
   const [avatarUrl, setAvatarUrl] = useState(AVATARS[0].url)
 
   const data = sentences[index]
@@ -189,7 +189,7 @@ export default function SignAvatarDemo() {
               AI Hub 실데이터
             </span>
             <span className="rounded-full border border-white/10 bg-space-800 px-3 py-1">
-              2D · 스켈레톤 · 3D 비교
+              3D 아바타 · 스켈레톤(키포인트)
             </span>
           </motion.div>
         )}

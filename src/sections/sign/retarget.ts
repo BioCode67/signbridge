@@ -24,9 +24,11 @@ const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
 
 const CONF_MIN = 0.15
-const SMOOTH = 0.45 // slerp factor for arms/body (0..1; higher = snappier)
-const SMOOTH_FINGER = 0.22 // fingers move gentler to kill jitter/popping
-const CONF_FINGER = 0.3 // fingers need higher confidence before they move
+const SMOOTH = 0.4 // slerp factor for arms/body (0..1; higher = snappier)
+const SMOOTH_FINGER = 0.16 // fingers move gentler to kill jitter/popping
+const CONF_FINGER = 0.4 // fingers need higher confidence before they move
+const FINGER_MAX_ANGLE = 1.5 // cap per-joint finger bend (~86°) → no snapping/folding
+const ARM_MAX_ANGLE = 2.7 // cap arm bend to avoid impossible folds
 
 const AXIS_R = new THREE.Vector3(-1, 0, 0)
 const AXIS_L = new THREE.Vector3(1, 0, 0)
@@ -157,6 +159,7 @@ function segDir(kp: number[], a: number, b: number, conf = CONF_MIN): THREE.Vect
  * Aim a bone so it points along `worldDir`, given its parent's world quaternion.
  * Smooths toward the target and writes the bone's resulting world quat into `out`.
  */
+const _qc = new THREE.Quaternion()
 function aimBone(
   vrm: VRM,
   name: VRMHumanBoneName,
@@ -165,6 +168,7 @@ function aimBone(
   parentWorld: THREE.Quaternion,
   out: THREE.Quaternion,
   smooth = SMOOTH,
+  maxAngle = Math.PI, // clamp bend to avoid hyperextension / snapping
 ) {
   const node = vrm.humanoid.getNormalizedBoneNode(name)
   if (!node) {
@@ -183,6 +187,13 @@ function aimBone(
     _tp.copy(worldDir).applyQuaternion(_inv)
     if (_tp.lengthSq() > 1e-8) {
       _q.setFromUnitVectors(axis, _tp.normalize())
+      // Clamp the rotation magnitude so noisy keypoints can't fold a joint
+      // through itself (the cause of distorted / snapping fingers).
+      const ang = 2 * Math.acos(Math.min(1, Math.abs(_q.w)))
+      if (ang > maxAngle && ang > 1e-4) {
+        _qc.identity().slerp(_q, maxAngle / ang)
+        _q.copy(_qc)
+      }
       if (Number.isFinite(_q.x + _q.y + _q.z + _q.w)) {
         local.slerp(_q, smooth) // smooth toward target; low-conf frames just hold `local`
       }
@@ -212,7 +223,7 @@ function aimArm(
   const restU = restLen(data, frames, sh, el, `${side}U`)
   const restL = restLen(data, frames, el, wr, `${side}L`)
   aimBone(vrm, `${side}UpperArm` as VRMHumanBoneName, axis, segDir3D(pose, sh, el, restU), _identity, worldU)
-  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir3D(pose, el, wr, restL), worldU, worldL)
+  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir3D(pose, el, wr, restL), worldU, worldL, SMOOTH, ARM_MAX_ANGLE)
   // Hand orientation from wrist(0)→middle-MCP(9) of the hand keypoints.
   const handDir = hand ? segDir(hand, 0, 9) : null
   aimBone(vrm, `${side}Hand` as VRMHumanBoneName, axis, handDir, worldL, outHandWorld)
@@ -245,7 +256,7 @@ function aimFingers(
       const name = `${side}${finger.bones[i]}` as VRMHumanBoneName
       const [a, b] = finger.segs[i]
       const world = new THREE.Quaternion()
-      aimBone(vrm, name, axis, segFn(hand, a, b), parentWorld, world, SMOOTH_FINGER)
+      aimBone(vrm, name, axis, segFn(hand, a, b), parentWorld, world, SMOOTH_FINGER, FINGER_MAX_ANGLE)
       carry.copy(world)
       parentWorld = carry
     }
@@ -267,7 +278,7 @@ function aimArm3D(
   const worldU = new THREE.Quaternion()
   const worldL = new THREE.Quaternion()
   aimBone(vrm, `${side}UpperArm` as VRMHumanBoneName, axis, segDir3Dreal(pose, sh, el), _identity, worldU)
-  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir3Dreal(pose, el, wr), worldU, worldL)
+  aimBone(vrm, `${side}LowerArm` as VRMHumanBoneName, axis, segDir3Dreal(pose, el, wr), worldU, worldL, SMOOTH, ARM_MAX_ANGLE)
   const handDir = hand ? segDir3Dreal(hand, 0, 9) : null
   aimBone(vrm, `${side}Hand` as VRMHumanBoneName, axis, handDir, worldL, outHandWorld)
 }

@@ -12,7 +12,7 @@ import { segDir, segDir3D, segDir3Dreal, restLen, smoothInto } from './retarget'
 const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
 const SMOOTH = 0.4, SMOOTH_FINGER = 0.16
-const ARM_MAX = 2.7, FINGER_MAX = 1.5
+const ARM_MAX = 2.7
 
 // Map our logical bone keys → RPM/Mixamo bone-name suffix.
 const FINGERS = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']
@@ -29,7 +29,9 @@ interface BoneInfo {
   axis: THREE.Vector3 // rest forward in the bone's local frame
   bind: THREE.Quaternion
   smooth: THREE.Quaternion
+  flex?: THREE.Vector3 // finger flexion axis (knuckle axis) in bone-local frame
 }
+const FINGER_FLEX_MAX = 1.5 // cap per-joint curl (~86°)
 
 export interface GLBRig {
   get(key: string): BoneInfo | undefined
@@ -111,6 +113,25 @@ export function prepareGLBRig(root: THREE.Object3D): GLBRig {
     handFrame.set(s.toLowerCase(), { fwd, normal, side })
   }
 
+  // Per finger bone: flexion axis (the knuckle/side axis in WORLD at bind),
+  // expressed in that bone's local frame. Fingers only rotate around this →
+  // pure flexion, never lateral twist (the cause of distorted fingers).
+  root.updateWorldMatrix(true, true)
+  for (const s of ['Left', 'Right']) {
+    const hand = byName.get(`${s}Hand`)
+    const hf = handFrame.get(s.toLowerCase())
+    if (!hand || !hf) continue
+    const sideWorld = hf.side.clone().applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion()))
+    for (const fg of FINGERS) {
+      for (const k of [1, 2, 3]) {
+        const info = infos.get(`${s}Hand${fg}${k}`)
+        if (!info) continue
+        const bwInv = info.bone.getWorldQuaternion(new THREE.Quaternion()).invert()
+        info.flex = sideWorld.clone().applyQuaternion(bwInv).normalize()
+      }
+    }
+  }
+
   return {
     get: (k) => infos.get(k),
     head: byName.get('Head'),
@@ -124,6 +145,8 @@ const _inv = new THREE.Quaternion()
 const _tp = new THREE.Vector3()
 const _q = new THREE.Quaternion()
 const _qc = new THREE.Quaternion()
+const _fq = new THREE.Quaternion()
+const _bq = new THREE.Quaternion()
 
 function aim(
   info: BoneInfo | undefined,
@@ -272,23 +295,25 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     const handWorld = new THREE.Quaternion()
     aimHand(rig, side, foreWorld, h ? handDir(h, 0, 9) : null, h ? handDir(h, 5, 17) : null, handWorld)
     if (!h) continue
-    // Knuckle axis in world: fingers should only FLEX in the plane ⟂ to it.
-    const hf = rig.handFrame.get(side)
-    const sideW = hf ? hf.side.clone().applyQuaternion(handWorld).normalize() : null
+    // Curl-based fingers: measure each joint's BEND ANGLE from the keypoints and
+    // rotate the bone purely around its flexion axis. Magnitude from data, axis
+    // fixed → natural curl with zero lateral twist (no distorted fingers).
     for (const fg of FINGERS) {
       const segs = HAND_SEGS[fg]
-      const dirs = segs.map(([a, b]) => {
-        const d = handDir(h, a, b)
-        if (d && sideW && fg !== 'Thumb') {
-          // remove sideways component → natural in-plane curl, no lateral snapping
-          d.addScaledVector(sideW, -d.dot(sideW))
-          if (d.lengthSq() < 1e-6) return null
-          d.normalize()
+      let prev = handDir(h, 0, segs[0][0]) // metacarpal reference (wrist→first joint)
+      for (let k = 0; k < 3; k++) {
+        const [a, b] = segs[k]
+        const cur = handDir(h, a, b)
+        const info = rig.get(`${Side}Hand${fg}${k + 1}`)
+        if (info && info.flex && cur && prev) {
+          const ang = Math.min(FINGER_FLEX_MAX, Math.acos(Math.max(-1, Math.min(1, prev.dot(cur)))))
+          _fq.setFromAxisAngle(info.flex, -ang) // curl toward the palm
+          _bq.copy(info.bind).multiply(_fq)
+          if (Number.isFinite(_bq.x + _bq.y + _bq.z + _bq.w)) info.smooth.slerp(_bq, SMOOTH_FINGER)
+          info.bone.quaternion.copy(info.smooth)
         }
-        return d
-      })
-      aimChain(rig, [`${Side}Hand${fg}1`, `${Side}Hand${fg}2`, `${Side}Hand${fg}3`],
-        dirs, SMOOTH_FINGER, FINGER_MAX, handWorld)
+        if (cur) prev = cur
+      }
     }
   }
   // Mouth/expression intentionally not driven from data — keypoint-derived

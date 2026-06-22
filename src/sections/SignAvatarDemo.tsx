@@ -295,7 +295,8 @@ export default function SignAvatarDemo() {
                 <div className="mt-4">
                   <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-wide text-slate-500">
                     <span>아바타 선택</span>
-                    <span className="text-slate-600">· 정장·앵커 등 {AVATARS.length}종</span>
+                    <span className="text-slate-600">· 실사·앵커 등 {AVATARS.length}종</span>
+                    <span className="text-slate-600">· ↗는 온라인 스트리밍</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {AVATARS.map((a) => (
@@ -310,6 +311,7 @@ export default function SignAvatarDemo() {
                         }`}
                       >
                         {a.label}
+                        {a.remote && <span className="ml-1 text-[9px] text-slate-500">↗</span>}
                       </button>
                     ))}
                   </div>

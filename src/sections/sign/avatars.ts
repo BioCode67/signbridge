@@ -24,7 +24,4 @@ export const AVATARS: AvatarOption[] = [
   { id: 'david', label: '데이비드', url: `${BASE}models/real-david.glb`, real: true },
   { id: 'julia', label: '줄리아', url: `${BASE}models/real-julia.glb`, real: true },
   { id: 'naoki', label: '정장 기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: true },
-  { id: 'nanami', label: '정장 앵커(여)', url: `${BASE}models/anchor-nanami.glb`, real: true },
-  { id: 'brunette', label: '실사 여성', url: `${BASE}models/real-brunette.glb`, real: true },
-  { id: 'vroid', label: '기본(VRoid)', url: `${BASE}models/avatar.vrm` },
 ]

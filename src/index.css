@@ -36,6 +36,27 @@
 }
 
 @layer components {
+  /* Keyboard skip link — visually hidden until focused. */
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 50%;
+    z-index: 100;
+    transform: translate(-50%, -150%);
+    border-radius: 0.6rem;
+    background: #22d3ee;
+    color: #03040a;
+    padding: 0.6rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    transition: transform 0.2s ease;
+  }
+  .skip-link:focus {
+    transform: translate(-50%, 0);
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
   /* Reusable glowing cyan text */
   .text-glow {
     text-shadow: 0 0 24px rgba(34, 211, 238, 0.45);

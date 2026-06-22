@@ -185,3 +185,9 @@
 ## 기획안·발표자료(_1) 반영 — 통계 갱신
 - 국립국어원 통계 정정: "90.8% 수어 적합 인식" → **"69.3% 일상에서 수어를 주로 사용 — 제1언어"**(WhySection)로 갱신(발표 slide3·기획안 정합). 출처 복지부 2024·국립국어원.
 - 발표자료 핵심기술(slide 10·11) 반영: HowItWorks에 **전송 비교 블록** 신설 — ① 대역폭(수어영상 4~8Mbps vs 관절좌표 ≈0.1Mbps, **40~80× 절감**, 67관절=자세25+양손42×30fps) ② 종단지연 막대비교(HLS 3~10초·LL-HLS 2~5초·SRT 0.3~0.8초·WebRTC 0.2~0.5초, SRT 방송 1위 77%). 나머지 KPI(BLEU 16.33·1초·95%·90%·5+채널)·44만·5%·KOREN(H200·V100·SDN·400Gbps)은 기존과 일치 확인.
+
+## 지속 개선: 소셜 메타·접근성·Q&A 시나리오 확장
+- **Open Graph/Twitter 메타**(index.html): og:title/description/url/image(favicon)/type/site_name/locale + twitter:card. 공모 링크 공유 시 미리보기 개선.
+- **접근성**(접근성 앱답게): `<MotionConfig reducedMotion="user">`로 모든 framer-motion 애니메이션이 OS '동작 줄이기' 설정 존중(CSS는 기존 prefers-reduced-motion 처리). 키보드 **건너뛰기 링크**(.skip-link, 포커스 시 노출 → #demo), `<main id="main">`.
+- **양방향 Q&A 시나리오 3종 확장**(QnADemo): 🌧️호우(관악 신림)·🌐지진(경주, 규모5.8)·🔥화재(마포 합정) 탭 — 시나리오별 GPS·재난 톤(색)·맞춤 질문 4개·수어 응답·글로스. 단일 시나리오 → 다중으로 데모 설득력 강화. 검증: 지진 탭 GPS=경주·맞춤 응답 정상.
+- 모바일(390px) 점검: 가로 오버플로 없음, 전송 비교 막대·KOREN 칩·히어로 모두 정상.

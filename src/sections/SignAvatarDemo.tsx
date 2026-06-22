@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import { drawFrame, type ViewMode } from './sign/renderSign'
@@ -36,13 +36,36 @@ export default function SignAvatarDemo() {
   const [mode, setMode] = useState<DisplayMode>('3d')
   const [avatarUrl, setAvatarUrl] = useState(AVATARS[0].url)
   const [customUrl, setCustomUrl] = useState('')
+  const objUrlRef = useRef<string | null>(null)
 
-  // Load a user-supplied model (RPM/Avaturn/VRoid .glb or .vrm). The avatar's
-  // ErrorBoundary catches a bad URL/CORS failure and shows a friendly message.
+  // Switch the model, revoking any previous object-URL (uploaded file) to avoid
+  // leaks. Accepts a bundled URL, a remote URL, or a blob: URL from a file.
+  const setModel = useCallback((url: string) => {
+    if (objUrlRef.current && objUrlRef.current !== url) {
+      URL.revokeObjectURL(objUrlRef.current)
+      objUrlRef.current = null
+    }
+    setAvatarUrl(url)
+  }, [])
+
+  // Load a user-supplied model by URL (RPM/Avaturn/VRoid .glb or .vrm). The
+  // avatar's ErrorBoundary catches a bad URL/CORS failure with a friendly note.
   const loadCustom = useCallback(() => {
     const url = customUrl.trim()
-    if (/^https?:\/\/.+\.(glb|vrm)(\?.*)?$/i.test(url)) setAvatarUrl(url)
-  }, [customUrl])
+    if (/^https?:\/\/.+\.(glb|vrm)(\?.*)?$/i.test(url)) setModel(url)
+  }, [customUrl, setModel])
+
+  // Load a model from a local file the user downloaded anywhere (VRoid Hub,
+  // Booth, Sketchfab, Mixamo→glb, …). No hosting/URL needed.
+  const onFile = useCallback((e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file || !/\.(glb|vrm)$/i.test(file.name)) return
+    const url = URL.createObjectURL(file)
+    objUrlRef.current = url
+    setModel(url)
+  }, [setModel])
+
   const customActive = !AVATARS.some((a) => a.url === avatarUrl)
 
   const data = sentences[index]
@@ -318,7 +341,7 @@ export default function SignAvatarDemo() {
                       <button
                         key={a.id}
                         type="button"
-                        onClick={() => setAvatarUrl(a.url)}
+                        onClick={() => setModel(a.url)}
                         className={`rounded-lg border px-3 py-1.5 text-xs transition-all ${
                           avatarUrl === a.url
                             ? 'border-cyan-glow bg-cyan-glow/10 text-cyan-soft'
@@ -335,35 +358,46 @@ export default function SignAvatarDemo() {
                     )}
                   </div>
 
-                  {/* Custom model loader — paste any rigged .glb / .vrm URL */}
-                  <form
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      loadCustom()
-                    }}
-                    className="mt-3 flex flex-col gap-2 rounded-xl border border-white/10 bg-space-800/40 p-3 sm:flex-row sm:items-center"
-                  >
-                    <div className="flex-1">
-                      <label className="mb-1 block text-[11px] font-semibold text-slate-400">
-                        내 아바타 불러오기 — 리깅된 <span className="text-cyan-soft">.glb / .vrm</span> 주소 붙여넣기
-                      </label>
+                  {/* Custom model loader — upload a local file OR paste a URL */}
+                  <div className="mt-3 rounded-xl border border-white/10 bg-space-800/40 p-3">
+                    <label className="mb-2 block text-[11px] font-semibold text-slate-400">
+                      내 아바타 불러오기 — 리깅된 <span className="text-cyan-soft">.glb / .vrm</span>
+                    </label>
+
+                    {/* 1) File upload — works with a model downloaded from anywhere */}
+                    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-cyan-glow/40 bg-cyan-glow/[0.05] px-4 py-3 text-xs font-semibold text-cyan-soft transition-colors hover:bg-cyan-glow/10">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12" />
+                      </svg>
+                      내 컴퓨터에서 파일 선택 (.glb / .vrm)
+                      <input type="file" accept=".glb,.vrm,model/gltf-binary" onChange={onFile} className="hidden" />
+                    </label>
+
+                    {/* 2) Or paste a hosted URL */}
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault()
+                        loadCustom()
+                      }}
+                      className="mt-2 flex gap-2"
+                    >
                       <input
                         type="url"
                         value={customUrl}
                         onChange={(e) => setCustomUrl(e.target.value)}
-                        placeholder="https://models.readyplayer.me/…​.glb  ·  VRoid/Avaturn .vrm·.glb"
-                        className="w-full rounded-lg border border-white/10 bg-space-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-glow/50"
+                        placeholder="또는 주소 붙여넣기 — https://…​.glb / .vrm"
+                        className="min-w-0 flex-1 rounded-lg border border-white/10 bg-space-900 px-3 py-2 text-xs text-slate-200 outline-none placeholder:text-slate-600 focus:border-cyan-glow/50"
                       />
-                    </div>
-                    <button
-                      type="submit"
-                      className="shrink-0 rounded-lg bg-cyan-glow px-4 py-2 text-xs font-bold text-space-950 transition-colors hover:bg-cyan-soft sm:mt-4"
-                    >
-                      불러오기
-                    </button>
-                  </form>
+                      <button
+                        type="submit"
+                        className="shrink-0 rounded-lg border border-white/10 bg-space-800 px-4 py-2 text-xs font-bold text-slate-200 transition-colors hover:border-cyan-glow/40 hover:text-cyan-soft"
+                      >
+                        불러오기
+                      </button>
+                    </form>
+                  </div>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-slate-600">
-                    Ready Player Me·Avaturn·VRoid 등에서 만든 아바타를 그대로 붙여 넣으면 즉시 수어로 구동됩니다. (표준 휴머노이드 본 + 손가락 필요)
+                    VRoid Hub·Booth·Sketchfab 등에서 받은 파일을 그대로 선택하면 즉시 수어로 구동됩니다. 파일은 브라우저 안에서만 처리되며 업로드되지 않습니다. (표준 휴머노이드 본 + 손가락 필요)
                   </p>
                 </div>
               )}

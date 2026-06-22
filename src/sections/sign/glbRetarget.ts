@@ -237,10 +237,10 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
   const f = Math.max(0, Math.min(frame, data.num_frames - 1))
   const use3d = !!data.keypoints3d
   const k = data.keypoints3d ?? data.keypoints
-  const pose = use3d ? k.pose[f] : smoothInto(data.keypoints.pose, f, scratchPose)
+  const pose = use3d ? smooth3d(k.pose, f, scratchPose3) : smoothInto(data.keypoints.pose, f, scratchPose)
   if (!pose) return
-  const hr = use3d ? k.hand_right?.[f] : data.keypoints.hand_right && (smoothInto(data.keypoints.hand_right, f, scratchHR) ?? undefined)
-  const hl = use3d ? k.hand_left?.[f] : data.keypoints.hand_left && (smoothInto(data.keypoints.hand_left, f, scratchHL) ?? undefined)
+  const hr = use3d ? smooth3d(k.hand_right, f, scratchHR3) : data.keypoints.hand_right && (smoothInto(data.keypoints.hand_right, f, scratchHR) ?? undefined)
+  const hl = use3d ? smooth3d(k.hand_left, f, scratchHL3) : data.keypoints.hand_left && (smoothInto(data.keypoints.hand_left, f, scratchHL) ?? undefined)
 
   const poseDir = (a: number, b: number, key: string) =>
     use3d ? segDir3Dreal(pose, a, b) : segDir3D(pose, a, b, restLen(data, data.keypoints.pose, a, b, key))
@@ -295,3 +295,34 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
 const scratchPose: number[] = []
 const scratchHR: number[] = []
 const scratchHL: number[] = []
+const scratchPose3: number[] = []
+const scratchHR3: number[] = []
+const scratchHL3: number[] = []
+
+/**
+ * Temporal smoothing for TRUE 3D landmarks (x,y,z triplets, no confidence):
+ * weighted ±1-frame average per joint, skipping missing (0,0,0) joints so they
+ * don't drag a valid joint toward the origin. Reduces jitter at the source.
+ */
+function smooth3d(frames: number[][] | undefined, f: number, buf: number[]): number[] | undefined {
+  if (!frames) return undefined
+  const cur = frames[f]
+  if (!cur) return undefined
+  const a = frames[f - 1]
+  const b = frames[f + 1]
+  const n = cur.length
+  buf.length = n
+  for (let j = 0; j < n; j += 3) {
+    let x = 0, y = 0, z = 0, w = 0
+    const valid = (fr: number[] | undefined, wt: number) => {
+      if (!fr) return
+      if (fr[j] === 0 && fr[j + 1] === 0 && fr[j + 2] === 0) return
+      x += fr[j] * wt; y += fr[j + 1] * wt; z += fr[j + 2] * wt; w += wt
+    }
+    valid(cur, 0.5)
+    valid(a, 0.25)
+    valid(b, 0.25)
+    if (w > 0) { buf[j] = x / w; buf[j + 1] = y / w; buf[j + 2] = z / w } else { buf[j] = 0; buf[j + 1] = 0; buf[j + 2] = 0 }
+  }
+  return buf
+}

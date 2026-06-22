@@ -15,7 +15,7 @@ function frameScene(scene: THREE.Object3D, head: THREE.Object3D, hips: THREE.Obj
   scene.updateWorldMatrix(true, true)
   const hp = head.getWorldPosition(new THREE.Vector3())
   const pp = hips.getWorldPosition(new THREE.Vector3())
-  const TARGET_HEAD = 1.5, TARGET_HIPS = 0.92
+  const TARGET_HEAD = 1.45, TARGET_HIPS = 0.9
   const s = (TARGET_HEAD - TARGET_HIPS) / Math.max(0.05, hp.y - pp.y)
   scene.scale.setScalar(s)
   scene.updateWorldMatrix(true, true)
@@ -97,8 +97,9 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
 function Rig() {
   const { camera } = useThree()
   useEffect(() => {
-    camera.position.set(0, 1.25, 1.45)
-    camera.lookAt(0, 1.15, 0)
+    // Pulled back so head→waist fits with margin even when arms raise near the face.
+    camera.position.set(0, 1.15, 1.95)
+    camera.lookAt(0, 1.05, 0)
   }, [camera])
   return null
 }
@@ -124,7 +125,7 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
       dpr={dpr}
       shadows
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      camera={{ fov: 28, near: 0.1, far: 20, position: [0, 1.2, 1.5] }}
+      camera={{ fov: 30, near: 0.1, far: 20, position: [0, 1.15, 1.95] }}
       style={{ width: '100%', height: '100%' }}
       onCreated={({ gl }) => {
         gl.toneMappingExposure = 1.12 // slightly brighter, more cinematic

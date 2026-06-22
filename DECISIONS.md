@@ -204,3 +204,6 @@
 
 ## 모바일 가독성: 시스템 구성도 가로 스크롤
 - 시스템 구성도 SVG(1080폭)가 모바일에서 너무 작게 축소되던 문제 → 컨테이너 `overflow-x-auto` + SVG `min-w-[680px]`로 모바일에선 가로 스크롤(읽을 수 있는 크기 유지), "← 옆으로 밀어서 전체 보기 →" 힌트(sm:hidden). 검증: 390px에서 4-에이전트 박스·라벨 가독.
+
+## OG 미리보기 이미지 제작
+- 공모 링크 공유 시 미리보기용 `public/og.png`(1200×630) 제작 — 다크+시안 브랜드, 네트워크 모티프, "들리지 않아도, 닿습니다" 헤드라인+서브카피+URL. resvg-js로 SVG→PNG 렌더, 한글은 시스템 `AppleGothic.ttf` 사용(토푸 없이 정상). meta를 og.png + twitter summary_large_image로 갱신. 소스/재생성법은 scripts/og.svg·gen-og.md.

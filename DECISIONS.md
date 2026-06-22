@@ -162,3 +162,7 @@
   - prepareGLBRig에서 4지 MCP 본에 **abduct 축(손바닥 normal, 본 로컬)** + **restLat(정지 좌우각)** 저장.
   - 런타임: 너클(MCP)에서 `curLat = atan2(cur·side, cur·fwd)` 측정 → `spread = clamp(curLat - restLat, ±0.42rad)`을 abduct 축으로 회전, 기존 curl과 합성(bind·spread·flex). **엄지 제외**, **3D 키포인트일 때만** 적용, ±24° 클램프로 왜곡 방지.
 - 검증: 펼친 손에서 손가락이 자연스럽게 부채꼴로 벌어지고 왜곡/역꺾임 없음(프레임 308·220 확인). 곡률만 쓰던 기존 대비 핸드셰이프 판독성 향상.
+
+## GitHub 아바타 재탐색 결과 + vroid 추가
+- 코드검색(여러 쿼리)·repo 직접 probe로 재탐색 → 사용 가능한 신규 실사 모델은 거의 없음(대부분 Git LFS 스텁이라 raw로 실파일 수신 불가, 또는 저폴리). 실사 풀은 고갈 확인 → **커스텀 URL 로더가 실질적 해법**임을 재확인.
+- 1건 추가: TalkingHead `vroid.glb`(2.2MB, VRoid 익스포트, 247노드·손가락 4/4·블렌드셰이프) → `char-vroid.glb`로 번들, "캐릭터(여2)"로 추가. 비례 깔끔한 고품질 애니풍이나 판타지 의상이라 스타일라이즈로 분류(사용자 큐레이션용). 손가락 신규 spread로 자연 구동 확인.

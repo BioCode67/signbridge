@@ -26,5 +26,6 @@ export const AVATARS: AvatarOption[] = [
   { id: 'david', label: '실사 인물(남2)', url: `${BASE}models/real-david.glb`, real: true },
   // Clean stylized characters
   { id: 'julia', label: '캐릭터(여)', url: `${BASE}models/real-julia.glb`, real: false },
+  { id: 'vroid', label: '캐릭터(여2)', url: `${BASE}models/char-vroid.glb`, real: false },
   { id: 'naoki', label: '만화풍 기자(남)', url: `${BASE}models/anchor-naoki.glb`, real: false },
 ]

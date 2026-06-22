@@ -36,6 +36,8 @@ export interface GLBRig {
   head?: THREE.Object3D
   hips?: THREE.Object3D
   faceMeshes: THREE.Mesh[]
+  /** Per-hand rest frame (in hand-local space): forward / palm-normal / side. */
+  handFrame: Map<string, { fwd: THREE.Vector3; normal: THREE.Vector3; side: THREE.Vector3 }>
 }
 
 function clean(name: string): string {
@@ -94,11 +96,27 @@ export function prepareGLBRig(root: THREE.Object3D): GLBRig {
   }
   make('Neck', 'Neck', 'Head')
 
+  // Hand rest frame: forward (→middle MCP), side (index→pinky), palm normal.
+  const handFrame = new Map<string, { fwd: THREE.Vector3; normal: THREE.Vector3; side: THREE.Vector3 }>()
+  for (const s of ['Left', 'Right']) {
+    const mid = byName.get(`${s}HandMiddle1`)
+    const idx = byName.get(`${s}HandIndex1`)
+    const pinky = byName.get(`${s}HandPinky1`)
+    const hand = byName.get(`${s}Hand`)
+    if (!mid || !idx || !pinky || !hand) continue
+    const fwd = mid.position.clone().normalize()
+    const side = pinky.position.clone().sub(idx.position).normalize()
+    const normal = new THREE.Vector3().crossVectors(fwd, side).normalize()
+    side.crossVectors(normal, fwd).normalize() // re-orthogonalise
+    handFrame.set(s.toLowerCase(), { fwd, normal, side })
+  }
+
   return {
     get: (k) => infos.get(k),
     head: byName.get('Head'),
     hips: byName.get('Hips'),
     faceMeshes,
+    handFrame,
   }
 }
 
@@ -153,16 +171,65 @@ function aimChain(
   dirs: (THREE.Vector3 | null)[],
   smooth: number,
   maxAngle: number,
-) {
+  startParent?: THREE.Quaternion,
+): THREE.Quaternion | null {
   const root = rig.get(keys[0])
-  if (!root) return
-  let parent = parentWorldOf(root)
+  if (!root) return null
+  let parent = startParent ? startParent.clone() : parentWorldOf(root)
   for (let i = 0; i < keys.length; i++) {
     const info = rig.get(keys[i])
     const out = new THREE.Quaternion()
     aim(info, dirs[i], parent, out, smooth, maxAngle)
     parent = out
   }
+  return parent
+}
+
+// --- Palm-accurate hand orientation (forward + palm normal) ---
+const _mRest = new THREE.Matrix4()
+const _mTar = new THREE.Matrix4()
+const _f = new THREE.Vector3()
+const _s = new THREE.Vector3()
+const _nrm = new THREE.Vector3()
+const _hinv = new THREE.Quaternion()
+const _hq = new THREE.Quaternion()
+function aimHand(
+  rig: GLBRig,
+  side: 'left' | 'right',
+  parentWorld: THREE.Quaternion,
+  tFwd: THREE.Vector3 | null,
+  tSide: THREE.Vector3 | null,
+  out: THREE.Quaternion,
+) {
+  const key = side === 'left' ? 'LeftHand' : 'RightHand'
+  const info = rig.get(key)
+  const rest = rig.handFrame.get(side)
+  if (!info) {
+    out.copy(parentWorld)
+    return
+  }
+  if (tFwd && tSide) {
+    _nrm.crossVectors(tFwd, tSide)
+    if (_nrm.lengthSq() > 1e-6 && rest) {
+      _nrm.normalize()
+      _s.crossVectors(_nrm, tFwd).normalize()
+      _f.copy(tFwd).normalize()
+      // to hand's parent-local space
+      _hinv.copy(parentWorld).invert()
+      _f.applyQuaternion(_hinv)
+      _s.applyQuaternion(_hinv)
+      _nrm.applyQuaternion(_hinv)
+      _mRest.makeBasis(rest.fwd, rest.side, rest.normal)
+      _mTar.makeBasis(_f, _s, _nrm)
+      _mRest.transpose() // orthonormal → inverse
+      _mTar.multiply(_mRest)
+      _hq.setFromRotationMatrix(_mTar)
+      if (Number.isFinite(_hq.x + _hq.y + _hq.z + _hq.w)) info.smooth.slerp(_hq, SMOOTH_FINGER + 0.06)
+    }
+  }
+  info.smooth.normalize()
+  info.bone.quaternion.copy(info.smooth)
+  out.copy(parentWorld).multiply(info.smooth).normalize()
 }
 
 /** Apply a keypoint frame to a GLB humanoid rig. */
@@ -180,19 +247,22 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
   const handDir = (h: number[] | undefined | null, a: number, b: number) =>
     !h ? null : use3d ? segDir3Dreal(h, a, b) : segDir(h, a, b, 0.4)
 
-  // arms (shoulder→elbow→wrist) + hand
-  aimChain(rig, ['RightArm', 'RightForeArm', 'RightHand'],
-    [poseDir(RSH, REL, 'RU'), poseDir(REL, RWR, 'RL'), handDir(hr as number[], 0, 9)], SMOOTH, ARM_MAX)
-  aimChain(rig, ['LeftArm', 'LeftForeArm', 'LeftHand'],
-    [poseDir(LSH, LEL, 'LU'), poseDir(LEL, LWR, 'LL'), handDir(hl as number[], 0, 9)], SMOOTH, ARM_MAX)
-
-  // fingers
-  for (const [side, hand] of [['Right', hr], ['Left', hl]] as const) {
-    if (!hand) continue
+  // arms (shoulder→elbow), then palm-accurate hand, then fingers off the hand.
+  for (const [Side, side, hand, sh, el, wr] of [
+    ['Right', 'right', hr, RSH, REL, RWR],
+    ['Left', 'left', hl, LSH, LEL, LWR],
+  ] as const) {
+    const foreWorld = aimChain(rig, [`${Side}Arm`, `${Side}ForeArm`],
+      [poseDir(sh, el, `${Side}U`), poseDir(el, wr, `${Side}L`)], SMOOTH, ARM_MAX)
+    if (!foreWorld) continue
+    const h = hand as number[] | undefined
+    const handWorld = new THREE.Quaternion()
+    aimHand(rig, side, foreWorld, h ? handDir(h, 0, 9) : null, h ? handDir(h, 5, 17) : null, handWorld)
+    if (!h) continue
     for (const fg of FINGERS) {
       const segs = HAND_SEGS[fg]
-      aimChain(rig, [`${side}Hand${fg}1`, `${side}Hand${fg}2`, `${side}Hand${fg}3`],
-        segs.map(([a, b]) => handDir(hand as number[], a, b)), SMOOTH_FINGER, FINGER_MAX)
+      aimChain(rig, [`${Side}Hand${fg}1`, `${Side}Hand${fg}2`, `${Side}Hand${fg}3`],
+        segs.map(([a, b]) => handDir(h, a, b)), SMOOTH_FINGER, FINGER_MAX, handWorld)
     }
   }
 

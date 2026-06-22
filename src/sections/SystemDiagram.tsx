@@ -30,8 +30,8 @@ export default function SystemDiagram() {
       <p className="mb-4 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
         시스템 구성도
       </p>
-      <div className="overflow-hidden rounded-2xl border border-white/10 bg-space-900/40 p-4 sm:p-6">
-        <svg viewBox="0 0 1080 280" className="h-auto w-full" role="img" aria-label="SignBridge 시스템 구성도">
+      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-space-900/40 p-4 sm:p-6">
+        <svg viewBox="0 0 1080 280" className="h-auto w-full min-w-[680px]" role="img" aria-label="SignBridge 시스템 구성도">
           <defs>
             <linearGradient id="koren" x1="0" y1="0" x2="1" y2="0">
               <stop offset="0" stopColor="#0e7490" />
@@ -125,6 +125,7 @@ export default function SystemDiagram() {
           </g>
         </svg>
       </div>
+      <p className="mt-2 text-center text-[10px] text-slate-600 sm:hidden">← 옆으로 밀어서 전체 보기 →</p>
       <p className="mx-auto mt-3 max-w-2xl text-center text-xs leading-relaxed text-slate-500">
         무거운 영상이 아닌 경량 관절 좌표만 전송 — KOREN 저지연망에서 다채널 동시 송출과 양방향 질의응답을 모두 초저지연으로 처리합니다.
       </p>

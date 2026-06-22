@@ -259,10 +259,23 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     const handWorld = new THREE.Quaternion()
     aimHand(rig, side, foreWorld, h ? handDir(h, 0, 9) : null, h ? handDir(h, 5, 17) : null, handWorld)
     if (!h) continue
+    // Knuckle axis in world: fingers should only FLEX in the plane ⟂ to it.
+    const hf = rig.handFrame.get(side)
+    const sideW = hf ? hf.side.clone().applyQuaternion(handWorld).normalize() : null
     for (const fg of FINGERS) {
       const segs = HAND_SEGS[fg]
+      const dirs = segs.map(([a, b]) => {
+        const d = handDir(h, a, b)
+        if (d && sideW && fg !== 'Thumb') {
+          // remove sideways component → natural in-plane curl, no lateral snapping
+          d.addScaledVector(sideW, -d.dot(sideW))
+          if (d.lengthSq() < 1e-6) return null
+          d.normalize()
+        }
+        return d
+      })
       aimChain(rig, [`${Side}Hand${fg}1`, `${Side}Hand${fg}2`, `${Side}Hand${fg}3`],
-        segs.map(([a, b]) => handDir(h, a, b)), SMOOTH_FINGER, FINGER_MAX, handWorld)
+        dirs, SMOOTH_FINGER, FINGER_MAX, handWorld)
     }
   }
 

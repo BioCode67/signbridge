@@ -1,31 +1,122 @@
 import { useCallback, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
+import * as tf from '@tensorflow/tfjs'
 import SectionHeading from '../ui/SectionHeading'
 import Button from '../ui/Button'
 import { useHolistic } from '../recognition/useHolistic'
-import type { LandmarkFrame } from '../recognition/landmarks'
+import { useRecognizer, type ModelStatus } from '../recognition/useRecognizer'
+import { buildModel } from '../recognition/model'
+import { KSL_LABELS, NUM_CLASSES, CONFIDENCE_THRESHOLD } from '../recognition/labels'
+import { FEATURE_DIM, SEQ_LEN, resampleSequence, type LandmarkFrame } from '../recognition/landmarks'
 
 /**
- * 실시간 수어 인식 데모 (입력 방향 파이프라인).
- * 웹캠 → MediaPipe Holistic → 포즈·양손 랜드마크 실시간 추출 → 오버레이 시각화.
- * (키워드 인식 → 자막은 Step2·4에서 이 프레임 스트림 위에 얹는다.)
+ * 실시간 수어 인식 데모 (Step1 랜드마크 추출 + Step2 GRU 분류 + Step4 자막).
+ * 웹캠 → MediaPipe Holistic → 랜드마크 → 특징 → GRU → 키워드 → 실시간 자막.
  *
- * 모든 처리는 브라우저 안에서만 일어난다(영상은 서버로 전송하지 않음).
+ * 기본 모델은 합성 데이터 학습본(파이프라인 실증용)이라 실제 수어를 인식하지는
+ * 못한다. 하단 "자체수집 학습 스튜디오"에서 몇 개 단어를 직접 녹화·학습하면
+ * 내 손동작을 실제로 인식한다(브라우저 안에서 학습·추론).
+ * 모든 처리는 브라우저 내에서 일어난다(영상 미전송).
  */
-export default function RecognitionDemo() {
-  const [totalFrames, setTotalFrames] = useState(0)
-  const framesRef = useRef(0)
 
-  const onFrame = useCallback((_frame: LandmarkFrame, _features: Float32Array | null) => {
-    framesRef.current += 1
-    // 30프레임마다 카운터 반영(리렌더 절약).
-    if (framesRef.current % 30 === 0) setTotalFrames(framesRef.current)
+const REC_MS = 1500 // 스튜디오 한 샘플 녹화 시간
+const MIN_REC_FRAMES = 12
+
+export default function RecognitionDemo() {
+  // 스튜디오 녹화 캡처용 버퍼/플래그(리렌더 없이 프레임 수집).
+  const recordingRef = useRef(false)
+  const studioBufRef = useRef<Float32Array[]>([])
+
+  // onFrame이 rec보다 먼저 선언되므로 pushFrame을 ref로 우회(훅 순환 회피).
+  const pushFrameRef = useRef<(f: Float32Array | null) => void>(() => {})
+  const onFrame = useCallback((_frame: LandmarkFrame, features: Float32Array | null) => {
+    pushFrameRef.current(features)
+    if (recordingRef.current && features) studioBufRef.current.push(features)
   }, [])
 
-  const { videoRef, overlayRef, status, stats, error, start, stop } = useHolistic({ onFrame })
-
+  const holistic = useHolistic({ onFrame })
+  const { videoRef, overlayRef, status, stats, error, start, stop } = holistic
   const running = status === 'running'
   const loading = status === 'loading'
+  const rec = useRecognizer(running)
+  pushFrameRef.current = rec.pushFrame
+
+  // ── 자체수집 학습 스튜디오 상태 ──
+  const samplesRef = useRef<{ label: string; seq: Float32Array }[]>([])
+  const [selectedLabel, setSelectedLabel] = useState<string>(KSL_LABELS[0])
+  const [counts, setCounts] = useState<Record<string, number>>({})
+  const [recording, setRecording] = useState(false)
+  const [training, setTraining] = useState<string>('') // '' = idle
+  const [studioOpen, setStudioOpen] = useState(false)
+
+  const totalSamples = Object.values(counts).reduce((a, b) => a + b, 0)
+  const distinctLabels = Object.keys(counts).length
+
+  const record = () => {
+    if (!running || recording) return
+    studioBufRef.current = []
+    recordingRef.current = true
+    setRecording(true)
+    window.setTimeout(() => {
+      recordingRef.current = false
+      setRecording(false)
+      const frames = studioBufRef.current
+      if (frames.length >= MIN_REC_FRAMES) {
+        samplesRef.current.push({ label: selectedLabel, seq: resampleSequence(frames, SEQ_LEN) })
+        setCounts((c) => ({ ...c, [selectedLabel]: (c[selectedLabel] ?? 0) + 1 }))
+      }
+    }, REC_MS)
+  }
+
+  const train = async () => {
+    const samples = samplesRef.current
+    const labelsUsed = new Set(samples.map((s) => s.label))
+    if (labelsUsed.size < 2) {
+      setTraining('⚠ 최소 2개 단어를 각각 2회 이상 녹화하세요')
+      window.setTimeout(() => setTraining(''), 2500)
+      return
+    }
+    setTraining('데이터 준비 중…')
+    const n = samples.length
+    const xs = new Float32Array(n * SEQ_LEN * FEATURE_DIM)
+    const ys = new Float32Array(n * NUM_CLASSES)
+    samples.forEach((s, i) => {
+      xs.set(s.seq, i * SEQ_LEN * FEATURE_DIM)
+      ys[i * NUM_CLASSES + KSL_LABELS.indexOf(s.label as (typeof KSL_LABELS)[number])] = 1
+    })
+    const X = tf.tensor3d(xs, [n, SEQ_LEN, FEATURE_DIM])
+    const Y = tf.tensor2d(ys, [n, NUM_CLASSES])
+    const model = buildModel()
+    const EPOCHS = 40
+    await model.fit(X, Y, {
+      epochs: EPOCHS,
+      batchSize: Math.min(16, n),
+      shuffle: true,
+      callbacks: {
+        onEpochEnd: (epoch, logs) => {
+          const acc = (logs?.acc ?? logs?.accuracy ?? 0) as number
+          setTraining(`학습 ${epoch + 1}/${EPOCHS} · acc ${acc.toFixed(2)}`)
+        },
+      },
+    })
+    X.dispose()
+    Y.dispose()
+    rec.recognizer.current.setModel(model)
+    rec.setStatus('custom')
+    rec.clearTranscript()
+    setTraining(`✓ 학습 완료 · ${labelsUsed.size}개 단어 · ${n}샘플`)
+    window.setTimeout(() => setTraining(''), 3000)
+  }
+
+  const resetStudio = () => {
+    samplesRef.current = []
+    setCounts({})
+    rec.reloadDefault()
+  }
+
+  const current = rec.current
+  const confPct = current ? Math.round(current.confidence * 100) : 0
+  const confident = current !== null && current.confidence >= CONFIDENCE_THRESHOLD
 
   return (
     <section id="live" className="relative border-t border-white/5 py-24 sm:py-32">
@@ -34,14 +125,14 @@ export default function RecognitionDemo() {
           eyebrow="실시간 인식 · Live"
           title={
             <>
-              웹캠으로 <span className="text-cyan-soft text-glow">수어 동작을 실시간</span> 추출
+              웹캠 수어를 <span className="text-cyan-soft text-glow">실시간 자막</span>으로
             </>
           }
-          description="MediaPipe Holistic이 웹캠 영상에서 상반신 포즈와 양손 21관절을 프레임마다 추출합니다. 이 좌표 스트림이 재난 키워드 인식·자막 생성의 입력이 됩니다. 영상은 브라우저 안에서만 처리되며 서버로 전송되지 않습니다."
+          description="MediaPipe Holistic이 상반신·양손 관절을 추출하고 GRU 분류기가 재난 키워드를 실시간 인식해 자막으로 띄웁니다. 기본 모델은 파이프라인 실증용(합성 학습)이므로, 아래 스튜디오에서 단어를 직접 녹화·학습하면 내 손동작을 실제로 인식합니다. 영상은 브라우저 안에서만 처리됩니다."
         />
 
         <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-          {/* 카메라 + 오버레이 스테이지 */}
+          {/* 카메라 + 오버레이 + 자막 */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -49,18 +140,42 @@ export default function RecognitionDemo() {
             transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
             className="relative aspect-[4/3] overflow-hidden rounded-2xl border border-white/10 bg-black/60"
           >
-            {/* 거울(좌우 반전) 영상 */}
             <video
               ref={videoRef}
               playsInline
               muted
               className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90"
             />
-            <canvas
-              ref={overlayRef}
-              className="absolute inset-0 h-full w-full"
-              aria-hidden="true"
-            />
+            <canvas ref={overlayRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+
+            {/* 실시간 자막 오버레이 */}
+            {running && (
+              <div className="absolute inset-x-0 bottom-0 space-y-2 bg-gradient-to-t from-black/85 to-transparent p-4 pt-10">
+                {current && (
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`text-3xl font-bold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-400'}`}
+                    >
+                      {confident ? current.label : '인식 중…'}
+                    </span>
+                    <div className="flex-1">
+                      <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className={`h-full rounded-full transition-all ${confident ? 'bg-cyan-glow' : 'bg-slate-500'}`}
+                          style={{ width: `${confPct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <span className="tabular-nums text-xs text-slate-400">{confPct}%</span>
+                  </div>
+                )}
+                {rec.transcript.length > 0 && (
+                  <p className="text-sm leading-relaxed text-white/90" aria-live="polite">
+                    {rec.transcript.join(' · ')}
+                  </p>
+                )}
+              </div>
+            )}
 
             {!running && (
               <div className="absolute inset-0 grid place-items-center bg-black/50 backdrop-blur-sm">
@@ -73,18 +188,14 @@ export default function RecognitionDemo() {
                   ) : (
                     <>
                       <p className="max-w-xs text-sm text-slate-300">
-                        카메라를 허용하면 실시간으로 손·상반신 랜드마크가 표시됩니다.
+                        카메라를 허용하면 실시간으로 손·상반신 랜드마크와 인식 자막이 표시됩니다.
                       </p>
                       <Button onClick={start} variant="primary">
                         카메라 시작
                       </Button>
                     </>
                   )}
-                  {error && (
-                    <p className="max-w-xs text-xs text-red-300">
-                      카메라를 시작하지 못했습니다: {error}
-                    </p>
-                  )}
+                  {error && <p className="max-w-xs text-xs text-red-300">카메라 오류: {error}</p>}
                 </div>
               </div>
             )}
@@ -100,7 +211,10 @@ export default function RecognitionDemo() {
           {/* 상태 패널 */}
           <div className="flex flex-col gap-4">
             <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-              <h3 className="text-sm font-semibold text-white">추출 상태</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-white">인식 상태</h3>
+                <ModelBadge status={rec.modelStatus} />
+              </div>
               <dl className="mt-4 space-y-3 text-sm">
                 <StatusRow label="상반신 포즈" ok={stats.poseOk} />
                 <StatusRow label="왼손 (21관절)" ok={stats.leftOk} />
@@ -112,24 +226,121 @@ export default function RecognitionDemo() {
                   <span className="tabular-nums text-slate-200">{stats.fps} fps</span>
                 </div>
                 <div className="mt-1 flex justify-between">
-                  <span>누적 프레임</span>
-                  <span className="tabular-nums text-slate-200">{totalFrames.toLocaleString()}</span>
+                  <span>확정 자막</span>
+                  <span className="tabular-nums text-slate-200">{rec.transcript.length}개</span>
                 </div>
               </div>
             </div>
 
-            {running && (
-              <Button onClick={stop} variant="ghost">
-                카메라 정지
-              </Button>
-            )}
+            <div className="flex gap-2">
+              {running ? (
+                <Button onClick={stop} variant="ghost">
+                  카메라 정지
+                </Button>
+              ) : null}
+              {rec.transcript.length > 0 && (
+                <button
+                  type="button"
+                  onClick={rec.clearTranscript}
+                  className="rounded-full border border-white/15 px-4 py-2 text-xs text-slate-300 hover:border-white/30"
+                >
+                  자막 지우기
+                </button>
+              )}
+            </div>
 
-            <p className="text-xs leading-relaxed text-slate-500">
-              팁: 상반신이 화면에 들어오고 조명이 밝을수록 손 관절 추적이 안정적입니다. GPU 가속이
-              가능한 브라우저(Chrome 권장)에서 가장 부드럽게 동작합니다.
-            </p>
+            <button
+              type="button"
+              onClick={() => setStudioOpen((v) => !v)}
+              className="rounded-xl border border-cyan-glow/30 bg-cyan-glow/5 px-4 py-3 text-left text-sm font-medium text-cyan-soft transition-colors hover:bg-cyan-glow/10"
+            >
+              🎓 자체수집 학습 스튜디오 {studioOpen ? '▲' : '▼'}
+              <span className="mt-0.5 block text-xs font-normal text-slate-400">
+                단어를 직접 녹화·학습해 실제 인식하기
+              </span>
+            </button>
           </div>
         </div>
+
+        {/* 학습 스튜디오 */}
+        {studioOpen && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            className="mt-6 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-6"
+          >
+            <div className="grid gap-6 md:grid-cols-[1fr_1fr]">
+              <div>
+                <h4 className="text-sm font-semibold text-white">1) 단어 녹화 (자체수집)</h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  카메라를 켠 상태에서 단어를 고르고 <b>녹화</b>를 누른 뒤 {REC_MS / 1000}초 동안
+                  해당 수어 동작을 하세요. 단어마다 2회 이상, 최소 2개 단어를 권장합니다.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedLabel}
+                    onChange={(e) => setSelectedLabel(e.target.value)}
+                    className="rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-glow/50"
+                  >
+                    {KSL_LABELS.map((l) => (
+                      <option key={l} value={l}>
+                        {l}
+                        {counts[l] ? ` (${counts[l]})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <Button onClick={record} variant="primary">
+                    {recording ? `녹화 중… ${REC_MS / 1000}s` : '● 녹화'}
+                  </Button>
+                  {!running && <span className="text-xs text-amber-300">카메라를 먼저 켜세요</span>}
+                </div>
+                {totalSamples > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {Object.entries(counts).map(([l, c]) => (
+                      <span
+                        key={l}
+                        className="rounded-md bg-white/5 px-2 py-1 text-xs text-slate-200"
+                      >
+                        {l} <span className="text-cyan-soft">×{c}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-sm font-semibold text-white">2) 학습 & 적용</h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  수집한 샘플로 브라우저 안에서 GRU를 학습합니다(수 초). 완료되면 위 카메라가 내
+                  손동작을 실제로 인식합니다.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <Button onClick={train} variant="primary">
+                    ▶ 학습 시작
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={resetStudio}
+                    className="rounded-full border border-white/15 px-4 py-2 text-xs text-slate-300 hover:border-white/30"
+                  >
+                    초기화(기본 모델)
+                  </button>
+                </div>
+                <div className="mt-3 text-xs text-slate-300">
+                  <div>
+                    수집: <b className="text-cyan-soft">{totalSamples}</b>샘플 · {distinctLabels}단어
+                  </div>
+                  {training && <div className="mt-1 text-cyan-soft">{training}</div>}
+                </div>
+              </div>
+            </div>
+            <p className="mt-4 border-t border-white/10 pt-3 text-[11px] leading-relaxed text-slate-500">
+              이 스튜디오는 실서비스에서 AI Hub「재난 수어영상」대규모 라벨 데이터로 학습한 모델을
+              대체하는 <b>소규모 자체수집 실증</b>입니다. 동일 특징·모델 구조를 그대로 사용하므로,
+              데이터만 교체하면 확장됩니다.
+            </p>
+          </motion.div>
+        )}
       </div>
     </section>
   )
@@ -140,13 +351,23 @@ function StatusRow({ label, ok }: { label: string; ok: boolean }) {
     <div className="flex items-center justify-between">
       <dt className="text-slate-300">{label}</dt>
       <dd
-        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-          ok ? 'text-lime-300' : 'text-slate-500'
-        }`}
+        className={`inline-flex items-center gap-1.5 text-xs font-medium ${ok ? 'text-lime-300' : 'text-slate-500'}`}
       >
         <span className={`h-2 w-2 rounded-full ${ok ? 'bg-lime-400' : 'bg-slate-600'}`} />
         {ok ? '감지됨' : '대기'}
       </dd>
     </div>
   )
+}
+
+function ModelBadge({ status }: { status: ModelStatus }) {
+  const map: Record<ModelStatus, { text: string; cls: string }> = {
+    idle: { text: '모델 대기', cls: 'text-slate-400 border-white/15' },
+    loading: { text: '모델 로딩', cls: 'text-amber-300 border-amber-400/30' },
+    ready: { text: '기본(합성 실증)', cls: 'text-slate-300 border-white/20' },
+    custom: { text: '내 모델 ✓', cls: 'text-cyan-soft border-cyan-glow/40 bg-cyan-glow/10' },
+    error: { text: '모델 없음', cls: 'text-red-300 border-red-400/30' },
+  }
+  const m = map[status]
+  return <span className={`rounded-full border px-2 py-0.5 text-[11px] font-medium ${m.cls}`}>{m.text}</span>
 }

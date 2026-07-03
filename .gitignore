@@ -31,3 +31,8 @@ node_modules/.tmp
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.pyc
+server/_smoke.py

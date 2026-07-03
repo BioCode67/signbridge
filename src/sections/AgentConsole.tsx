@@ -1,8 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import Button from '../ui/Button'
 import { Orchestrator } from '../agents/orchestrator'
+import { RuleDisasterAgent } from '../agents/disasterAgent'
+import { RuleSignAgent } from '../agents/signAgent'
+import { SimBroadcastAgent } from '../agents/broadcastAgent'
+import { LlmQAAgent } from '../agents/qaAgent'
+import { TemplateBackbone } from '../agents/qaBackbone'
+import { KoGPT2Backbone } from '../agents/kogpt2Backbone'
 import type { PipelineResult, Severity } from '../agents/types'
 
 /**
@@ -54,12 +60,41 @@ const SEV_LABEL: Record<Severity, string> = {
 }
 
 export default function AgentConsole() {
-  const orchestrator = useMemo(() => new Orchestrator(), [])
+  // Q&A 에이전트를 직접 보유해 백본(템플릿 ↔ KoGPT2)을 런타임 교체한다.
+  const qaAgentRef = useRef(new LlmQAAgent())
+  const orchestrator = useMemo(
+    () =>
+      new Orchestrator({
+        disaster: new RuleDisasterAgent(),
+        sign: new RuleSignAgent(),
+        qa: qaAgentRef.current,
+        broadcast: new SimBroadcastAgent(),
+      }),
+    [],
+  )
   const [preset, setPreset] = useState(0)
   const [text, setText] = useState(PRESETS[0].text)
   const [question, setQuestion] = useState(PRESETS[0].question)
   const [result, setResult] = useState<PipelineResult | null>(null)
   const [busy, setBusy] = useState(false)
+
+  // KoGPT2 백본 토글.
+  const [useKoGPT2, setUseKoGPT2] = useState(false)
+  const [serverUrl, setServerUrl] = useState('http://localhost:8000')
+  const [serverOk, setServerOk] = useState<boolean | null>(null)
+
+  const toggleBackbone = async (on: boolean) => {
+    setUseKoGPT2(on)
+    if (on) {
+      const bb = new KoGPT2Backbone(serverUrl)
+      qaAgentRef.current.setBackbone(bb)
+      setServerOk(null)
+      setServerOk(await bb.health())
+    } else {
+      qaAgentRef.current.setBackbone(new TemplateBackbone())
+      setServerOk(null)
+    }
+  }
 
   const pick = (i: number) => {
     setPreset(i)
@@ -131,6 +166,38 @@ export default function AgentConsole() {
             <Button onClick={run} variant="primary">
               {busy ? '처리 중…' : '파이프라인 실행 ▶'}
             </Button>
+
+            {/* Q&A 언어 백본 선택 */}
+            <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+              <label className="flex items-center gap-2 text-xs font-medium text-slate-200">
+                <input
+                  type="checkbox"
+                  checked={useKoGPT2}
+                  onChange={(e) => toggleBackbone(e.target.checked)}
+                  className="accent-cyan-glow"
+                />
+                Q&A 백본으로 KoGPT2 사용
+                {useKoGPT2 && serverOk !== null && (
+                  <span className={serverOk ? 'text-lime-300' : 'text-red-300'}>
+                    {serverOk ? '· 서버 연결됨' : '· 서버 응답 없음(템플릿 폴백)'}
+                  </span>
+                )}
+              </label>
+              {useKoGPT2 && (
+                <input
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  onBlur={() => useKoGPT2 && toggleBackbone(true)}
+                  placeholder="http://localhost:8000"
+                  className="mt-2 w-full rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-glow/50"
+                />
+              )}
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                끄면 오프라인 템플릿 백본. 켜면 로컬 KoGPT2 서버(server/app.py)로 생성, 실패 시 자동
+                폴백.
+              </p>
+            </div>
+
             <p className="text-xs text-slate-500">
               위치: {PRESETS[preset].region} · 4개 에이전트가 순서대로 실행됩니다.
             </p>

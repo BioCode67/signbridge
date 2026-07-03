@@ -5,12 +5,13 @@ import Hero from './sections/Hero'
 import WhySection from './sections/WhySection'
 import SignAvatarDemo from './sections/SignAvatarDemo'
 import QnADemo from './sections/QnADemo'
-
-// 실시간 인식은 MediaPipe·TF.js 번들이 무거우므로 지연 로드(초기 페인트 보호).
-const RecognitionDemo = lazy(() => import('./sections/RecognitionDemo'))
+import AgentConsole from './sections/AgentConsole'
 import HowItWorks from './sections/HowItWorks'
 import ImpactSection from './sections/ImpactSection'
 import Footer from './sections/Footer'
+
+// 실시간 인식은 MediaPipe·TF.js 번들이 무거우므로 지연 로드(초기 페인트 보호).
+const RecognitionDemo = lazy(() => import('./sections/RecognitionDemo'))
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
             <RecognitionDemo />
           </Suspense>
           <QnADemo />
+          <AgentConsole />
           <HowItWorks />
           <ImpactSection />
         </main>

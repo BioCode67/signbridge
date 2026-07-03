@@ -7,6 +7,7 @@ const LINKS = [
   { label: '수어 데모', href: '#demo' },
   { label: '실시간 인식', href: '#live' },
   { label: '양방향 Q&A', href: '#qa' },
+  { label: '4-에이전트', href: '#agents' },
   { label: '작동 원리', href: '#how' },
   { label: '기대효과', href: '#impact' },
 ]

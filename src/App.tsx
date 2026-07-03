@@ -1,9 +1,13 @@
+import { lazy, Suspense } from 'react'
 import { MotionConfig } from 'framer-motion'
 import Navbar from './navigation/Navbar'
 import Hero from './sections/Hero'
 import WhySection from './sections/WhySection'
 import SignAvatarDemo from './sections/SignAvatarDemo'
 import QnADemo from './sections/QnADemo'
+
+// 실시간 인식은 MediaPipe·TF.js 번들이 무거우므로 지연 로드(초기 페인트 보호).
+const RecognitionDemo = lazy(() => import('./sections/RecognitionDemo'))
 import HowItWorks from './sections/HowItWorks'
 import ImpactSection from './sections/ImpactSection'
 import Footer from './sections/Footer'
@@ -23,6 +27,15 @@ export default function App() {
           <Hero />
           <WhySection />
           <SignAvatarDemo />
+          <Suspense
+            fallback={
+              <section id="live" className="border-t border-white/5 py-24 text-center text-sm text-slate-500">
+                실시간 인식 모듈 불러오는 중…
+              </section>
+            }
+          >
+            <RecognitionDemo />
+          </Suspense>
           <QnADemo />
           <HowItWorks />
           <ImpactSection />

@@ -22,12 +22,19 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# 예: NIA_SL_SEN0001_REAL01_F  /  NIA_SL_WRD1234_CROWD07_F
+# 예: NIA_SL_SEN0001_REAL01_F  /  NIA_SL_WORD1501_REAL01_D
+#
+# ⚠️ 가이드 문서는 `WRD`로 적혀 있지만 **실제 배포본은 `WORD`** 를 쓴다.
+# (실제 샘플 확인: NIA_SL_WORD1501_REAL01_D_000000000000_keypoints.json)
+# 둘 다 받아들이고 kind는 표준형으로 정규화한다.
 CLIP_RE = re.compile(
-    r"^NIA_SL_(?P<kind>SEN|WRD|FINSP)(?P<content>\d+)"
+    r"^NIA_SL_(?P<kind>SEN|SENTENCE|WORD|WRD|FINSP|FSP)(?P<content>\d+)"
     r"_(?P<method>REAL|SYN|CROWD)(?P<signer>\d*)"
     r"_(?P<angle>[FUDRL])$"
 )
+
+# 표기 흔들림을 표준형으로 모은다.
+KIND_ALIASES = {"SENTENCE": "SEN", "WRD": "WORD", "FSP": "FINSP"}
 
 ANGLES = ("F", "U", "D", "R", "L")
 
@@ -54,10 +61,13 @@ def parse_clip_name(stem: str) -> ClipName | None:
     parts = match.groupdict()
     method = parts["method"]
     signer_no = parts["signer"] or "00"
+    kind = KIND_ALIASES.get(parts["kind"], parts["kind"])
     return ClipName(
         stem=stem,
-        kind=parts["kind"],
-        content_id=f"{parts['kind']}{parts['content']}",
+        kind=kind,
+        # content_id는 표준형 kind로 만든다. 그래야 WRD/WORD 표기가 섞여 있어도
+        # 같은 콘텐츠가 서로 다른 id로 갈라지지 않는다.
+        content_id=f"{kind}{parts['content']}",
         method=method,
         signer=f"{method}{signer_no}",
         angle=parts["angle"],

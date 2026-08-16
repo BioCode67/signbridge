@@ -70,6 +70,54 @@ def unflatten(flat: list[list[float]] | np.ndarray, num_points: int) -> np.ndarr
     return arr[:, :expected].reshape(arr.shape[0], num_points, 3)
 
 
+def split_keypoints(
+    flat: list | np.ndarray, num_points: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """평탄 배열 → (좌표 (T, N, 3), 신뢰도 (T, N)). **점당 값 개수를 자동 판별한다.**
+
+    실제 AI Hub 배포본을 열어 보니 2D와 3D의 점당 값 개수가 다르다.
+
+        pose_keypoints_2d   75 = 25점 × 3  (x, y, conf)
+        pose_keypoints_3d  100 = 25점 × 4  (x, y, z, conf)
+        hand_..._2d         63 = 21점 × 3
+        hand_..._3d         84 = 21점 × 4
+
+    3을 고정으로 가정하면 3D 배열이 통째로 어긋난다(좌표가 점 경계를 넘어 섞인다).
+    그래서 길이 ÷ 점 개수로 stride를 역산한다. 2D는 z를 0으로 채워 형태를 맞춘다.
+    """
+    arr = np.asarray(flat, dtype=np.float32)
+    if arr.ndim == 1:
+        arr = arr[None, :]
+    frames = arr.shape[0]
+    if arr.size == 0 or num_points == 0:
+        return (
+            np.zeros((frames, num_points, 3), dtype=np.float32),
+            np.zeros((frames, num_points), dtype=np.float32),
+        )
+
+    stride = arr.shape[1] // num_points
+    if stride not in (2, 3, 4):
+        raise ValueError(
+            f"키포인트 배열 길이 {arr.shape[1]}을 {num_points}점으로 나눌 수 없습니다"
+            f"(점당 {arr.shape[1] / num_points:.2f}값). 배포본 형식을 확인하세요."
+        )
+
+    usable = num_points * stride
+    grid = arr[:, :usable].reshape(frames, num_points, stride)
+
+    coords = np.zeros((frames, num_points, 3), dtype=np.float32)
+    if stride == 2:  # (x, y)만 있고 신뢰도가 없는 경우
+        coords[:, :, :2] = grid
+        conf = np.ones((frames, num_points), dtype=np.float32)
+    elif stride == 3:  # (x, y, conf) — 2D
+        coords[:, :, :2] = grid[:, :, :2]
+        conf = grid[:, :, 2]
+    else:  # (x, y, z, conf) — 3D
+        coords[:, :, :] = grid[:, :, :3]
+        conf = grid[:, :, 3]
+    return coords, conf
+
+
 def convert_pose(
     op_pose: np.ndarray, conf_threshold: float = DEFAULT_CONF_THRESHOLD
 ) -> tuple[np.ndarray, np.ndarray]:

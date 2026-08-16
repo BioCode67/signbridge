@@ -79,10 +79,66 @@ def walk_keys(value: Any, depth: int = 0) -> Iterator[str]:
         yield from walk_keys(value[0], depth + 1)
 
 
+def classify(name: str) -> str:
+    lowered = name.lower()
+    if lowered.endswith("_keypoints.json"):
+        return "키포인트"
+    if "morpheme" in lowered:
+        return "형태소(글로스)"
+    if lowered.endswith(".json"):
+        return "기타 JSON"
+    if lowered.endswith((".mp4", ".avi")):
+        return "영상"
+    if lowered.endswith((".xml",)):
+        return "XML"
+    return "기타"
+
+
+def inventory(names: list[str]) -> None:
+    """파일 종류와 폴더 구조를 요약한다.
+
+    **형태소 파일이 들어 있는지**가 특히 중요하다. 키포인트만 있으면 글로스 라벨이 없어
+    학습을 시작할 수 없다(형태소는 전부 합쳐도 0.2GB 남짓이라 따로 받으면 된다).
+    """
+    kinds: dict[str, int] = {}
+    tops: dict[str, int] = {}
+    clips: set[str] = set()
+
+    for name in names:
+        kinds[classify(name)] = kinds.get(classify(name), 0) + 1
+        parts = name.replace("\\", "/").split("/")
+        # 파일명은 빼고 상위 3단계 폴더만 센다(클립마다 폴더가 하나씩이라 그대로 두면
+        # 폴더 목록이 곧 파일 목록이 되어 버린다).
+        folder = "/".join(parts[:-1][:3]) or "(최상위)"
+        tops[folder] = tops.get(folder, 0) + 1
+        base = parts[-1]
+        if base.endswith("_keypoints.json"):
+            head = base[: -len("_keypoints.json")]
+            clips.add(head.rsplit("_", 1)[0] if "_" in head else head)
+
+    print("파일 종류")
+    for kind, count in sorted(kinds.items(), key=lambda kv: -kv[1]):
+        print(f"  {kind:16s} {count:,}개")
+    if clips:
+        print(f"\n키포인트 클립 수: {len(clips):,}개 (예: {sorted(clips)[:3]})")
+    if "형태소(글로스)" not in kinds:
+        print("\n⚠️ 형태소(글로스) 파일이 없습니다 — 라벨이 없으면 학습을 시작할 수 없습니다.")
+        print("   AI Hub에서 `*_morpheme.zip`을 따로 받으세요(전부 합쳐도 0.2GB 남짓).")
+
+    print("\n폴더 구조 (상위 12개)")
+    for folder, count in sorted(tops.items(), key=lambda kv: -kv[1])[:12]:
+        print(f"  {folder}  … {count:,}개")
+    print()
+
+
 def iter_json(path: Path, limit: int) -> Iterator[tuple[str, Any]]:
     """파일·디렉터리·zip 어디서든 JSON을 꺼내 준다."""
     if path.is_dir():
-        files = sorted(path.rglob("*.json"))[:limit]
+        every = [str(p.relative_to(path)) for p in path.rglob("*") if p.is_file()]
+        inventory(every)
+        candidates = sorted(path.rglob("*.json"))
+        candidates.sort(key=lambda p: (0 if "morpheme" in p.name.lower() else 1, str(p)))
+        files = candidates[:limit]
         for file in files:
             try:
                 yield str(file.relative_to(path)), json.loads(file.read_text(encoding="utf-8"))
@@ -92,8 +148,13 @@ def iter_json(path: Path, limit: int) -> Iterator[tuple[str, Any]]:
 
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as archive:
-            names = [n for n in archive.namelist() if n.lower().endswith(".json")][:limit]
-            print(f"  (zip 안 JSON {len(archive.namelist())}개 중 {len(names)}개 확인)\n")
+            all_names = archive.namelist()
+            inventory(all_names)
+            json_names = [n for n in all_names if n.lower().endswith(".json")]
+            # 형태소 파일이 있으면 그것부터 보여 준다(글로스 구조가 가장 중요하다).
+            json_names.sort(key=lambda n: (0 if "morpheme" in n.lower() else 1, n))
+            names = json_names[:limit]
+            print(f"  (JSON {len(json_names):,}개 중 {len(names)}개 확인)\n")
             for name in names:
                 try:
                     with archive.open(name) as handle:

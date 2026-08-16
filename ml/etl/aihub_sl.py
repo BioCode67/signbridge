@@ -5,9 +5,17 @@
 | | 재난안전 | 수어 영상 |
 |---|---|---|
 | 키포인트 위치 | 형태소 JSON 안(`landmarks`) | **별도 파일, 프레임당 1개** |
-| 좌표 | 3D | **2D**(OpenPose 표준) |
+| 좌표 | 3D | **2D와 3D 둘 다** (3D는 미터 단위, 기본으로 3D 사용) |
 | 글로스 필드 | `sign_script.*[].gloss_id` | **`data[].attributes[].name`** |
 | 수어자 정보 | `signer` 필드 | **파일명**(REAL01~20) |
+
+실제 배포본을 열어 확인한 사항(가이드 문서만으로는 알 수 없던 것들)
+  · `people`이 리스트가 아니라 **딕셔너리**다. 표준 OpenPose와 다르다.
+  · 2D는 점당 3값(x, y, conf), **3D는 점당 4값(x, y, z, conf)**. 3으로 가정하면
+    좌표가 점 경계를 넘어 뒤섞인다.
+  · 파일명의 단어 구분자가 가이드의 `WRD`가 아니라 **`WORD`**다.
+  · 프레임 번호는 12자리(`_000000000000_keypoints.json`)이고 클립마다 폴더가 하나씩이다.
+  · 카메라 파라미터(`camparam`: Intrinsics/CameraMatrix/Distortion)가 함께 들어 있다.
 
     python -m ml.etl.aihub_sl \
         --morpheme /data/raw/수어영상/라벨링데이터/REAL/SEN \
@@ -36,34 +44,54 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ml.signbridge.naming import frame_index, parse_clip_name, strip_suffix  # noqa: E402
-from ml.signbridge.openpose import convert_clip  # noqa: E402
+from ml.signbridge.openpose import convert_clip, convert_clip_3d, split_keypoints  # noqa: E402
 from ml.signbridge.pack import save_pack  # noqa: E402
 
 NUM_POSE_OP = 25
 NUM_HAND_OP = 21
 
 
-def read_openpose_json(path: Path) -> tuple[list, list, list]:
+def read_openpose_json(path: Path, prefer_3d: bool = True) -> tuple[list, list, list, bool]:
     """OpenPose 프레임 JSON에서 pose/left/right 평탄 배열을 꺼낸다.
 
-    `people[0]`에 들어 있는 배포본과 최상위에 바로 있는 배포본을 모두 처리한다.
+    배포본 편차 두 가지를 모두 처리한다.
+
+    1. **`people`가 리스트가 아니라 딕셔너리인 경우** — OpenPose 표준은
+       `"people": [{...}]`이지만, 실제 AI Hub 수어영상 배포본은
+       `"people": {"person_id": -1, ...}` 처럼 **딕셔너리 하나**로 들어 있다.
+       리스트만 가정하면 좌표를 하나도 못 읽고 전부 0이 된다(조용히 실패).
+    2. **3D가 함께 들어 있는 경우** — 실제 배포본에는 `*_keypoints_2d`와
+       `*_keypoints_3d`가 모두 있다. 3D는 미터 단위 실좌표라 브라우저 MediaPipe의
+       z와 성격이 맞으므로 기본으로 3D를 쓴다.
+
+    Returns:
+        (pose, left, right, is_3d)
     """
     with open(path, encoding="utf-8") as handle:
         data = json.load(handle)
 
     holder = data
     people = data.get("people") if isinstance(data, dict) else None
-    if isinstance(people, list) and people:
+    if isinstance(people, dict):
+        holder = people
+    elif isinstance(people, list) and people:
         # 여러 명이 잡히면 포즈 신뢰도 합이 가장 큰 사람을 수어자로 본다.
         holder = max(
             people, key=lambda p: float(np.sum(np.asarray(p.get("pose_keypoints_2d", [0]))[2::3]))
         )
 
-    return (
-        holder.get("pose_keypoints_2d") or [],
-        holder.get("hand_left_keypoints_2d") or [],
-        holder.get("hand_right_keypoints_2d") or [],
-    )
+    suffixes = ("_3d", "_2d") if prefer_3d else ("_2d", "_3d")
+    for suffix in suffixes:
+        pose = holder.get(f"pose_keypoints{suffix}")
+        if not pose:
+            continue
+        return (
+            pose,
+            holder.get(f"hand_left_keypoints{suffix}") or [],
+            holder.get(f"hand_right_keypoints{suffix}") or [],
+            suffix == "_3d",
+        )
+    return [], [], [], False
 
 
 def read_morpheme(path: Path) -> tuple[str, list[dict]]:
@@ -117,44 +145,75 @@ def read_morpheme(path: Path) -> tuple[str, list[dict]]:
 
 
 def convert_clip_files(
-    stem: str, morpheme_path: Path, keypoint_paths: list[Path], out_dir: Path, fps: float
+    stem: str,
+    morpheme_path: Path,
+    keypoint_paths: list[Path],
+    out_dir: Path,
+    fps: float,
+    prefer_3d: bool = True,
 ) -> dict | None:
     if not keypoint_paths:
         return None
 
     poses, lefts, rights = [], [], []
+    is_3d = False
     for path in keypoint_paths:
-        pose, left, right = read_openpose_json(path)
+        pose, left, right, frame_is_3d = read_openpose_json(path, prefer_3d=prefer_3d)
         poses.append(pose)
         lefts.append(left)
         rights.append(right)
+        is_3d = is_3d or frame_is_3d
 
-    def pad(rows: list, num_points: int) -> np.ndarray:
-        width = num_points * 3
-        out = np.zeros((len(rows), width), dtype=np.float32)
+    def stack(rows: list, num_points: int) -> tuple[np.ndarray, np.ndarray]:
+        """프레임별 평탄 배열들을 (T, N, 3) 좌표 + (T, N) 신뢰도로 모은다."""
+        coords = np.zeros((len(rows), num_points, 3), dtype=np.float32)
+        confs = np.zeros((len(rows), num_points), dtype=np.float32)
         for index, row in enumerate(rows):
-            values = np.asarray(row, dtype=np.float32).reshape(-1)
-            out[index, : min(width, len(values))] = values[:width]
-        return out
+            if not row:
+                continue
+            point, conf = split_keypoints(row, num_points)
+            coords[index] = point[0]
+            confs[index] = conf[0]
+        return coords, confs
 
-    arrays = convert_clip(
-        {
-            "pose": pad(poses, NUM_POSE_OP),
-            "hand_left": pad(lefts, NUM_HAND_OP),
-            "hand_right": pad(rights, NUM_HAND_OP),
-        }
-    )
+    pose_xyz, pose_conf = stack(poses, NUM_POSE_OP)
+    left_xyz, left_conf = stack(lefts, NUM_HAND_OP)
+    right_xyz, right_conf = stack(rights, NUM_HAND_OP)
+
+    if is_3d:
+        # 3D는 미터 단위 실좌표. convert_clip_3d의 위생 검사(중앙값 상대 기준)를 거친다.
+        arrays, _ = convert_clip_3d(
+            {
+                "pose": pose_xyz.reshape(len(pose_xyz), -1),
+                "hand_left": left_xyz.reshape(len(left_xyz), -1),
+                "hand_right": right_xyz.reshape(len(right_xyz), -1),
+            }
+        )
+    else:
+        # 2D는 (x, y, conf) 형태로 되돌려 기존 경로를 태운다.
+        def to_flat(coords: np.ndarray, conf: np.ndarray) -> np.ndarray:
+            out = np.concatenate([coords[:, :, :2], conf[:, :, None]], axis=2)
+            return out.reshape(len(coords), -1)
+
+        arrays = convert_clip(
+            {
+                "pose": to_flat(pose_xyz, pose_conf),
+                "hand_left": to_flat(left_xyz, left_conf),
+                "hand_right": to_flat(right_xyz, right_conf),
+            }
+        )
 
     korean, glosses = read_morpheme(morpheme_path) if morpheme_path else ("", [])
     parsed = parse_clip_name(stem)
 
+    source = "aihub-sl-3d" if is_3d else "aihub-sl-2d"
     meta = {
         "id": stem,
         "fps": fps,
         "korean_text": korean,
         "glosses": glosses,
-        "source": "aihub-sl-2d",
-        "has_depth": False,
+        "source": source,
+        "has_depth": is_3d,
     }
     rel = f"packs/{stem}.npz"
     save_pack(out_dir / rel, arrays, meta)
@@ -167,8 +226,8 @@ def convert_clip_files(
         "korean_text": korean,
         "glosses": glosses,
         "signer": parsed.signer if parsed else "",
-        "source": "aihub-sl-2d",
-        "has_depth": False,
+        "source": source,
+        "has_depth": is_3d,
         "angle": parsed.angle if parsed else "",
         "content_id": parsed.content_id if parsed else "",
         "kind": parsed.kind if parsed else "",
@@ -176,9 +235,9 @@ def convert_clip_files(
 
 
 def _worker(payload: tuple) -> dict | None:
-    stem, morpheme_path, keypoint_paths, out_dir, fps = payload
+    stem, morpheme_path, keypoint_paths, out_dir, fps, prefer_3d = payload
     try:
-        return convert_clip_files(stem, morpheme_path, keypoint_paths, out_dir, fps)
+        return convert_clip_files(stem, morpheme_path, keypoint_paths, out_dir, fps, prefer_3d)
     except Exception as error:
         print(f"  [warn] {stem}: {type(error).__name__}: {error}", flush=True)
         return None
@@ -214,6 +273,11 @@ def main() -> None:
     parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument(
+        "--force-2d",
+        action="store_true",
+        help="3D가 있어도 2D를 쓴다(학습·추론 모두 --zero-depth로 맞출 때)",
+    )
     args = parser.parse_args()
 
     angles = None if args.angles.lower() == "all" else {a.strip().upper() for a in args.angles.split(",")}
@@ -240,7 +304,7 @@ def main() -> None:
             if angles is not None and parsed.angle not in angles:
                 skipped_angle += 1
                 continue
-        payloads.append((stem, morpheme_index.get(stem), paths, args.out, args.fps))
+        payloads.append((stem, morpheme_index.get(stem), paths, args.out, args.fps, not args.force_2d))
 
     if args.limit:
         payloads = payloads[: args.limit]
@@ -275,7 +339,8 @@ def main() -> None:
     signers = {r["signer"] for r in records if r["signer"]}
     angles_seen = {r["angle"] for r in records if r["angle"]}
     print(f"\n[etl] 클립 {len(records)}개 → {index_path}")
-    print(f"[etl] 수어자 {len(signers)}명 · 각도 {sorted(angles_seen)}")
+    depth_count = sum(1 for r in records if r["has_depth"])
+    print(f"[etl] 수어자 {len(signers)}명 · 각도 {sorted(angles_seen)} · 깊이(z) 포함 {depth_count}개")
     if no_gloss:
         print(
             f"[etl] ⚠️ 글로스가 없는 클립 {no_gloss}개 — 형태소 zip을 함께 받았는지 확인하세요"

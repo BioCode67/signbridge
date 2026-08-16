@@ -120,12 +120,13 @@ def convert_hand(
 # 문제는 깊이 추정 실패 프레임에 -25,000,000 같은 값이 섞여 있다는 것이다. 그대로 쓰면
 # 어깨 너비 정규화가 통째로 망가지므로 아래 위생 검사를 반드시 통과시켜야 한다.
 
-# 사람 몸이 카메라에서 떨어져 있을 법한 범위(mm).
-DEPTH_MIN_MM = 200.0
-DEPTH_MAX_MM = 20000.0
-# 어깨 너비의 물리적 타당 범위(mm).
-SHOULDER_MIN_MM = 50.0
-SHOULDER_MAX_MM = 2000.0
+# 어깨 너비가 클립 중앙값 대비 이 범위를 벗어나면 추정 실패로 본다.
+# **절대 단위(mm/픽셀)를 쓰지 않는 이유**: AI Hub 배포본마다 3D 좌표의 단위가 다르다.
+# 재난안전 데이터 가이드라인은 pose_keypoints_3d 범위를 [0~1920](픽셀 느낌)으로 적어 두었는데,
+# 실제 가공본에서는 z가 2500 안팎(mm로 보이는 값)이었다. 절대 임계값을 박아 두면 단위가
+# 다른 배포본에서 전부 걸러져 버리므로, **클립 자체의 중앙값 기준 상대 판정**을 쓴다.
+SHOULDER_MIN_RATIO = 0.3
+SHOULDER_MAX_RATIO = 3.0
 # 몸 중심에서 이 배수(어깨 너비)를 넘는 관절은 추정 실패로 간주한다.
 OUTLIER_BODY_RADII = 8.0
 
@@ -134,6 +135,9 @@ def sanitize_3d(
     pose3d: np.ndarray, hands3d: tuple[np.ndarray, ...]
 ) -> tuple[np.ndarray, tuple[np.ndarray, ...], np.ndarray]:
     """3D 키포인트에서 추정 실패 값을 제거한다.
+
+    깊이 추정이 실패한 프레임에는 -25,000,000 같은 값이 섞여 들어온다. 그대로 두면
+    어깨 너비 정규화가 통째로 망가진다.
 
     Returns:
         (정리된 pose3d, 정리된 손들, frame_ok) — frame_ok가 False인 프레임은 어깨 자체가
@@ -147,12 +151,15 @@ def sanitize_3d(
     center = (left_shoulder + right_shoulder) / 2.0  # (T, 3)
     width = np.linalg.norm(left_shoulder[:, :2] - right_shoulder[:, :2], axis=1)  # (T,)
 
+    # 중앙값은 이상치에 강하다. 프레임 절반 이상이 정상이면 올바른 기준을 잡는다.
+    finite = np.isfinite(width) & (width > 0)
+    reference = float(np.median(width[finite])) if finite.any() else 0.0
+
     frame_ok = (
         np.isfinite(center).all(axis=1)
-        & (center[:, 2] >= DEPTH_MIN_MM)
-        & (center[:, 2] <= DEPTH_MAX_MM)
-        & (width >= SHOULDER_MIN_MM)
-        & (width <= SHOULDER_MAX_MM)
+        & finite
+        & (width >= SHOULDER_MIN_RATIO * reference)
+        & (width <= SHOULDER_MAX_RATIO * reference)
     )
 
     # 몸 중심에서 지나치게 멀리 떨어진 관절은 0(미검출)으로 만든다.

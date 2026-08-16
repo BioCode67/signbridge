@@ -190,6 +190,14 @@ def main() -> None:
         raise SystemExit("학습 표본이 0개입니다. prepare.py의 --min-count를 낮춰 보세요.")
 
     print(f"[train] 학습 {len(train_set)} / 검증 {len(val_set)} 표본, 클래스 {num_classes}개")
+    if len(val_set) == 0:
+        # 검증 표본이 0이면 지표가 전부 0으로 나와 "성능이 나쁜 것"처럼 보인다.
+        # 실제로는 측정 자체가 안 된 것이므로 여기서 분명히 알린다.
+        raise SystemExit(
+            "검증 표본이 0개입니다. 지표를 만들 수 없습니다.\n"
+            "  → prepare.py의 --split-by를 바꾸거나(수어자가 너무 적으면 signer 분할이 한쪽으로 쏠린다),\n"
+            "    --val-ratio를 올리거나, 데이터를 더 넣으세요."
+        )
 
     pin = device.type == "cuda"
     train_loader = DataLoader(

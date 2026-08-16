@@ -140,20 +140,42 @@ CTC 구현이 맞는지 의심될 때 PHOENIX에 한 번 돌려 보는 것이, �
 | 다운로드가 안 끝남 | INNORIX 클라이언트 사용, 미완료 파일이 `.irx961`로 남는다 |
 | 좌표 정규화 붕괴 | 이전 변환기가 min/max 정규화를 쓰자 이상치 Z(≈0)로 골격이 한 점으로 붕괴 → **퍼센타일(2~98%)** 기준으로 해결 |
 
-### 이 코드가 받아들이는 형식
+### 재난안전 데이터 전용 어댑터 ★
 
-- `--format repo` : 이 저장소 `public/data/sign_N.json` — **직접 확인·검증 완료**
-- `--format openpose-dir` : 클립별 OpenPose 프레임 json + 라벨 json — 이건 **OpenPose 표준
-  출력 규약**이지, AI Hub 배포본이 그 형태라고 확인된 것이 아니다
-
-위 표대로라면 AI Hub 원본은 **형태소 JSON 경로**일 가능성이 높다. 배포 차수마다 필드 이름이
-다르므로 **반드시 먼저 구조를 찍어 보고** 어댑터를 맞춘다.
+**공식 구축 가이드라인(V1.1)의 스키마 표를 근거로** 작성했다(추측이 아니다).
 
 ```bash
-python -m ml.etl.inspect_json /data/raw/aihub/라벨링데이터 --limit 3
+python -m ml.etl.aihub_disaster --input /data/raw/재난안전/라벨링데이터 \
+    --out /data/signbridge/ksl-disaster --workers 16
 ```
 
-이 출력만 있으면 형태소 JSON용 어댑터를 정확히 붙일 수 있다(추측으로 미리 쓰지 않았다).
+가이드라인에서 확인된, 반드시 알아야 할 세 가지.
+
+| 사실 | 왜 중요한가 |
+|---|---|
+| 글로스가 **`sign_gestures_both` / `_strong`(우세손) / `_weak`(비우세손)** 세 층렬로 나뉜다 | 한 줄짜리 시퀀스가 아니다. 합쳐서 시간순 정렬해야 한다(`--tiers`) |
+| 글로스 필드 이름이 **`gloss_id`** | `gloss`·`name`으로 찾으면 0건이 나온다 |
+| 키포인트가 **형태소 JSON의 `landmarks`** 안에 있다 | 별도 키포인트 XML(수 GB)을 받을 필요가 없다 |
+
+그 밖에 학습·평가에 직접 쓰이는 메타 필드도 함께 뽑는다.
+
+- **`signer`** — 수어자 분리 평가의 근거(`prepare.py --split-by signer`)
+- **`augment`** — AI 증강 문장 여부. `prepare.py --exclude-augmented`로 제외 가능
+- **`filmed_in_studio`** — 대면(스튜디오) / **비대면 촬영**. 비대면 쪽이 실제 웹캠 환경에
+  더 가까우므로 `--only-remote`로 그것만 골라 쓸 수 있다
+- `hand_default` — 우세손(좌우 반전 증강을 근거 있게 쓰려면 필요)
+
+### 그 밖의 형식
+
+- `--format repo` : 이 저장소 `public/data/sign_N.json` — 직접 확인·검증 완료
+- `--format openpose-dir` : OpenPose 표준 출력 규약. AI Hub 배포본이 그 형태라고
+  확인된 것은 아니다
+
+배포 차수마다 필드가 다를 수 있으니, 처음 받으면 구조부터 찍어 볼 것.
+
+```bash
+python -m ml.etl.inspect_json /data/raw/재난안전/라벨링데이터 --limit 3
+```
 
 ---
 

@@ -74,6 +74,16 @@ def main() -> None:
         default=None,
         help="JSON 배열 파일. 여기 있는 글로스만 남긴다(재난 30개 어휘 등).",
     )
+    parser.add_argument(
+        "--exclude-augmented",
+        action="store_true",
+        help="AI 증강 문장(augment=true)을 제외한다. 실제 발송 재난문자만 쓰고 싶을 때",
+    )
+    parser.add_argument(
+        "--only-remote",
+        action="store_true",
+        help="비대면 촬영(filmed_in_studio=false)만 쓴다. 웹캠 환경에 더 가깝다",
+    )
     args = parser.parse_args()
 
     index_path = args.data / "index.jsonl"
@@ -81,7 +91,33 @@ def main() -> None:
     if not records:
         raise SystemExit(f"레코드가 없습니다: {index_path}")
 
-    assign_splits(records, args.split_by, args.val_ratio, args.test_ratio)
+    # 필터는 **레코드를 지우지 않는다.** split="excluded"로 표시만 하고 index.jsonl에는
+    # 전부 남긴다. 지워 버리면 다른 조건으로 다시 돌릴 때 데이터가 영영 사라지고
+    # (ETL을 통째로 다시 돌려야 한다), 필터를 연달아 적용하면 결과가 누적돼 버린다.
+    kept: list[dict] = []
+    excluded: list[dict] = []
+    for record in records:
+        drop = (args.exclude_augmented and record.get("augment", False)) or (
+            args.only_remote and record.get("filmed_in_studio", True)
+        )
+        (excluded if drop else kept).append(record)
+
+    if excluded:
+        print(f"[prepare] 필터로 제외(split=excluded): {len(excluded)}개 / 사용 {len(kept)}개")
+    if not kept:
+        raise SystemExit("필터를 적용하니 남은 클립이 0개입니다.")
+
+    for record in excluded:
+        record["split"] = "excluded"
+    assign_splits(kept, args.split_by, args.val_ratio, args.test_ratio)
+
+    for split in ("train", "val", "test"):
+        if not any(r["split"] == split for r in kept):
+            print(
+                f"[prepare] ⚠️ '{split}' 분할이 비었습니다. 수어자 수가 적으면 signer 분할이"
+                " 한쪽으로 쏠립니다 — --split-by clip 을 고려하세요."
+            )
+    records = kept + excluded
 
     counts = Counter[str]()
     per_split = Counter[str]()

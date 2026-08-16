@@ -45,6 +45,12 @@ import re
 import sys
 import zipfile
 from collections import Counter
+
+try:
+    import py7zr.io as py7zr_io
+except ImportError:  # 7z 입력을 쓰지 않으면 없어도 된다.
+    py7zr_io = None  # type: ignore[assignment]
+
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -261,11 +267,14 @@ def convert_file(
     tiers: list[str],
     depth: str,
     zip_path: Path | None = None,
+    raw: bytes | None = None,
 ) -> dict | None:
-    if zip_path is not None:
-        # json_path는 zip 내부 멤버 이름이다(파일시스템에 없다).
-        raw = _zip_handle(zip_path).read(json_path.as_posix())
+    if raw is not None:
+        # 이미 메모리에 있는 JSON 바이트(7z 스트리밍 경로). json_path는 이름표일 뿐이다.
         record = json.loads(raw.decode("utf-8-sig"))
+    elif zip_path is not None:
+        # json_path는 zip 내부 멤버 이름이다(파일시스템에 없다).
+        record = json.loads(_zip_handle(zip_path).read(json_path.as_posix()).decode("utf-8-sig"))
     else:
         with open(json_path, encoding="utf-8") as handle:
             record = json.load(handle)
@@ -343,24 +352,49 @@ def convert_file(
 
 
 def _worker(payload: tuple) -> dict | None:
-    json_path, out_dir, tiers, depth, zip_path = payload
+    json_path, out_dir, tiers, depth, zip_path, raw = payload
     try:
-        return convert_file(json_path, out_dir, tiers, depth, zip_path)
+        return convert_file(json_path, out_dir, tiers, depth, zip_path, raw)
     except Exception as error:
         print(f"  [warn] {json_path.name}: {type(error).__name__}: {error}", flush=True)
         return None
 
 
+# ── 아카이브 종류 판별 ────────────────────────────────────────────────────────
+# **AI Hub의 `*.zip`은 실제로는 7z다.** 확장자만 zip이고 내용은 7-Zip(LZMA2) 아카이브라
+# 파이썬 `zipfile`도 `unzip`도 열지 못한다("End-of-central-directory signature not found").
+# 확장자를 믿지 말고 매직 바이트로 판별한다.
+ZIP_MAGIC = b"PK\x03\x04"
+SEVENZ_MAGIC = b"7z\xbc\xaf\x27\x1c"
+
+
+def archive_kind(path: Path) -> str:
+    """'zip' | '7z' | '' (아카이브 아님)"""
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(6)
+    except OSError:
+        return ""
+    if head.startswith(SEVENZ_MAGIC):
+        return "7z"
+    if head.startswith(ZIP_MAGIC):
+        return "zip"
+    return ""
+
+
+def find_archives(root: Path) -> list[Path]:
+    if root.is_file():
+        return [root] if archive_kind(root) else []
+    found = [p for p in sorted(root.rglob("*")) if p.is_file() and archive_kind(p)]
+    return found
+
+
 def collect_inputs(root: Path) -> list[tuple[Path, Path | None]]:
-    """변환할 JSON 목록을 (경로, 소속 zip) 쌍으로 모은다.
-
-    --input으로 zip 하나, zip이 든 디렉터리, 이미 푼 JSON 디렉터리 어느 쪽을 줘도 된다.
-    zip과 JSON이 섞여 있어도 그대로 처리한다(파일럿만 풀어 둔 상태 등).
-    """
-    zips = [root] if root.suffix.lower() == ".zip" else sorted(root.rglob("*.zip"))
-
+    """진짜 zip과 낱개 JSON을 (경로, 소속 zip) 쌍으로 모은다. 7z는 여기서 다루지 않는다."""
     items: list[tuple[Path, Path | None]] = []
-    for archive in zips:
+    for archive in find_archives(root):
+        if archive_kind(archive) != "zip":
+            continue
         with zipfile.ZipFile(archive) as handle:
             items.extend(
                 (Path(name), archive)
@@ -373,13 +407,111 @@ def collect_inputs(root: Path) -> list[tuple[Path, Path | None]]:
     return items
 
 
+# ── 7z 스트리밍 ──────────────────────────────────────────────────────────────
+# 재난안전 아카이브는 `Solid = +`, `Blocks = 1`, 즉 **통짜로 압축**돼 있다. 멤버 하나를
+# 꺼내려 해도 앞에서부터 다 풀어야 하므로, 파일마다 따로 열면 O(n²)가 되어 끝나지 않는다.
+# 유일하게 실용적인 방법은 **처음부터 끝까지 한 번만 훑으면서** 멤버가 풀릴 때마다 곧바로
+# 처리하는 것이다. py7zr의 WriterFactory가 그 자리를 준다 — 멤버 하나가 다 풀리면
+# `Py7zIO.close()`가 불린다. 그때 JSON을 넘기고 버퍼를 비운다(메모리 일정하게 유지).
+#
+# 압축 해제 자체는 순차라 한 스레드지만, 무거운 쪽은 좌표 변환(numpy)이므로 그건 프로세스
+# 풀로 넘긴다. 다만 무한정 넘기면 안 넘어간 JSON이 메모리에 쌓이므로 in-flight를 제한한다.
+
+
+def _json_only_factory(on_done):
+    """JSON만 메모리로 받고 나머지(xlsx·mp4 등)는 /dev/null로 버리는 WriterFactory.
+
+    py7zr가 없는 환경에서도 모듈을 import할 수 있어야 하므로 클래스를 함수 안에 둔다.
+    """
+    if py7zr_io is None:
+        raise SystemExit("7z 아카이브를 읽으려면 py7zr가 필요합니다:  pip install py7zr")
+
+    class _JsonSink(py7zr_io.Py7zIO):
+        """멤버 하나를 메모리에 받아 두었다가, 다 풀리는 순간 콜백으로 넘긴다."""
+
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self._buf = bytearray()
+
+        def write(self, s: bytes | bytearray) -> int:
+            self._buf += s
+            return len(s)
+
+        def read(self, size: int | None = None) -> bytes:
+            return bytes(self._buf)
+
+        def seek(self, offset: int, whence: int = 0) -> int:
+            return offset
+
+        def flush(self) -> None:
+            return None
+
+        def size(self) -> int:
+            return len(self._buf)
+
+        def close(self) -> None:
+            if self._buf:
+                on_done(self.name, bytes(self._buf))
+            self._buf = bytearray()
+
+    class _JsonOnlyFactory(py7zr_io.WriterFactory):
+        def create(self, filename: str):
+            if filename.lower().endswith(".json"):
+                return _JsonSink(filename)
+            return py7zr_io.NullIO()
+
+    return _JsonOnlyFactory()
+
+
+def stream_7z(
+    archive: Path,
+    out_dir: Path,
+    tiers: list[str],
+    depth: str,
+    workers: int,
+    limit: int,
+    on_result,
+) -> int:
+    """7z를 한 번만 훑으면서 JSON을 변환한다. 처리한 개수를 돌려준다."""
+    import py7zr
+
+    max_inflight = max(2, workers * 2)
+    seen = 0
+
+    with ProcessPoolExecutor(max_workers=max(1, workers)) as pool:
+        pending: list = []
+
+        def drain(keep: int) -> None:
+            while len(pending) > keep:
+                on_result(pending.pop(0).result())
+
+        def handle(name: str, raw: bytes) -> None:
+            nonlocal seen
+            if limit and seen >= limit:
+                return
+            seen += 1
+            pending.append(
+                pool.submit(_worker, (Path(name), out_dir, tiers, depth, None, raw))
+            )
+            # 먼저 넣은 것부터 걷어내 메모리를 일정하게 유지한다.
+            drain(max_inflight)
+            if seen % 500 == 0:
+                print(f"  [etl] {seen}개 처리", flush=True)
+
+        with py7zr.SevenZipFile(archive, "r") as handle_7z:
+            handle_7z.extractall(factory=_json_only_factory(handle))
+
+        drain(0)
+    return seen
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="재난안전 수어영상 형태소 JSON → 랜드마크 팩")
     parser.add_argument(
         "--input",
         type=Path,
         required=True,
-        help="형태소/비수지 JSON — 디렉터리, zip, zip이 든 디렉터리 모두 가능(zip은 풀지 않고 읽음)",
+        help="형태소/비수지 JSON — 디렉터리·zip·7z 모두 가능(압축을 풀지 않고 읽는다)",
     )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument(
@@ -395,31 +527,43 @@ def main() -> None:
     tiers = [t.strip() for t in args.tiers.split(",") if t.strip()]
     args.out.mkdir(parents=True, exist_ok=True)
 
+    results: list = []
+    sevenz = [p for p in find_archives(args.input) if archive_kind(p) == "7z"]
     files = collect_inputs(args.input)
     if args.limit:
         files = files[: args.limit]
-    if not files:
+    if not files and not sevenz:
         raise SystemExit(f"JSON이 없습니다: {args.input}")
 
-    from_zip = sum(1 for _, archive in files if archive is not None)
-    print(
-        f"[etl] 형태소 JSON {len(files)}개 변환 "
-        f"(zip 안 {from_zip}개, 층렬={tiers}, workers={args.workers})"
-    )
-    payloads = [(path, args.out, tiers, args.depth, archive) for path, archive in files]
+    # 7z는 통짜 압축이라 한 번만 훑는다(무작위 접근 불가). 아카이브별로 순서대로.
+    for archive in sevenz:
+        print(f"[etl] 7z 스트리밍: {archive.name} (층렬={tiers}, workers={args.workers})")
+        done = stream_7z(
+            archive, args.out, tiers, args.depth, args.workers, args.limit, results.append
+        )
+        print(f"[etl] {archive.name}에서 JSON {done}개 처리")
+
+    if files:
+        from_zip = sum(1 for _, archive in files if archive is not None)
+        print(
+            f"[etl] 형태소 JSON {len(files)}개 변환 "
+            f"(zip 안 {from_zip}개, 층렬={tiers}, workers={args.workers})"
+        )
+        payloads = [
+            (path, args.out, tiers, args.depth, archive, None) for path, archive in files
+        ]
+        if args.workers <= 1:
+            results.extend(_worker(p) for p in payloads)
+        else:
+            with ProcessPoolExecutor(max_workers=args.workers) as pool:
+                futures = [pool.submit(_worker, p) for p in payloads]
+                for index, future in enumerate(as_completed(futures), start=1):
+                    results.append(future.result())
+                    if index % 500 == 0:
+                        print(f"  {index}/{len(payloads)}", flush=True)
+
     records: list[dict] = []
     no_landmarks: list[str] = []
-
-    if args.workers <= 1:
-        results = [_worker(p) for p in payloads]
-    else:
-        results = []
-        with ProcessPoolExecutor(max_workers=args.workers) as pool:
-            futures = [pool.submit(_worker, p) for p in payloads]
-            for index, future in enumerate(as_completed(futures), start=1):
-                results.append(future.result())
-                if index % 500 == 0:
-                    print(f"  {index}/{len(payloads)}", flush=True)
 
     for result in results:
         if not result:

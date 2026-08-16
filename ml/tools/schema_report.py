@@ -26,6 +26,25 @@ MAX_STRING = 40
 MAX_KEYS = 30
 MAX_DEPTH = 5
 
+# **AI Hub의 `*.zip`은 실제로는 7z다.** 확장자만 zip이고 내용은 7-Zip(LZMA2)이라
+# zipfile도 unzip도 열지 못한다. 확장자를 믿지 말고 매직 바이트로 판별한다.
+ZIP_MAGIC = b"PK\x03\x04"
+SEVENZ_MAGIC = b"7z\xbc\xaf\x27\x1c"
+
+
+def archive_kind(path: Path) -> str:
+    """'zip' | '7z' | '' (아카이브 아님)"""
+    try:
+        with open(path, "rb") as handle:
+            head = handle.read(6)
+    except OSError:
+        return ""
+    if head.startswith(SEVENZ_MAGIC):
+        return "7z"
+    if head.startswith(ZIP_MAGIC):
+        return "zip"
+    return ""
+
 # 어댑터 판정에 쓰는 표식들.
 DISASTER_MARKERS = ("sign_script", "sign_gestures_both", "gloss_id", "nms_script")
 SL_MARKERS = ("attributes", "metaData", "exportedOn")
@@ -131,8 +150,78 @@ def inventory(names: list[str]) -> None:
     print()
 
 
+class _StopEarly(Exception):
+    """필요한 만큼 봤으니 그만 풀라는 신호."""
+
+
+def iter_7z(path: Path, limit: int) -> Iterator[tuple[str, Any]]:
+    """7z에서 JSON 몇 개만 꺼낸다.
+
+    AI Hub 아카이브는 `Solid = +`, 즉 통짜로 압축돼 있어 특정 파일만 골라 뽑을 수 없다.
+    앞에서부터 풀되 필요한 개수를 채우면 예외로 중단시킨다 — 90GB짜리를 끝까지 푸는
+    사고를 막기 위해서다.
+    """
+    try:
+        import py7zr
+        import py7zr.io as pio
+    except ImportError:
+        raise SystemExit("7z 아카이브입니다. 읽으려면:  pip install py7zr")
+
+    with py7zr.SevenZipFile(path, "r") as handle:
+        inventory(handle.getnames())
+
+    collected: list[tuple[str, bytes]] = []
+
+    class _Sink(pio.Py7zIO):
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self._buf = bytearray()
+
+        def write(self, s):
+            self._buf += s
+            return len(s)
+
+        def read(self, size=None):
+            return bytes(self._buf)
+
+        def seek(self, offset, whence=0):
+            return offset
+
+        def flush(self):
+            return None
+
+        def size(self):
+            return len(self._buf)
+
+        def close(self):
+            if self._buf:
+                collected.append((self.name, bytes(self._buf)))
+            self._buf = bytearray()
+            if len(collected) >= limit:
+                raise _StopEarly
+
+    class _Factory(pio.WriterFactory):
+        def create(self, filename: str):
+            if filename.lower().endswith(".json"):
+                return _Sink(filename)
+            return pio.NullIO()
+
+    try:
+        with py7zr.SevenZipFile(path, "r") as handle:
+            handle.extractall(factory=_Factory())
+    except _StopEarly:
+        pass
+
+    print(f"  (앞에서부터 JSON {len(collected)}개 확인)\n")
+    for name, raw in collected[:limit]:
+        try:
+            yield name, json.loads(raw.decode("utf-8-sig"))
+        except Exception as error:
+            yield name, {"__파싱실패__": f"{type(error).__name__}: {error}"}
+
+
 def iter_json(path: Path, limit: int) -> Iterator[tuple[str, Any]]:
-    """파일·디렉터리·zip 어디서든 JSON을 꺼내 준다."""
+    """파일·디렉터리·zip·7z 어디서든 JSON을 꺼내 준다."""
     if path.is_dir():
         every = [str(p.relative_to(path)) for p in path.rglob("*") if p.is_file()]
         inventory(every)
@@ -144,9 +233,23 @@ def iter_json(path: Path, limit: int) -> Iterator[tuple[str, Any]]:
                 yield str(file.relative_to(path)), json.loads(file.read_text(encoding="utf-8"))
             except Exception as error:
                 yield str(file), {"__파싱실패__": f"{type(error).__name__}: {error}"}
+        if files:
+            return
+        # 낱개 JSON이 없으면 디렉터리 안의 아카이브를 들여다본다. AI Hub에서 막 받은
+        # 상태가 정확히 이 모양이다(폴더 안에 `*.zip`, 실제로는 7z).
+        for archive in sorted(path.rglob("*")):
+            if archive.is_file() and archive_kind(archive):
+                print(f"── 아카이브 안을 봅니다: {archive.name}\n")
+                yield from iter_json(archive, limit)
+                return
         return
 
-    if path.suffix.lower() == ".zip":
+    kind = archive_kind(path)
+    if kind == "7z":
+        yield from iter_7z(path, limit)
+        return
+
+    if kind == "zip":
         with zipfile.ZipFile(path) as archive:
             all_names = archive.namelist()
             inventory(all_names)

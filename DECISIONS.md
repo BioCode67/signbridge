@@ -343,3 +343,58 @@ zip 90GB가 풀리면 수백 GB가 되는데, 실측 전에는 상한을 알 수
 
 한편 ③에서 나오는 최종 산출물은 **원래의 zip 그대로**다(aihubshell은 tar와 분할 조각만
 풀고 zip은 건드리지 않는다). 그래서 "zip을 열어 둔 채 멤버만 읽는" ETL 전략은 그대로 유효하다.
+
+## API 키 동작 확인, 그리고 **AI Hub의 `.zip`은 실제로 7z였다**
+
+발급받은 키로 가장 작은 파일(수어스크립트_TL, 372MB)을 실제로 받아 키·승인·경로를 한 번에
+검증했다. 다운로드 정상(HTTP 200), aihubshell이 `download.tar` → `.part0` → 병합 순으로
+처리하고 **최종 산출물로 `*.zip`을 남기는 것**까지 앞 항목의 예측과 일치했다.
+
+**그런데 그 `.zip`이 zip이 아니었다.**
+
+    $ file 수어스크립트_TL.zip
+    7-zip archive data, version 0.4
+    $ unzip -l 수어스크립트_TL.zip
+    End-of-central-directory signature not found.
+
+확장자만 `.zip`이고 내용은 7-Zip(LZMA2)이다. 파이썬 `zipfile`도 `unzip`도 열지 못한다.
+앞 항목에서 만든 "zip을 열어 둔 채 멤버만 읽는" 경로는 **실데이터에서 한 건도 처리하지
+못했을 것이다.** 합성 zip으로만 검증한 탓에 놓쳤다 — 실제 파일을 받아 보고서야 드러났다.
+
+더 나쁜 것은 압축 방식이다:
+
+    Method = LZMA2:24   Solid = +   Blocks = 1
+
+**통짜(solid) 압축**이라 멤버 하나를 꺼내려 해도 앞에서부터 전부 풀어야 한다. 파일마다
+따로 여는 방식은 O(n²)가 되어 90GB에서는 사실상 끝나지 않는다.
+
+**대응 — 한 번만 훑는 스트리밍으로 바꿨다.**
+- 확장자를 믿지 않고 **매직 바이트로 판별**(`archive_kind`: `7z¼¯'\x1c` / `PK\x03\x04`).
+- 7z는 `stream_7z`로 처음부터 끝까지 **한 번만** 훑으며, py7zr `WriterFactory`로 멤버가
+  다 풀리는 순간(`Py7zIO.close()`) JSON을 넘기고 버퍼를 비운다. 메모리가 일정하게 유지된다.
+- 압축 해제는 순차(1스레드)지만 무거운 좌표 변환은 프로세스 풀로 넘긴다. 넘기지 못한
+  JSON이 쌓이지 않도록 in-flight를 `workers×2`로 제한한다.
+- JSON이 아닌 멤버(xlsx·mp4)는 `NullIO`로 흘려보내 메모리에 담지 않는다.
+- **검증**: 같은 6클립을 낱개 JSON / 진짜 zip / solid 7z 세 경로로 각각 ETL →
+  `index.jsonl` 완전 일치, 팩 배열 최대 오차 0.0.
+
+`schema_report.py`도 같은 이유로 실데이터에서 조용히 실패하고 있었다("JSON을 찾지
+못했습니다"). 7z를 열도록 고치고, 디렉터리를 주면 **안의 아카이브까지 들여다보도록** 했다.
+필요한 개수를 채우면 예외로 중단시킨다 — 구조만 보려다 90GB를 끝까지 푸는 사고를 막는다.
+
+## 수어스크립트(372MB)만으로 ③단계를 지금 학습할 수 있다
+
+받아서 열어 보니 형태소 JSON이 아니라 **xlsx 131개**였다(`04_수어스크립트/{1.tact,2.untact}_morpheme/`
+아래 재난 유형별). 시간축 표 형식이고, 한 파일에 15만 행 넘게 여러 클립이 쌓여 있다.
+
+    r1  Information / File name        : NIA_SL_G1_COLDWAVE000010_1_TW07.js
+    r2               Korean sentence   : 오늘 21시부로 한파가 예상되오니 …
+    r19 sign_gestures_both / gloss_id  : 오늘1        start 1.823  end 2.275
+    r22 sign_gestures_both / gloss_id  : 밤1, 시:9시  start 2.385  end 3.153
+    …
+    (비수지 Ci·EBf·Mmo·Mctr 층도 같은 형식으로 들어 있다)
+
+즉 **한국어 문장 ↔ 시간순 글로스 시퀀스 쌍**이 그대로 있다. 키포인트가 필요 없는
+③ `train_gloss2text --direction text2gloss`는 **90GB를 기다리지 않고 이 372MB만으로
+학습 가능하다.** 현재 앱의 규칙 기반 `signAgent.ts`를 대체하는 경로이기도 하다.
+xlsx → (한국어, 글로스열) 추출기는 아직 없다 — 다음에 만든다.

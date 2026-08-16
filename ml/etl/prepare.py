@@ -9,6 +9,8 @@
   clip    클립 ID 해시로 나눈다. signer 정보가 없을 때의 차선책.
   sentence 같은 한국어 문장이 여러 수어자에게 반복 촬영된 데이터에서, 문장 단위로 나눈다.
           (수어자 일반화가 아니라 문장 일반화를 보고 싶을 때.)
+  content 「수어 영상」처럼 파일명에 콘텐츠 번호(SEN0001)가 있는 데이터에서 그 번호로 나눈다.
+          같은 문장의 5각도·20명 촬영본이 학습·평가에 걸치지 않게 막는다.
 
 사전은 **학습 분할에서만** 집계한다(검증 어휘가 새어 들어가지 않게).
 """
@@ -40,7 +42,11 @@ def assign_splits(records: list[dict], split_by: str, val_ratio: float, test_rat
         if not any(keys):
             print("[prepare] ⚠️ signer 정보가 없어 clip 해시 분할로 대체합니다.")
             split_by = "clip"
-    if split_by == "sentence":
+    if split_by == "content":
+        # 수어 영상: 같은 문장(SEN0001)이 수어자·각도만 바꿔 여러 클립으로 존재한다.
+        # content_id로 나누지 않으면 같은 문장이 학습과 평가에 동시에 들어가 점수가 부풀려진다.
+        keys = [r.get("content_id") or r.get("korean_text") or r["id"] for r in records]
+    elif split_by == "sentence":
         keys = [r.get("korean_text") or r["id"] for r in records]
     elif split_by == "clip":
         keys = [r["id"] for r in records]
@@ -62,7 +68,7 @@ def assign_splits(records: list[dict], split_by: str, val_ratio: float, test_rat
 def main() -> None:
     parser = argparse.ArgumentParser(description="분할 + 글로스 사전 생성")
     parser.add_argument("--data", type=Path, required=True, help="index.jsonl이 있는 디렉터리")
-    parser.add_argument("--split-by", choices=["signer", "clip", "sentence"], default="signer")
+    parser.add_argument("--split-by", choices=["signer", "clip", "sentence", "content"], default="signer")
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--test-ratio", type=float, default=0.1)
     parser.add_argument("--min-count", type=int, default=5, help="이보다 드문 글로스는 제외")

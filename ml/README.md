@@ -165,6 +165,53 @@ python -m ml.etl.aihub_disaster --input /data/raw/재난안전/라벨링데이�
   더 가까우므로 `--only-remote`로 그것만 골라 쓸 수 있다
 - `hand_default` — 우세손(좌우 반전 증강을 근거 있게 쓰려면 필요)
 
+### 「수어 영상」 전용 어댑터 ★ (사전학습용)
+
+**재난안전과 구조가 다르다.** 헷갈리면 0건이 나온다.
+
+| | 재난안전 | 수어 영상 |
+|---|---|---|
+| 키포인트 위치 | 형태소 JSON 안(`landmarks`) | **별도 파일, 프레임당 1개** |
+| 좌표 | 3D | **2D**(OpenPose 표준) → 학습·추론 모두 `--zero-depth` |
+| 글로스 필드 | `sign_script.*[].gloss_id` | **`data[].attributes[].name`** |
+| 수어자 정보 | `signer` 필드 | **파일명**(REAL01~20) |
+
+```bash
+python -m ml.etl.aihub_sl \
+    --morpheme /data/raw/수어영상/라벨링데이터 --keypoints /data/raw/수어영상/라벨링데이터 \
+    --out /data/signbridge/ksl-sl --angles F --workers 16
+python -m ml.etl.prepare --data /data/signbridge/ksl-sl --split-by content
+```
+
+**파일명이 곧 메타데이터다**(공식 가이드 표2·표3).
+
+```
+NIA_SL_[SEN|WRD|FINSP]XXXX_[REAL|SYN|CROWD]XX_[F|U|D|R|L]
+        └ 콘텐츠 번호        └ 수어자(20명)      └ 촬영각도
+```
+
+여기서 세 가지가 바로 나온다 — **수어자**(분리 평가), **각도**(5각도 다시점),
+**콘텐츠 번호**(같은 문장이 학습·평가에 걸치지 않게). 그래서 `--split-by content`를 쓴다.
+`--angles all`로 5각도를 모두 넣으면 데이터가 5배가 되고 카메라 각도에 강해진다.
+(크라우드소싱은 단방향이라 `F`만 존재한다.)
+
+### 다운로드 계획 — 영상은 받지 않는다
+
+공식 파일 목록의 실제 용량이다. **이 표가 전략을 결정한다.**
+
+| 구분 | 용량 | 판단 |
+|---|---|---|
+| 형태소(morpheme) zip 전체 | **약 0.2 GB** | 글로스만 필요하면 이것만 받아도 된다 |
+| 키포인트(keypoint) zip 전체 | **약 400 GB** | **900 GiB 쿼터 안에 들어간다** |
+| 원천 영상(video) zip 전체 | **약 2 TB** | 들어가지 않는다. 받지 말 것 |
+
+즉 **영상 없이 키포인트만으로 사전학습이 가능하다.** MediaPipe 재추출이 품질상 더 낫지만,
+그건 영상 2TB가 필요하다. 먼저 키포인트로 돌려 보고, 도메인 갭이 실제로 문제가 될 때만
+영상을 배치 단위로 받아 재추출한다(`KOREN_SETUP.md`의 "배치 후 삭제" 참고).
+
+> 다운로드는 분할 압축으로 온다. 병합에 리눅스 명령이 필요하다:
+> `find <폴더> -name "파일명.zip.part*" -print0 | sort -zt'.' -k2V | xargs -0 cat > 파일명.zip`
+
 ### 그 밖의 형식
 
 - `--format repo` : 이 저장소 `public/data/sign_N.json` — 직접 확인·검증 완료

@@ -4,6 +4,13 @@
 # torch/torchvision은 이미 설치돼 있다고 본다(직접 설치하면 CUDA 버전이 어긋날 수 있다).
 #
 #     pip install -r ml/requirements.txt
+#
+# torch 버전 호환: 학습·내보내기 전 과정을 **torch 2.5.1과 2.13 양쪽에서 실행 검증**했다.
+# 2.5.1에서 걸렸던 두 가지는 코드 쪽에서 이미 해결돼 있다.
+#   · dynamo ONNX 내보내기가 BatchNorm1d 변환에 실패 → 프런트엔드를 LayerNorm으로 변경
+#     (가변 길이 패딩 배치에서 BatchNorm이 통계를 오염시키는 문제도 함께 해결)
+#   · `Dim.DYNAMIC`이 2.6부터라 2.5.x에 없음 → `Dim.AUTO`로 자동 대체
+# 참고: 2.5.1에서는 int8 양자화 압축률이 낮다(1.2× vs 2.13의 3.2×). fp32(약 4MB)를 써도 무방.
 
 numpy>=1.24
 

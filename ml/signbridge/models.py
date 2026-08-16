@@ -54,6 +54,37 @@ def sinusoidal_positions(length: int, dim: int, device, dtype) -> torch.Tensor:
     return encoding.to(dtype)
 
 
+class ConvFrontend(nn.Module):
+    """Conv1d ×2로 국소 시간 패턴을 잡고 (선택적으로) 시간축을 줄인다.
+
+    정규화에 **BatchNorm이 아니라 LayerNorm**을 쓰는 이유 두 가지.
+
+    1. **정확성** — 가변 길이 배치는 뒤쪽이 0으로 패딩된다. BatchNorm1d는 (배치, 시간)
+       축으로 통계를 내므로 그 패딩까지 평균·분산에 섞어 버린다. 배치 안 문장 길이가
+       제각각인 CTC 학습에서는 통계가 배치 구성에 따라 요동친다. LayerNorm은 채널 축만
+       보므로 패딩과 무관하다.
+    2. **내보내기 호환** — torch 2.5.x의 dynamo ONNX 내보내기는 BatchNorm1d 변환에서
+       실패한다(`_native_batch_norm_legit_no_training`). KOREN 기본 가상환경이
+       torch 2.5.1이라 이 문제를 실제로 만난다.
+
+    입출력은 [B, T, C] 형식으로 통일하고, Conv를 위한 축 교환만 내부에서 처리한다.
+    """
+
+    def __init__(self, in_dim: int, d_model: int, stride: int):
+        super().__init__()
+        self.conv1 = nn.Conv1d(in_dim, d_model, kernel_size=5, padding=2, stride=stride)
+        self.norm1 = nn.LayerNorm(d_model)
+        self.conv2 = nn.Conv1d(d_model, d_model, kernel_size=3, padding=1)
+        self.norm2 = nn.LayerNorm(d_model)
+        self.activation = nn.GELU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.conv1(x.transpose(1, 2)).transpose(1, 2)
+        x = self.activation(self.norm1(x))
+        x = self.conv2(x.transpose(1, 2)).transpose(1, 2)
+        return self.activation(self.norm2(x))
+
+
 class SignEncoder(nn.Module):
     """랜드마크 시퀀스 → 문맥 표현 [B, T', d_model]."""
 
@@ -61,16 +92,7 @@ class SignEncoder(nn.Module):
         super().__init__()
         self.cfg = cfg
         in_dim = cfg.feature_dim * (2 if cfg.use_velocity else 1)
-
-        # Conv 프런트엔드: 국소 시간 패턴 + (선택) 시간축 다운샘플.
-        self.frontend = nn.Sequential(
-            nn.Conv1d(in_dim, cfg.d_model, kernel_size=5, padding=2, stride=cfg.conv_stride),
-            nn.BatchNorm1d(cfg.d_model),
-            nn.GELU(),
-            nn.Conv1d(cfg.d_model, cfg.d_model, kernel_size=3, padding=1),
-            nn.BatchNorm1d(cfg.d_model),
-            nn.GELU(),
-        )
+        self.frontend = ConvFrontend(in_dim, cfg.d_model, cfg.conv_stride)
         self.dropout = nn.Dropout(cfg.dropout)
 
         layer = nn.TransformerEncoderLayer(
@@ -104,7 +126,7 @@ class SignEncoder(nn.Module):
             velocity[:, 1:] = x[:, 1:] - x[:, :-1]
             x = torch.cat([x, velocity], dim=-1)
 
-        x = self.frontend(x.transpose(1, 2)).transpose(1, 2)  # [B, T', d_model]
+        x = self.frontend(x)  # [B, T', d_model]
 
         if padding_mask is not None and self.cfg.conv_stride > 1:
             padding_mask = padding_mask[:, :: self.cfg.conv_stride][:, : x.shape[1]]

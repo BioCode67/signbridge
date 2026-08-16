@@ -201,7 +201,9 @@ bash ml/jobs/train_ctc.sh
 | GPU 사용률이 낮음 | 데이터로더 병목. `--workers` ↑ |
 | CTC 손실이 발산/NaN | 입력이 라벨보다 짧은 표본. `--conv-stride 1` 또는 `--max-frames` ↑ (스크립트가 건너뛴 개수를 보고한다) |
 | 학습은 되는데 어휘가 20개도 안 됨 | `prepare.py --min-count` 를 낮추거나 데이터를 더 넣을 것 |
-| 재시작하니 체크포인트가 사라짐 | `--out`이 볼륨 밖(홈)이었다. `/data/runs/...`로 |
+| 재시작하니 체크포인트가 사라짐 | `--out`이 볼륨 밖(홈)이었다. 데이터 볼륨 경로로 줄 것 |
+| ONNX 내보내기가 BatchNorm에서 실패 | torch 2.5.x의 알려진 문제. **이미 해결됨**(프런트엔드가 LayerNorm). 옛 체크포인트를 쓰고 있다면 재학습 필요 |
+| `Dim.DYNAMIC` AttributeError | torch 2.6부터의 API. **이미 해결됨**(2.5.x에서는 `Dim.AUTO` 자동 사용) |
 | MediaPipe 추출이 너무 느림 | `--every 2`로 프레임 절반만(30fps → 15fps). 수어 인식에는 대개 충분 |
 
 ---

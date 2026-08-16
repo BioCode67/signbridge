@@ -50,6 +50,23 @@ def load_checkpoint(path: Path):
     return model, config, checkpoint, task
 
 
+def dynamic_dim_marker():
+    """축을 동적으로 두라는 표식을 torch 버전에 맞게 돌려준다.
+
+    `Dim.DYNAMIC`은 torch 2.6부터고, 2.5.x에는 `Dim.AUTO`만 있다. KOREN 기본 가상환경이
+    **torch 2.5.1**이라 이 분기가 실제로 필요하다(없으면 AttributeError로 죽는다).
+    """
+    dim = torch.export.Dim
+    for name in ("DYNAMIC", "AUTO"):
+        marker = getattr(dim, name, None)
+        if marker is not None:
+            return marker
+    raise RuntimeError(
+        f"이 torch({torch.__version__})에는 Dim.DYNAMIC/AUTO가 없습니다. "
+        "torch 2.5 이상에서 내보내기를 실행하세요."
+    )
+
+
 def export_graph(model, dummy, path: Path, dynamic_axes: dict, dynamo: bool) -> None:
     """ONNX 그래프를 파일 하나로 내보낸다.
 
@@ -69,7 +86,7 @@ def export_graph(model, dummy, path: Path, dynamic_axes: dict, dynamo: bool) -> 
         do_constant_folding=True,
     )
     if dynamo:
-        dynamic = {axis: torch.export.Dim.DYNAMIC for axis in dynamic_axes["input"]}
+        dynamic = {axis: dynamic_dim_marker() for axis in dynamic_axes["input"]}
         torch.onnx.export(
             model,
             (dummy,),
@@ -112,19 +129,23 @@ def quantize(onnx_path: Path, int8_path: Path, model, dummy, dynamic_axes: dict)
         legacy_path.unlink(missing_ok=True)
 
 
-def verify(onnx_path: Path, model, task: str, seq_len: int) -> None:
+def verify(onnx_path: Path, model, task: str, seq_len: int, label: str = "fp32") -> bool:
     """여러 입력 크기로 PyTorch와 ONNX 출력을 대조한다.
 
     **한 가지 크기만 확인하면 안 된다.** 동적 축이 실제로는 상수로 구워진 그래프도
     내보낼 때 쓴 크기에서는 멀쩡히 통과한다. 브라우저는 배치 1로, 평가 스크립트는
-    배치 N으로 돌리므로 두 경우 모두 여기서 걸러야 한다.
+    배치 N으로 돌리므로 두 경우 모두 여기서 걸러야 한다. (레거시 TorchScript 내보내기는
+    실제로 어텐션 reshape에 배치를 상수로 굽는다 — 이 검사가 유일한 방어선이다.)
+
+    Returns:
+        모든 크기에서 실행에 성공했으면 True.
     """
     try:
         import numpy as np
         import onnxruntime as ort
     except ImportError:
         print("[export] ⚠️ onnxruntime이 없어 검증을 건너뜁니다.")
-        return
+        return True
 
     session = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
     shapes = [(1, seq_len), (4, seq_len)]
@@ -137,18 +158,23 @@ def verify(onnx_path: Path, model, task: str, seq_len: int) -> None:
         try:
             onnx_output = session.run(None, {"input": probe.numpy()})[0]
         except Exception as error:
-            print(f"[export] ❌ 입력 {batch}×{frames} 실행 실패: {error}")
+            print(f"[export] ❌ [{label}] 입력 {batch}×{frames} 실행 실패: {error}")
             print("[export]    동적 축이 그래프에 상수로 굳었을 가능성이 큽니다.")
-            raise SystemExit(1)
+            return False
         with torch.no_grad():
             torch_output = model(probe).numpy()
         diff = float(np.max(np.abs(onnx_output - torch_output)))
         worst = max(worst, diff)
-        print(f"[export] 입력 {batch}×{frames} → 출력 {tuple(onnx_output.shape)}, 오차 {diff:.2e}")
+        print(
+            f"[export] [{label}] 입력 {batch}×{frames} → 출력 {tuple(onnx_output.shape)}, "
+            f"오차 {diff:.2e}"
+        )
 
-    print(f"[export] PyTorch ↔ ONNX 최대 오차 {worst:.3e}")
-    if worst > 1e-3:
+    print(f"[export] [{label}] PyTorch 대비 최대 오차 {worst:.3e}")
+    # int8은 양자화 오차가 당연히 크므로 크기만 본다. fp32는 수치까지 일치해야 한다.
+    if label == "fp32" and worst > 1e-3:
         print("[export] ⚠️ 오차가 큽니다. opset·연산자 지원을 확인하세요.")
+    return True
 
 
 def main() -> None:
@@ -211,9 +237,14 @@ def main() -> None:
             if quantize(onnx_path, int8_path, model, dummy, dynamic_axes):
                 int8_mb = int8_path.stat().st_size / 1e6
                 print(f"[export] {int8_path} ({int8_mb:.2f} MB, {size_mb / int8_mb:.1f}× 축소)")
+                # 양자화가 레거시 경로로 우회했다면 동적 축이 굳었을 수 있다.
+                # 그런 int8 모델은 쓰면 안 되므로 검증에 실패하면 파일을 지운다.
+                if not args.no_verify and not verify(int8_path, model, task, seq_len, "int8"):
+                    int8_path.unlink(missing_ok=True)
+                    print("[export] ⚠️ int8 모델이 동적 축 검증에 실패해 삭제했습니다. fp32를 쓰세요.")
 
-    if not args.no_verify:
-        verify(onnx_path, model, task, seq_len)
+    if not args.no_verify and not verify(onnx_path, model, task, seq_len, "fp32"):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

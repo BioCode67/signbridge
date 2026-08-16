@@ -1,11 +1,30 @@
 """AI Hub 키포인트 라벨 → 학습용 랜드마크 팩(.npz) + index.jsonl.
 
 지원 입력 형식
-  repo         이 저장소의 `public/data/sign_N.json` 형식(검증됨).
-               {korean_text, fps, num_frames, gloss_sequence[], keypoints{pose,hand_left,hand_right}}
-  openpose-dir 클립마다 OpenPose 프레임별 JSON이 담긴 디렉터리 +
-               글로스 타임코드가 든 라벨 JSON. AI Hub가 흔히 배포하는 형태다.
+  repo         이 저장소의 `public/data/sign_N.json` 형식(**직접 확인·검증됨**).
+               {korean_text, fps, num_frames, gloss_sequence[], keypoints{pose,hand_left,hand_right},
+                keypoints3d{...}}
+  openpose-dir 클립마다 OpenPose 프레임별 JSON이 담긴 디렉터리 + 라벨 JSON.
                (`*_000000000000_keypoints.json`, `people[0].pose_keypoints_2d` …)
+               ⚠️ 이건 **OpenPose 표준 출력 규약**이지 AI Hub 배포본이 확인된 형태가 아니다.
+               아래 메모를 먼저 읽을 것.
+
+────────────────────────────────────────────────────────────────────────────
+AI Hub 실제 배포본에 대해 **확인된 사실** (이 저장소 DECISIONS.md의 이전 ETL 기록)
+────────────────────────────────────────────────────────────────────────────
+  · 라벨 아카이브는 확장자가 `.zip`이지만 **실제로는 7-Zip**이다.
+    → `unzip`·파이썬 `zipfile`로는 못 푼다. `bsdtar`(libarchive)를 쓸 것.
+  · 키포인트는 **형태소 JSON의 `landmarks` 필드 안에 이미 들어 있다.**
+    → 별도로 배포되는 `1.키포인트(xml)_VL.zip`(약 6.96GB)은 **받을 필요가 없다.**
+  · 3D 랜드마크와 카메라 내부 파라미터(`intrinsic_F`)가 함께 제공된다.
+    3D를 2D로 투영할 수도 있지만, **이 파이프라인은 3D를 그대로 쓰는 편이 낫다**
+    (브라우저 MediaPipe 입력에 z가 있으므로).
+  · 다운로드는 INNORIX 클라이언트를 쓰며 미완료 파일이 `.irx961`로 남는다.
+
+따라서 AI Hub 원본을 받았다면 **`openpose-dir`가 아니라 형태소 JSON 경로**가 맞을 가능성이
+높다. 필드 이름은 배포 차수마다 다르므로, 반드시 먼저 구조를 찍어 보고 어댑터를 맞춘다:
+
+    python -m ml.etl.inspect_json /data/raw/aihub/라벨링데이터 --limit 3
 
   실행 예:
     python -m ml.etl.aihub_to_packs --format repo \

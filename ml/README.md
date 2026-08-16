@@ -126,17 +126,33 @@ MediaPipe 추출은 **CPU 작업**이다(16 vCPU면 실시간의 20~30배속). G
 CTC 구현이 맞는지 의심될 때 PHOENIX에 한 번 돌려 보는 것이, 한국어 데이터로 백 번
 추측하는 것보다 빠르다.
 
-### 이 코드가 바로 받아들이는 형식
+### AI Hub 원본 다루기 — 미리 알아야 할 함정
 
-- `--format repo` : 이 저장소 `public/data/sign_N.json` (검증 완료)
-- `--format openpose-dir` : 클립별 OpenPose 프레임 json 디렉터리 + 라벨 json
+이 저장소의 이전 ETL 작업(`DECISIONS.md`)에서 **실제로 확인된** 사항이다. 모르고 시작하면
+하루씩 날아가는 것들이라 먼저 적는다.
 
-AI Hub 실제 배포본은 연도·차수마다 스키마가 조금씩 다르다. **먼저 구조를 찍어 보고**
-필요하면 `etl/aihub_to_packs.py`의 `load_label()` 필드 후보에 이름만 추가하면 된다.
+| 함정 | 실제 |
+|---|---|
+| 라벨 아카이브가 안 풀림 | 확장자는 `.zip`인데 **내용은 7-Zip**. `unzip`·파이썬 `zipfile` 실패 → **`bsdtar`**(libarchive) 사용 |
+| 키포인트 XML이 6.96GB | **받을 필요 없음.** 키포인트는 **형태소 JSON의 `landmarks` 필드**에 이미 들어 있다 |
+| 3D 좌표 처리 | 3D 랜드마크 + 카메라 내부 파라미터(`intrinsic_F`) 제공. 2D로 투영할 수도 있으나, **이 파이프라인은 3D를 그대로 쓰는 게 낫다**(브라우저 입력에 z가 있으므로) |
+| 다운로드가 안 끝남 | INNORIX 클라이언트 사용, 미완료 파일이 `.irx961`로 남는다 |
+| 좌표 정규화 붕괴 | 이전 변환기가 min/max 정규화를 쓰자 이상치 Z(≈0)로 골격이 한 점으로 붕괴 → **퍼센타일(2~98%)** 기준으로 해결 |
+
+### 이 코드가 받아들이는 형식
+
+- `--format repo` : 이 저장소 `public/data/sign_N.json` — **직접 확인·검증 완료**
+- `--format openpose-dir` : 클립별 OpenPose 프레임 json + 라벨 json — 이건 **OpenPose 표준
+  출력 규약**이지, AI Hub 배포본이 그 형태라고 확인된 것이 아니다
+
+위 표대로라면 AI Hub 원본은 **형태소 JSON 경로**일 가능성이 높다. 배포 차수마다 필드 이름이
+다르므로 **반드시 먼저 구조를 찍어 보고** 어댑터를 맞춘다.
 
 ```bash
-python -m ml.etl.inspect_json /data/aihub/라벨링데이터 --limit 3
+python -m ml.etl.inspect_json /data/raw/aihub/라벨링데이터 --limit 3
 ```
+
+이 출력만 있으면 형태소 JSON용 어댑터를 정확히 붙일 수 있다(추측으로 미리 쓰지 않았다).
 
 ---
 

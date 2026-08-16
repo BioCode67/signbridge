@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # AI Hub 원본 영상 → MediaPipe 랜드마크 팩 → 분할·사전 생성.
 #
-# ★ CPU 워크스페이스에서 돌릴 것. MediaPipe는 GPU를 쓰지 않으므로, GPU 워크스페이스에서
-#   돌리면 하나뿐인 GPU 할당량을 며칠간 놀린 채 점유하게 된다.
+# MediaPipe는 GPU를 쓰지 않는 순수 CPU 작업이다. CPU 워크스페이스가 있으면 거기서 돌리는
+# 편이 좋다 — GPU 워크스페이스에서 돌리면 하나뿐인 GPU를 며칠간 놀린 채 점유하게 된다.
+# 다만 **GPU 워크스페이스에도 vCPU 16이 딸려 오므로 거기서 돌려도 속도는 같다.**
+# CPU 자원이 아직 등록되지 않았다면 그냥 GPU 워크스페이스에서 실행하면 된다.
 #
 #     RAW_ROOT=/data/raw/aihub DATA_ROOT=/data/signbridge/ksl bash ml/jobs/etl_mediapipe.sh
 

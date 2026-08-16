@@ -14,7 +14,9 @@
 
 비용: MediaPipe는 CPU 추론이라 영상 길이에 비례한다. 16 vCPU 워크스페이스에서
 워커 14개 기준 대략 실시간의 20~30배속(= 1시간 분량 영상을 2~3분)이 나온다.
-GPU는 이 단계에서 거의 쓰이지 않으므로, **GPU 잡을 점유하지 말고 CPU 잡으로 돌릴 것.**
+GPU는 이 단계에서 거의 쓰이지 않으므로 CPU 워크스페이스가 있으면 그쪽에서 돌리는 게 좋다.
+다만 KOREN GPU 워크스페이스에도 vCPU 16이 함께 붙어 나오므로, **CPU 자원이 따로 없으면
+GPU 워크스페이스에서 그냥 돌려도 속도는 같다**(GPU가 노는 것이 유일한 손해).
 
     python -m ml.etl.extract_mediapipe \
         --videos /data/aihub/원천데이터 --labels /data/aihub/라벨링데이터 \

@@ -28,8 +28,6 @@ export const FEATURE_DIM = POSE_KEYS.length * 3 + 21 * 3 * 2 + 2 // = 27 + 126 +
 // 분류 입력 시퀀스 길이(프레임). MediaPipe 실효 FPS(~15~25)에서 약 1.2~2초 동작.
 export const SEQ_LEN = 32
 
-const ZERO: Landmark = { x: 0, y: 0, z: 0 }
-
 /**
  * 한 프레임을 위치·스케일 불변 특징 벡터로 변환.
  * 어깨 중점을 원점, 어깨 너비를 스케일로 삼아 포즈·양손을 같은 좌표계로 정규화한다.
@@ -61,12 +59,23 @@ export function frameToFeatures(frame: LandmarkFrame): Float32Array | null {
     out[o++] = (p.z - cz) * inv
   }
 
-  for (const idx of POSE_KEYS) push(pose[idx] ?? ZERO)
+  // 미검출 관절은 **0으로 남긴다**(원점 좌표를 정규화해 넣지 않는다).
+  // 예전에는 미검출 시 ZERO 랜드마크를 그대로 변환해 넣었는데, 그러면 손이 없을 때의
+  // 값이 `(-cx, -cy, -cz) * inv` 즉 **몸 위치에 따라 달라지는 값**이 되어 버린다.
+  // 모델 입장에선 "손 없음"이 매번 다른 벡터로 보이는 잡음이다. 0 + 존재 플래그(아래)가
+  // 훨씬 일관된 신호다. 파이썬 학습 코드(ml/signbridge/features.py)도 같은 규칙을 쓴다.
+  for (const idx of POSE_KEYS) {
+    const p = pose[idx]
+    if (p) push(p)
+    else o += 3 // out은 0으로 초기화돼 있다.
+  }
 
   const hasLeft = frame.leftHand.length === 21
   const hasRight = frame.rightHand.length === 21
-  for (let i = 0; i < 21; i++) push(hasLeft ? frame.leftHand[i] : ZERO)
-  for (let i = 0; i < 21; i++) push(hasRight ? frame.rightHand[i] : ZERO)
+  if (hasLeft) for (let i = 0; i < 21; i++) push(frame.leftHand[i])
+  else o += 21 * 3
+  if (hasRight) for (let i = 0; i < 21; i++) push(frame.rightHand[i])
+  else o += 21 * 3
 
   out[o++] = hasLeft ? 1 : 0
   out[o++] = hasRight ? 1 : 0

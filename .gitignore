@@ -36,3 +36,10 @@ node_modules/.tmp
 __pycache__/
 *.pyc
 server/_smoke.py
+
+# ML 학습 산출물 (KOREN 볼륨에 두고 저장소에는 커밋하지 않는다)
+runs/
+*.pt
+*.onnx
+ml/**/index.jsonl
+ml/**/packs/

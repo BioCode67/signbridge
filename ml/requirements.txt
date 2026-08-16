@@ -1,0 +1,25 @@
+# SignBridge 학습 파이프라인 의존성.
+#
+# KOREN AI Cloud의 `torch2.5.1 py3.12 cuda12.4` 가상환경을 전제로 하며,
+# torch/torchvision은 이미 설치돼 있다고 본다(직접 설치하면 CUDA 버전이 어긋날 수 있다).
+#
+#     pip install -r ml/requirements.txt
+
+numpy>=1.24
+
+# ── ETL ────────────────────────────────────────────────────────────────
+# MediaPipe 랜드마크 재추출(권장 경로)에 필요. CPU 워크스페이스에만 있으면 된다.
+mediapipe>=0.10.14
+opencv-python-headless>=4.9      # GUI 없는 서버 환경이므로 headless
+
+# ── 내보내기 ────────────────────────────────────────────────────────────
+onnx>=1.16
+onnxruntime>=1.18                # 내보낸 그래프 검증 + int8 동적 양자화
+onnxscript>=0.1                  # torch.export 기반 ONNX 내보내기에 필요
+
+# ── 언어 단계(글로스 ↔ 한국어) ────────────────────────────────────────
+transformers>=4.40
+sentencepiece                    # KoBART 토크나이저
+
+# 참고: 특징 일치 검증(ml/tools/feature_parity.py)은 파이썬 패키지가 아니라
+# Node 22+ 를 쓴다(타입 스트리핑으로 landmarks.ts를 직접 실행).

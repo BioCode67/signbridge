@@ -82,9 +82,61 @@ def postprocess(text: str, prompt: str) -> str:
     return out
 
 
+# ── 텍스트 → 글로스 (KoBART 파인튜닝, ml/train_gloss2text.py 산출물) ──────────
+#
+# 규칙 기반 signAgent.ts를 대체하는 경로다. AI Hub「재난안전 수어영상」의
+# (한국어, 글로스열) 16만 쌍으로 파인튜닝한 모델을 로드한다.
+# 모델 경로는 T2G_MODEL 환경변수로 바꿀 수 있다(기본: 학습 러너의 best).
+import os
+
+T2G_MODEL = os.environ.get("T2G_MODEL", os.path.expanduser("~/sbruns/t2g-v3/best"))
+
+
+@lru_cache(maxsize=1)
+def load_t2g():
+    import torch  # noqa: F401
+    from transformers import AutoTokenizer, BartForConditionalGeneration
+
+    tok = AutoTokenizer.from_pretrained(T2G_MODEL)
+    model = BartForConditionalGeneration.from_pretrained(T2G_MODEL)
+    model.eval()
+    return tok, model
+
+
+class T2GRequest(BaseModel):
+    text: str
+
+
+class T2GResponse(BaseModel):
+    text: str
+    gloss: list[str]
+    backend: str = "kobart-t2g"
+
+
+@app.post("/t2g", response_model=T2GResponse)
+def text2gloss(req: T2GRequest):
+    import torch
+
+    tok, model = load_t2g()
+    inputs = tok(req.text, max_length=128, truncation=True, return_tensors="pt")
+    inputs.pop("token_type_ids", None)  # KoBART 토크나이저 산출물, BART는 안 받는다
+    with torch.no_grad():
+        out = model.generate(
+            **inputs,
+            max_length=96,
+            num_beams=4,
+            # 글로스열에 실제 2-gram 반복이 있어(예: 갑자기1 춥다1 × 2) 3으로 둔다.
+            no_repeat_ngram_size=3,
+        )
+    decoded = tok.decode(out[0], skip_special_tokens=True)
+    gloss = [g for g in decoded.split() if g]
+    return T2GResponse(text=req.text, gloss=gloss)
+
+
 @app.get("/health")
 def health():
-    return {"ok": True, "model": MODEL_NAME}
+    t2g_ready = os.path.isdir(T2G_MODEL)
+    return {"ok": True, "model": MODEL_NAME, "t2g_model": T2G_MODEL, "t2g_ready": t2g_ready}
 
 
 @app.post("/qa", response_model=QAResponse)

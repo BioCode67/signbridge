@@ -92,7 +92,8 @@ export interface DisasterAgent {
   assess(input: AgentInput): DisasterAssessment
 }
 export interface SignAgent {
-  convert(text: string): SignConversion
+  // 규칙 기반은 동기, KoBART HTTP 백본은 비동기 — 둘 다 허용한다.
+  convert(text: string): SignConversion | Promise<SignConversion>
 }
 export interface QAAgent {
   answer(question: string, ctx: { assessment: DisasterAssessment; geo?: GeoContext }): Promise<QAResult>

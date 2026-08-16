@@ -60,6 +60,33 @@ def load_pack(path: str | Path) -> tuple[dict[str, np.ndarray], dict]:
     return arrays, meta
 
 
+# 어깨 너비로 정규화한 좌표가 이 배수를 넘으면 물리적으로 말이 안 된다.
+# 사람 팔은 어깨 너비의 3배를 넘지 않는다. 그런데도 큰 값이 나온다면 원인은 하나 —
+# **어깨가 잘못 잡혀 어깨 너비가 비정상적으로 작게 계산된 것**이고, 그러면 1/폭이
+# 폭주해 클립 전체가 쓰레기가 된다. 에러 없이 학습이 망가지는 종류라 미리 잡는다.
+SANE_FEATURE_LIMIT = 20.0
+
+
+def feature_health(arrays: dict[str, np.ndarray]) -> float:
+    """팩 배열에서 정규화 특징의 최대 절댓값을 구한다(클립 건전성 지표).
+
+    `SANE_FEATURE_LIMIT`를 넘으면 어깨 검출이 무너진 클립이다.
+    """
+    from .features import clip_to_features
+
+    feats, valid = clip_to_features(
+        arrays["pose"],
+        arrays["left"],
+        arrays["right"],
+        arrays["left_present"],
+        arrays["right_present"],
+        arrays.get("pose_present"),
+    )
+    if not bool(np.any(valid)):
+        return 0.0
+    return float(np.max(np.abs(feats[valid])))
+
+
 def pack_to_features(path: str | Path, zero_depth: bool = False) -> tuple[np.ndarray, dict]:
     """팩을 곧바로 (T, 155) 특징 행렬로 로드한다.
 

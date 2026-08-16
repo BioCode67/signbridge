@@ -45,7 +45,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ml.signbridge.naming import frame_index, parse_clip_name, strip_suffix  # noqa: E402
 from ml.signbridge.openpose import convert_clip, convert_clip_3d, split_keypoints  # noqa: E402
-from ml.signbridge.pack import save_pack  # noqa: E402
+from ml.signbridge.pack import SANE_FEATURE_LIMIT, feature_health, save_pack  # noqa: E402
 
 NUM_POSE_OP = 25
 NUM_HAND_OP = 21
@@ -220,6 +220,7 @@ def convert_clip_files(
 
     return {
         "id": stem,
+        "feature_max_abs": round(feature_health(arrays), 2),
         "npz": rel,
         "fps": fps,
         "num_frames": int(arrays["pose"].shape[0]),
@@ -335,6 +336,9 @@ def main() -> None:
         for record in records:
             handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
+    unhealthy = [r for r in records if r.get("feature_max_abs", 0) > SANE_FEATURE_LIMIT]
+    if unhealthy:
+        print(f"[etl] ⚠️ 어깨 검출이 무너진 클립 {len(unhealthy)}개 — 학습에서 제외를 검토하세요.")
     no_gloss = sum(1 for r in records if not r["glosses"])
     signers = {r["signer"] for r in records if r["signer"]}
     angles_seen = {r["angle"] for r in records if r["angle"]}

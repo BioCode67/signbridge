@@ -41,7 +41,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
@@ -50,7 +52,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from ml.signbridge.openpose import convert_clip, convert_clip_3d  # noqa: E402
-from ml.signbridge.pack import save_pack  # noqa: E402
+from ml.signbridge.pack import SANE_FEATURE_LIMIT, feature_health, save_pack  # noqa: E402
 
 NUM_POSE_OP = 25
 NUM_HAND_OP = 21
@@ -169,9 +171,60 @@ def read_glosses(record: dict, tiers: list[str]) -> list[dict]:
     return entries
 
 
+METADATA_KEYS = ("metadata", "metaData", "meta")
+
+# 예: NIA_SL_G1_COLDWAVE000021_1_TW07
+#     └그룹  └재난 카테고리 └번호 └1:1~1:3 └작업자 코드
+DISASTER_NAME_RE = re.compile(
+    r"^NIA_SL_(?P<group>G\d+)_(?P<category>[A-Z]+)(?P<number>\d+)"
+    r"_(?P<ratio>\d+)_(?P<worker>\w+)$"
+)
+
+
+def meta_get(record: dict, key: str, default=None):
+    """최상위와 `metadata` 양쪽에서 값을 찾는다.
+
+    **실제 배포본은 signer·augment·video_fps·filmed_in_studio·hand_default를
+    전부 `metadata` 안에 넣어 둔다.** 최상위에서만 찾으면 전부 기본값으로 조용히
+    떨어지는데, 특히 signer가 비면 `--split-by signer`가 clip 해시로 대체되어
+    **수어자 분리 평가가 무력화되고 정확도가 부풀려진다.** 가장 위험한 실패였다.
+    """
+    if key in record:
+        return record[key]
+    for meta_key in METADATA_KEYS:
+        container = record.get(meta_key)
+        if isinstance(container, dict) and key in container:
+            return container[key]
+    return default
+
+
+def parse_disaster_name(stem: str, path: Path | None = None) -> dict:
+    """파일명·경로에서 재난 카테고리 등을 뽑는다.
+
+    카테고리(COLDWAVE, TYPHOON …)는 **재난 유형**이라 층화 분할·유형별 성능 분석에
+    바로 쓸 수 있다. 경로에도 `.../1.자연재난/COLDWAVE/1_1/...` 형태로 들어 있어
+    파일명이 규칙을 벗어나면 경로에서 보완한다.
+    """
+    info: dict[str, str] = {}
+    match = DISASTER_NAME_RE.match(stem)
+    if match:
+        info["category"] = match.group("category")
+        info["number"] = match.group("number")
+        info["group"] = match.group("group")
+        info["ratio"] = match.group("ratio")
+        info["worker"] = match.group("worker")
+
+    if path is not None and "category" not in info:
+        for part in path.parts:
+            if part.isupper() and part.isalpha() and len(part) >= 4:
+                info["category"] = part
+                break
+    return info
+
+
 def extract_signer(record: dict) -> str:
     """수어자 식별자. 수어자 분리 분할에 쓰이므로 **안정적인 값**이어야 한다."""
-    signer = record.get("signer")
+    signer = meta_get(record, "signer")
     if isinstance(signer, dict):
         for key in ("id", "signer_id", "name", "code", "no"):
             value = signer.get(key)
@@ -219,8 +272,9 @@ def convert_file(json_path: Path, out_dir: Path, tiers: list[str], depth: str) -
             }
         )
 
-    clip_id = str(record.get("id") or json_path.stem)
-    fps = float(record.get("video_fps") or 30.0)
+    clip_id = str(meta_get(record, "id") or json_path.stem)
+    fps = float(meta_get(record, "video_fps") or 30.0)
+    name_info = parse_disaster_name(clip_id, json_path)
     glosses = read_glosses(record, tiers)
     source = "aihub-disaster-3d" if has_depth else "aihub-disaster-2d"
 
@@ -234,9 +288,11 @@ def convert_file(json_path: Path, out_dir: Path, tiers: list[str], depth: str) -
     }
     rel = f"packs/{clip_id}.npz"
     save_pack(out_dir / rel, arrays, meta)
+    health = feature_health(arrays)
 
     return {
         "id": clip_id,
+        "feature_max_abs": round(health, 2),
         "npz": rel,
         "fps": fps,
         "num_frames": int(arrays["pose"].shape[0]),
@@ -247,9 +303,12 @@ def convert_file(json_path: Path, out_dir: Path, tiers: list[str], depth: str) -
         "has_depth": has_depth,
         "depth_frame_ratio": round(depth_ratio, 4),
         # 아래 두 필드는 분할·필터링에 쓰인다(prepare.py 참고).
-        "augment": bool(record.get("augment", False)),
-        "filmed_in_studio": bool(record.get("filmed_in_studio", True)),
-        "hand_default": record.get("hand_default", ""),
+        "augment": bool(meta_get(record, "augment", False)),
+        "filmed_in_studio": bool(meta_get(record, "filmed_in_studio", True)),
+        "hand_default": meta_get(record, "hand_default", ""),
+        # 재난 유형(COLDWAVE, TYPHOON …). 층화 분할·유형별 성능 분석에 쓴다.
+        "category": name_info.get("category", ""),
+        "content_id": f"{name_info.get('category', '')}{name_info.get('number', '')}" or clip_id,
     }
 
 
@@ -324,6 +383,18 @@ def main() -> None:
     print(f"\n[etl] 클립 {len(records)}개, 글로스 구간 {total_glosses}개 → {index_path}")
     print(f"[etl] 깊이(z) 포함 {with_depth}개 · 수어자 {len(signers)}명")
     print(f"[etl] 증강 문장 {augmented}개 · 비대면 촬영 {remote}개")
+    unhealthy = [r for r in records if r.get("feature_max_abs", 0) > SANE_FEATURE_LIMIT]
+    if unhealthy:
+        print(
+            f"[etl] ⚠️ 어깨 검출이 무너진 것으로 보이는 클립 {len(unhealthy)}개"
+            f" (정규화 좌표가 {SANE_FEATURE_LIMIT:.0f}배 초과). 예: "
+            + ", ".join(f"{r['id']}({r['feature_max_abs']:.0f})" for r in unhealthy[:3])
+        )
+        print("[etl]    이런 클립은 학습에 넣으면 해가 됩니다 — 원본 키포인트를 확인하세요.")
+    categories = Counter(r["category"] for r in records if r["category"])
+    if categories:
+        top = ", ".join(f"{k} {v}" for k, v in categories.most_common(8))
+        print(f"[etl] 재난 유형 {len(categories)}종: {top}")
     if no_landmarks:
         print(
             f"[etl] ⚠️ landmarks가 없는 파일 {len(no_landmarks)}개 (예: {no_landmarks[:3]}). "

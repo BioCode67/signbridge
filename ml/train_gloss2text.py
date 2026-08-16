@@ -176,6 +176,7 @@ def main() -> None:
             inputs = tokenizer(
                 pair["source"], max_length=args.max_source, truncation=True, return_tensors="pt"
             ).to(device)
+            inputs.pop("token_type_ids", None)  # collate와 같은 이유 — BART는 안 받는다
             # no_repeat_ngram_size=3: 학습 초기의 "부탁1 부탁1 …" 꼬리 반복을 막는다.
             # 글로스열엔 실제 2-gram 반복이 있으므로(예: 갑자기1 춥다1 × 2) 2는 안 된다.
             with torch.no_grad():

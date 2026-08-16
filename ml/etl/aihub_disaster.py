@@ -43,6 +43,7 @@ import argparse
 import json
 import re
 import sys
+import zipfile
 from collections import Counter
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -236,9 +237,38 @@ def extract_signer(record: dict) -> str:
     return ""
 
 
-def convert_file(json_path: Path, out_dir: Path, tiers: list[str], depth: str) -> dict | None:
-    with open(json_path, encoding="utf-8") as handle:
-        record = json.load(handle)
+# zip 안의 JSON을 압축을 풀지 않고 그대로 읽기 위한 캐시.
+#
+# 형태소 JSON은 텍스트라 압축률이 높다(재난안전 학습셋은 zip 90GB인데 풀면 수백 GB).
+# 전부 풀어 두면 디스크가 감당이 안 되고, 하나씩 풀었다 지우면 느리다. 그래서 zip을
+# 열어 둔 채로 멤버만 꺼내 쓴다. ZipFile 핸들은 프로세스마다 따로 잡아야 하므로
+# (fork된 자식이 부모의 파일 오프셋을 공유하면 깨진다) 워커 안에서 지연 생성한다.
+_ZIP_CACHE: dict[str, zipfile.ZipFile] = {}
+
+
+def _zip_handle(zip_path: Path) -> zipfile.ZipFile:
+    key = str(zip_path)
+    handle = _ZIP_CACHE.get(key)
+    if handle is None:
+        handle = zipfile.ZipFile(zip_path)
+        _ZIP_CACHE[key] = handle
+    return handle
+
+
+def convert_file(
+    json_path: Path,
+    out_dir: Path,
+    tiers: list[str],
+    depth: str,
+    zip_path: Path | None = None,
+) -> dict | None:
+    if zip_path is not None:
+        # json_path는 zip 내부 멤버 이름이다(파일시스템에 없다).
+        raw = _zip_handle(zip_path).read(json_path.as_posix())
+        record = json.loads(raw.decode("utf-8-sig"))
+    else:
+        with open(json_path, encoding="utf-8") as handle:
+            record = json.load(handle)
 
     # 일부 배포본은 {"0": {...}} 처럼 한 겹 감싸서 준다.
     if "sign_script" not in record and "landmarks" not in record:
@@ -313,17 +343,44 @@ def convert_file(json_path: Path, out_dir: Path, tiers: list[str], depth: str) -
 
 
 def _worker(payload: tuple) -> dict | None:
-    json_path, out_dir, tiers, depth = payload
+    json_path, out_dir, tiers, depth, zip_path = payload
     try:
-        return convert_file(json_path, out_dir, tiers, depth)
+        return convert_file(json_path, out_dir, tiers, depth, zip_path)
     except Exception as error:
         print(f"  [warn] {json_path.name}: {type(error).__name__}: {error}", flush=True)
         return None
 
 
+def collect_inputs(root: Path) -> list[tuple[Path, Path | None]]:
+    """변환할 JSON 목록을 (경로, 소속 zip) 쌍으로 모은다.
+
+    --input으로 zip 하나, zip이 든 디렉터리, 이미 푼 JSON 디렉터리 어느 쪽을 줘도 된다.
+    zip과 JSON이 섞여 있어도 그대로 처리한다(파일럿만 풀어 둔 상태 등).
+    """
+    zips = [root] if root.suffix.lower() == ".zip" else sorted(root.rglob("*.zip"))
+
+    items: list[tuple[Path, Path | None]] = []
+    for archive in zips:
+        with zipfile.ZipFile(archive) as handle:
+            items.extend(
+                (Path(name), archive)
+                for name in handle.namelist()
+                if name.lower().endswith(".json") and not name.endswith("/")
+            )
+
+    if root.is_dir():
+        items.extend((path, None) for path in sorted(root.rglob("*.json")))
+    return items
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="재난안전 수어영상 형태소 JSON → 랜드마크 팩")
-    parser.add_argument("--input", type=Path, required=True, help="형태소/비수지 JSON 디렉터리")
+    parser.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="형태소/비수지 JSON — 디렉터리, zip, zip이 든 디렉터리 모두 가능(zip은 풀지 않고 읽음)",
+    )
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument(
         "--tiers",
@@ -338,14 +395,18 @@ def main() -> None:
     tiers = [t.strip() for t in args.tiers.split(",") if t.strip()]
     args.out.mkdir(parents=True, exist_ok=True)
 
-    files = sorted(args.input.rglob("*.json"))
+    files = collect_inputs(args.input)
     if args.limit:
         files = files[: args.limit]
     if not files:
         raise SystemExit(f"JSON이 없습니다: {args.input}")
 
-    print(f"[etl] 형태소 JSON {len(files)}개 변환 (층렬={tiers}, workers={args.workers})")
-    payloads = [(path, args.out, tiers, args.depth) for path in files]
+    from_zip = sum(1 for _, archive in files if archive is not None)
+    print(
+        f"[etl] 형태소 JSON {len(files)}개 변환 "
+        f"(zip 안 {from_zip}개, 층렬={tiers}, workers={args.workers})"
+    )
+    payloads = [(path, args.out, tiers, args.depth, archive) for path, archive in files]
     records: list[dict] = []
     no_landmarks: list[str] = []
 

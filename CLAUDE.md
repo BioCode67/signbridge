@@ -108,17 +108,27 @@ python3 ml/tools/schema_report.py <경로 또는 zip> --limit 3
 
 **아직 없는 것**
 - **정확도 수치.** 실데이터가 아직 없어서 어떤 숫자도 의미가 없다.
-- 데이터 볼륨(`sbdata`) 미연결 — 현재 홈 50G뿐
 - 브라우저 ONNX 연동은 실제 학습 모델이 나온 뒤에 붙인다
 
-**다음 순서**
-1. `sbdata` 볼륨 생성·연결 → 코드와 데이터를 그쪽으로 옮긴다
-2. AI Hub「재난안전정보 수어영상」의 **라벨링데이터(형태소 JSON)만** 받는다.
-   원천데이터(영상, TB급)는 받지 않는다 — 키포인트가 형태소 JSON 안에 이미 있다
-3. `python -m ml.etl.aihub_disaster --input <라벨링> --out <데이터> --workers 16`
-4. `python -m ml.etl.prepare --data <데이터> --split-by signer --min-count 5`
-5. `stats.json`의 어휘 수·표본 수를 보고 목표 어휘 규모를 정한다 ← **첫 분기점**
-6. `python -m ml.train_isolated --data <데이터> --out <runs>/iso-v1 --epochs 60`
+**막고 있는 것 — 두 가지뿐**
+1. **홈 볼륨 900GiB로 확대** (현재 50G). 콘솔에서 사람이 해야 한다.
+2. **AI Hub API 키** (마이페이지 발급 + 데이터셋 이용 신청 승인)
+
+**다음 순서** — 위 둘이 되면 명령 한 줄씩이다
+
+```bash
+export AIHUB_APIKEY=<키>
+bash ml/jobs/run_disaster.sh pilot    # 검증셋 11GB로 한 바퀴 (내려받기→구조확인→팩→분할)
+cat ~/sbdata/ksl/stats.json           # 어휘 수·표본 수 확인  ← 첫 분기점
+bash ml/jobs/run_disaster.sh full     # 학습셋 90GB
+python -m ml.train_isolated --data ~/sbdata/ksl --out ~/sbruns/iso-v1 --epochs 60
+```
+
+- 받을 것은 **형태소 JSON뿐**. 원천 영상(2TB+)도, 별도 키포인트 XML(52GB)도 받지 않는다
+  — 키포인트가 형태소 JSON 안에 이미 있다.
+- **zip은 풀지 않는다.** `aihub_disaster`가 zip을 연 채로 멤버만 읽는다. 풀면 수백 GB로
+  불어난다. 푼 것과 결과가 같은지는 검증했다(index 동일, 배열 오차 0).
+- 경로는 `ml/jobs/koren_paths.sh` 한 곳에 모여 있다. 별도 볼륨을 붙이면 세 줄만 바꾼다.
 
 ---
 

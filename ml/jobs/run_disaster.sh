@@ -5,15 +5,18 @@
 #   export AIHUB_APIKEY=<AI Hub 마이페이지에서 발급한 키>
 #   bash ml/jobs/run_disaster.sh pilot     # 검증셋 11GB — 먼저 이것부터
 #   bash ml/jobs/run_disaster.sh full      # 학습셋 90GB — pilot이 통과한 뒤에
-#   bash ml/jobs/run_disaster.sh script    # 수어스크립트 372MB — 키포인트 불필요(③단계용)
+#   bash ml/jobs/run_disaster.sh script    # 수어스크립트 372MB — 키포인트 없이 ③단계용
 #
 # ── 실제 파일 목록 (2026-08 확인, aihubshell -mode l -datasetkey 636)
-#   Training   1.키포인트(xml)_TL          52 GB   61894   ← 안 씀(형태소 JSON에 이미 있음)
+#   Training   1.키포인트(xml)_TL          52 GB   61894   ← 안 받음(형태소 JSON에 이미 있음)
 #   Training   2.형태소_비수지(json)_TL    90 GB   61895   ← 본 학습 데이터
 #   Training   수어스크립트_TL            372 MB   61896   ← 라벨 텍스트만
 #   Validation 2.형태소_비수지(json)_VL    11 GB   62028   ← 파일럿
 #
 # 원천데이터(.mp4)는 합계 2TB가 넘는데 받지 않는다. 키포인트가 형태소 JSON 안에 있다.
+#
+# **zip을 풀지 않는다.** ETL이 zip을 연 채로 JSON 멤버만 꺼내 읽는다(디스크 수백 GB 절약).
+# 푼 결과와 완전히 같은 팩이 나오는 것은 검증했다(index 동일, 배열 오차 0).
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -24,31 +27,31 @@ export PATH="$HOME/.local/bin:$PATH"
 
 STAGE="${1:-pilot}"
 case "${STAGE}" in
-  pilot)  FILEKEY=62028; LABEL="검증셋 형태소 JSON (11GB)" ;;
-  full)   FILEKEY=61895; LABEL="학습셋 형태소 JSON (90GB)" ;;
-  script) FILEKEY=61896; LABEL="수어스크립트 (372MB)" ;;
+  pilot)  FILEKEY=62028; LABEL="검증셋 형태소 JSON (11GB)";  NEED=40 ;;
+  full)   FILEKEY=61895; LABEL="학습셋 형태소 JSON (90GB)";  NEED=150 ;;
+  script) FILEKEY=61896; LABEL="수어스크립트 (372MB)";       NEED=5 ;;
   *) echo "stage는 pilot | full | script 중 하나"; exit 1 ;;
 esac
 
 : "${AIHUB_APIKEY:?AIHUB_APIKEY 환경변수가 필요합니다 (AI Hub 마이페이지 → API 키)}"
 
+command -v aihubshell >/dev/null || {
+  echo "aihubshell이 없습니다. 설치:"
+  echo "  mkdir -p ~/.local/bin && curl -sS -o ~/.local/bin/aihubshell https://api.aihub.or.kr/api/aihubshell.do && chmod +x ~/.local/bin/aihubshell"
+  exit 1
+}
+
+sb_require_space "${NEED}"
+
 RAW_DIR="${RAW_ROOT}/disaster-${STAGE}"
 mkdir -p "${RAW_DIR}" "${DATA_ROOT}"
 
-# /tmp는 컨테이너 디스크라 넉넉하지만 재시작하면 사라진다. 압축을 풀면 원본의
-# 3~5배로 불어나므로 받기 전에 여유부터 본다.
-FREE_GB=$(df -BG --output=avail "${RAW_ROOT}" | tail -1 | tr -dc '0-9')
-echo "── ${LABEL} / 내려받을 곳 ${RAW_DIR} (여유 ${FREE_GB}G)"
+echo "── ${LABEL} → ${RAW_DIR}"
 
-echo "── 1. 내려받기"
+echo "── 1. 내려받기 (오래 걸립니다. 끊기면 같은 명령으로 이어받기)"
 ( cd "${RAW_DIR}" && aihubshell -mode d -datasetkey 636 -filekey "${FILEKEY}" )
 
-echo "── 2. 압축 풀기"
-find "${RAW_DIR}" -name '*.zip' -print0 | while IFS= read -r -d '' z; do
-  unzip -oq "$z" -d "${z%.zip}" && rm -f "$z"   # 푼 뒤 zip은 지운다(디스크 절약)
-done
-
-echo "── 3. 구조 확인 — 여기서 이상하면 아래로 진행하지 말 것"
+echo "── 2. 구조 확인 — 여기서 이상하면 아래로 진행하지 말 것"
 python3 "${REPO_ROOT}/ml/tools/schema_report.py" "${RAW_DIR}" --limit 3
 
 if [ "${STAGE}" = "script" ]; then
@@ -56,10 +59,10 @@ if [ "${STAGE}" = "script" ]; then
   exit 0
 fi
 
-echo "── 4. 팩 만들기 → ${DATA_ROOT}"
+echo "── 3. 팩 만들기 (zip에서 직접 읽음) → ${DATA_ROOT}"
 python -m ml.etl.aihub_disaster --input "${RAW_DIR}" --out "${DATA_ROOT}" --workers 16
 
-echo "── 5. 수어자 분리 분할"
+echo "── 4. 수어자 분리 분할"
 python -m ml.etl.prepare --data "${DATA_ROOT}" --split-by signer --min-count 5
 
 echo

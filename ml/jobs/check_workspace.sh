@@ -122,6 +122,43 @@ else
   bad "python이 없습니다"
 fi
 
+# ── 5. Claude Code를 여기서 돌릴 수 있는가 ─────────────────────
+head2 "5. Claude Code 연결 가능 여부"
+# 워크스페이스 안에서 Claude Code가 돌면 데이터를 눈으로 옮길 필요 없이
+# 그 자리에서 ETL·학습·디버깅을 시킬 수 있다. 두 가지가 필요하다.
+node_ok=0
+if command -v node >/dev/null 2>&1; then
+  node_version=$(node -v 2>/dev/null)
+  major=${node_version#v}
+  major=${major%%.*}
+  if [[ "${major}" =~ ^[0-9]+$ ]] && (( major >= 18 )); then
+    ok "Node.js ${node_version} (18 이상 필요 — 충족)"
+    node_ok=1
+  else
+    warn "Node.js ${node_version} — 18 이상이 필요합니다"
+  fi
+else
+  warn "Node.js 없음 (설치 필요)"
+fi
+
+api_ok=0
+if command -v curl >/dev/null 2>&1; then
+  # 인증 없이 부르면 401이 정상이다. 즉 401도 '연결은 된다'는 뜻이다.
+  api=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 https://api.anthropic.com/v1/messages 2>/dev/null)
+  case "${api}" in
+    000|"") bad "api.anthropic.com 접속 불가 — 여기서는 Claude Code를 쓸 수 없습니다" ;;
+    *)      ok "api.anthropic.com 응답함 (HTTP ${api}) — 네트워크는 열려 있습니다"; api_ok=1 ;;
+  esac
+fi
+
+if (( api_ok == 1 )); then
+  if (( node_ok == 1 )); then
+    echo "     → 바로 설치해 보세요:  npm install -g @anthropic-ai/claude-code"
+  else
+    echo "     → Node.js를 먼저 설치해야 합니다(아래 '다음 할 일' 참고)."
+  fi
+fi
+
 # ── 요약 ────────────────────────────────────────────────────────
 head2 "다음 할 일"
 cat <<'GUIDE'
@@ -131,5 +168,11 @@ cat <<'GUIDE'
   받을 것은 **라벨링데이터(형태소 JSON)** 뿐입니다.
   원천데이터(영상 .mp4)는 받지 마세요 — 용량이 TB급이고 지금은 필요 없습니다.
   재난안전 데이터는 키포인트가 형태소 JSON 안에 이미 들어 있습니다.
+
+  5번이 ✅ 인데 Node.js가 없다면 (sudo 없이 홈에 설치하는 방법):
+    curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz -o /tmp/node.tar.xz
+    mkdir -p ~/.local && tar -xJf /tmp/node.tar.xz -C ~/.local
+    echo 'export PATH=$HOME/.local/node-v22.11.0-linux-x64/bin:$PATH' >> ~/.bashrc
+    source ~/.bashrc && node -v
 GUIDE
 echo

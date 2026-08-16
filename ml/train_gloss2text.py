@@ -115,15 +115,21 @@ def main() -> None:
             truncation=True,
             return_tensors="pt",
         )
-        labels = tokenizer(
-            [item["target"] for item in batch],
-            max_length=args.max_target,
-            padding=True,
-            truncation=True,
-            return_tensors="pt",
-        ).input_ids
-        # 패딩 토큰은 손실에서 제외한다(-100은 HF의 무시 인덱스).
-        labels[labels == tokenizer.pad_token_id] = -100
+        # **KoBART 토크나이저는 EOS를 붙이지 않는다.** ("오늘1 밤1" → BOS도 EOS도 없음)
+        # 라벨에 EOS가 한 번도 없으면 모델이 종결을 배우지 못해, 생성이 max_length까지
+        # 변형 번역을 이어붙이며 폭주한다(t2g-v1에서 실제 그랬다). 토큰 레벨에서 직접
+        # 잘라내고 EOS를 붙인다 — 문자열에 "</s>"를 붙이는 방식은 max_length 잘림 시
+        # EOS부터 사라져서 안 된다.
+        eos = tokenizer.eos_token_id
+        target_ids = [
+            tokenizer(item["target"], truncation=True, max_length=args.max_target - 1).input_ids
+            + [eos]
+            for item in batch
+        ]
+        width = max(len(ids) for ids in target_ids)
+        labels = torch.full((len(target_ids), width), -100, dtype=torch.long)
+        for row, ids in enumerate(target_ids):
+            labels[row, : len(ids)] = torch.tensor(ids, dtype=torch.long)
         encoded["labels"] = labels
         # KoBART 토크나이저는 token_type_ids를 내놓지만 BART forward는 받지 않는다.
         encoded.pop("token_type_ids", None)

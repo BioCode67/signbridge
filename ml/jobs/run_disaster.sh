@@ -17,6 +17,14 @@
 #
 # **zip을 풀지 않는다.** ETL이 zip을 연 채로 JSON 멤버만 꺼내 읽는다(디스크 수백 GB 절약).
 # 푼 결과와 완전히 같은 팩이 나오는 것은 검증했다(index 동일, 배열 오차 0).
+#
+# ── 내려받는 도중에는 용량이 한때 3배까지 부푼다 (aihubshell 내부 동작)
+#   ① download.tar 수신                     90G
+#   ② tar -xvf → 분할 조각(.part) 풀기     +90G = 180G
+#   ③ 조각 병합해 zip 복원                 +90G = 270G  ← 최대
+#   ④ 조각 삭제 → 180G, download.tar 삭제 → 90G(zip만 남음)
+# 그래서 NEED는 최종 90G가 아니라 그 3배 남짓으로 잡는다. 공식 가이드도
+# "다운로드 받을 데이터의 2~3배 이상의 용량을 확보"하라고 안내한다.
 
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,8 +35,9 @@ export PATH="$HOME/.local/bin:$PATH"
 
 STAGE="${1:-pilot}"
 case "${STAGE}" in
-  pilot)  FILEKEY=62028; LABEL="검증셋 형태소 JSON (11GB)";  NEED=40 ;;
-  full)   FILEKEY=61895; LABEL="학습셋 형태소 JSON (90GB)";  NEED=150 ;;
+  # NEED는 **내려받는 중 한때 필요한 최대치**다(아래 주석 참고). 최종 점유량이 아니다.
+  pilot)  FILEKEY=62028; LABEL="검증셋 형태소 JSON (11GB)";  NEED=45 ;;
+  full)   FILEKEY=61895; LABEL="학습셋 형태소 JSON (90GB)";  NEED=320 ;;
   script) FILEKEY=61896; LABEL="수어스크립트 (372MB)";       NEED=5 ;;
   *) echo "stage는 pilot | full | script 중 하나"; exit 1 ;;
 esac

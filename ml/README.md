@@ -218,11 +218,17 @@ NIA_SL_[SEN|WRD|FINSP]XXXX_[REAL|SYN|CROWD]XX_[F|U|D|R|L]
 - `--format openpose-dir` : OpenPose 표준 출력 규약. AI Hub 배포본이 그 형태라고
   확인된 것은 아니다
 
-배포 차수마다 필드가 다를 수 있으니, 처음 받으면 구조부터 찍어 볼 것.
+배포 차수마다 필드가 다를 수 있으니, **처음 받으면 구조부터 찍어 볼 것.**
 
 ```bash
-python -m ml.etl.inspect_json /data/raw/재난안전/라벨링데이터 --limit 3
+# 데이터를 어디에 올릴 필요 없다. 있는 자리에서 실행하고 출력 텍스트만 가져오면 된다.
+python3 ml/tools/schema_report.py /data/raw/재난안전/라벨링데이터 --limit 3
+python3 ml/tools/schema_report.py 샘플데이터.zip     # 압축 해제 없이 바로 읽는다
 ```
+
+`schema_report.py`는 **표준 라이브러리만 쓰는 단일 파일**이라 저장소 clone도 pip install도
+필요 없다. 파일 하나만 옮겨 실행해도 된다. 좌표는 개수·범위로, 문자열은 앞 40자만 요약하므로
+출력이 보통 2~5KB이고 원문·좌표가 그대로 새어 나가지 않는다. 어떤 어댑터를 쓸지도 판정해 준다.
 
 ---
 

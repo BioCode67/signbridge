@@ -125,6 +125,8 @@ def main() -> None:
         # 패딩 토큰은 손실에서 제외한다(-100은 HF의 무시 인덱스).
         labels[labels == tokenizer.pad_token_id] = -100
         encoded["labels"] = labels
+        # KoBART 토크나이저는 token_type_ids를 내놓지만 BART forward는 받지 않는다.
+        encoded.pop("token_type_ids", None)
         return encoded
 
     train_loader = DataLoader(

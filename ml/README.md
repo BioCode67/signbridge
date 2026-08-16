@@ -271,7 +271,11 @@ ml/
 └─ jobs/                  KOREN 잡 스케줄링 스크립트
 ```
 
-KOREN AI Cloud 워크스페이스 설정·볼륨·잡 운영은 **[KOREN_SETUP.md](KOREN_SETUP.md)** 참고.
+KOREN 문서 두 개를 함께 본다.
+
+- **[KOREN_RESOURCES.md](KOREN_RESOURCES.md)** — AI Cloud·HPC·KOREN VM 세 자원 중
+  **어떤 작업을 어디서 돌릴지**. 먼저 읽을 것.
+- **[KOREN_SETUP.md](KOREN_SETUP.md)** — AI Cloud 워크스페이스·볼륨·잡 운영 절차.
 
 ---
 

@@ -190,10 +190,28 @@ def main() -> None:
     parser.add_argument("--max-frames", type=int, default=0, help="클립당 최대 프레임(0=제한 없음)")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--resume", action="store_true", help="이미 팩이 있는 클립은 건너뛴다")
+    parser.add_argument(
+        "--num-shards",
+        type=int,
+        default=1,
+        help="전체 작업을 N등분한다(여러 대의 VM/노드에 나눠 돌릴 때)",
+    )
+    parser.add_argument("--shard", type=int, default=0, help="이 프로세스가 맡을 조각 번호(0부터)")
     args = parser.parse_args()
+
+    if not 0 <= args.shard < args.num_shards:
+        raise SystemExit(f"--shard는 0 이상 {args.num_shards} 미만이어야 합니다.")
 
     args.out.mkdir(parents=True, exist_ok=True)
     videos = sorted(p for p in args.videos.rglob("*") if p.suffix.lower() in VIDEO_SUFFIXES)
+
+    # 샤딩은 정렬된 전체 목록에 대해 먼저 적용한다. --resume으로 걸러낸 뒤에 나누면
+    # 재시작할 때마다 각 노드가 맡는 파일이 달라져 중복·누락이 생긴다.
+    if args.num_shards > 1:
+        total = len(videos)
+        videos = videos[args.shard :: args.num_shards]
+        print(f"[etl] 샤드 {args.shard}/{args.num_shards}: 전체 {total}개 중 {len(videos)}개 담당")
+
     if args.resume:
         videos = [v for v in videos if not (args.out / "packs" / f"{v.stem}.npz").exists()]
     if args.limit:
@@ -225,7 +243,13 @@ def main() -> None:
                     print(f"  {index}/{len(payloads)}", flush=True)
 
     records.sort(key=lambda r: r["id"])
-    index_path = args.out / "index.jsonl"
+    # 여러 노드가 같은 index.jsonl에 쓰면 서로 덮어써 버린다. 샤드별로 따로 쓰고
+    # 전부 끝난 뒤 merge_index.py로 합친다.
+    index_path = (
+        args.out / "index.jsonl"
+        if args.num_shards == 1
+        else args.out / f"index.shard{args.shard:03d}.jsonl"
+    )
     mode = "a" if args.resume and index_path.exists() else "w"
     with open(index_path, mode, encoding="utf-8") as handle:
         for record in records:
@@ -235,6 +259,8 @@ def main() -> None:
         mean_hand = float(np.mean([r["hand_detect_rate"] for r in records]))
         print(f"[etl] 완료: 클립 {len(records)}개 → {index_path}")
         print(f"[etl] 평균 손 검출률 {mean_hand:.1%} (0.7 미만이면 화질·크롭·조명 점검)")
+    if args.num_shards > 1:
+        print("[etl] 모든 샤드가 끝나면: python -m ml.etl.merge_index --data <출력경로>")
 
 
 if __name__ == "__main__":

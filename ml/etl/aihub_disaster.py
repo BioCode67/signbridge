@@ -43,6 +43,7 @@ import argparse
 import json
 import re
 import sys
+import threading
 import zipfile
 from collections import Counter
 
@@ -472,31 +473,45 @@ def stream_7z(
     limit: int,
     on_result,
 ) -> int:
-    """7z를 한 번만 훑으면서 JSON을 변환한다. 처리한 개수를 돌려준다."""
+    """7z를 한 번만 훑으면서 JSON을 변환한다. 처리한 개수를 돌려준다.
+
+    **콜백은 여러 스레드에서 동시에 불린다.** 재난안전 검증셋은 `Blocks = 26`이라
+    py7zr가 블록별로 병렬 해제하기 때문이다(`Blocks = 1`이면 단일 스레드). 카운터와
+    대기열을 락 없이 만지면 진행 표시가 어긋나고 백프레셔가 무너지므로 락을 건다.
+    풀린 순서는 보장되지 않지만, 결과는 마지막에 id로 정렬하므로 상관없다.
+    """
     import py7zr
 
     max_inflight = max(2, workers * 2)
     seen = 0
+    guard = threading.Lock()
 
     with ProcessPoolExecutor(max_workers=max(1, workers)) as pool:
         pending: list = []
 
         def drain(keep: int) -> None:
-            while len(pending) > keep:
-                on_result(pending.pop(0).result())
+            while True:
+                with guard:
+                    if len(pending) <= keep:
+                        return
+                    future = pending.pop(0)
+                # 결과 대기는 락 밖에서 — 안에서 기다리면 해제 스레드가 전부 막힌다.
+                on_result(future.result())
 
         def handle(name: str, raw: bytes) -> None:
             nonlocal seen
-            if limit and seen >= limit:
-                return
-            seen += 1
-            pending.append(
-                pool.submit(_worker, (Path(name), out_dir, tiers, depth, None, raw))
-            )
+            with guard:
+                if limit and seen >= limit:
+                    return
+                seen += 1
+                count = seen
+                pending.append(
+                    pool.submit(_worker, (Path(name), out_dir, tiers, depth, None, raw))
+                )
             # 먼저 넣은 것부터 걷어내 메모리를 일정하게 유지한다.
             drain(max_inflight)
-            if seen % 500 == 0:
-                print(f"  [etl] {seen}개 처리", flush=True)
+            if count % 500 == 0:
+                print(f"  [etl] {count}개 처리", flush=True)
 
         with py7zr.SevenZipFile(archive, "r") as handle_7z:
             handle_7z.extractall(factory=_json_only_factory(handle))

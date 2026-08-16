@@ -176,8 +176,15 @@ def main() -> None:
             inputs = tokenizer(
                 pair["source"], max_length=args.max_source, truncation=True, return_tensors="pt"
             ).to(device)
+            # no_repeat_ngram_size=3: 학습 초기의 "부탁1 부탁1 …" 꼬리 반복을 막는다.
+            # 글로스열엔 실제 2-gram 반복이 있으므로(예: 갑자기1 춥다1 × 2) 2는 안 된다.
             with torch.no_grad():
-                generated = model.generate(**inputs, max_length=args.max_target, num_beams=4)
+                generated = model.generate(
+                    **inputs,
+                    max_length=args.max_target,
+                    num_beams=4,
+                    no_repeat_ngram_size=3,
+                )
             decoded = tokenizer.decode(generated[0], skip_special_tokens=True)
             print(f"  입력: {pair['source'][:70]}")
             print(f"  생성: {decoded[:70]}")

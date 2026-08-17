@@ -25,9 +25,21 @@ function cleanGloss(g: string): string {
   return g.replace(/[0-9#:]+$/, '')
 }
 
+// AI 번역 서버(FastAPI /compose). 없으면 이 입력창만 비활성 — 수록 문장 재생은 그대로 동작.
+const COMPOSE_URL = 'http://localhost:8000/compose'
+
 export default function SignAvatarDemo() {
   const load = useSignData()
-  const sentences = load.sentences
+
+  // AI 합성 결과 — 수록 문장 목록 맨 앞에 탭으로 끼어든다.
+  const [composed, setComposed] = useState<(typeof load.sentences)[number] | null>(null)
+  const [aiText, setAiText] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiNote, setAiNote] = useState('')
+  const sentences = useMemo(
+    () => (composed ? [composed, ...load.sentences] : load.sentences),
+    [composed, load.sentences],
+  )
 
   const [index, setIndex] = useState(0)
   const [frame, setFrame] = useState(0)
@@ -163,6 +175,44 @@ export default function SignAvatarDemo() {
     frameRef.current = 0
   }, [])
 
+  // 임의 문장 → 서버에서 (KoBART 번역 + 글로스 뱅크 합성) → 즉시 재생.
+  const composeText = useCallback(async () => {
+    const text = aiText.trim()
+    if (!text || aiBusy) return
+    setAiBusy(true)
+    setAiNote('')
+    try {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 20000)
+      const res = await fetch(COMPOSE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
+        body: JSON.stringify({ text }),
+      })
+      clearTimeout(timer)
+      if (!res.ok) throw new Error(`서버 오류 ${res.status}`)
+      const json = await res.json()
+      if (json.error) throw new Error(json.error)
+      setComposed({ ...json, file: '__ai__' })
+      setIndex(0)
+      setFrame(0)
+      frameRef.current = 0
+      setPlaying(true)
+      if (json.gloss_missing?.length) {
+        setAiNote(`동작 사전에 없는 단어 ${json.gloss_missing.length}개는 건너뜀`)
+      }
+    } catch (err) {
+      setAiNote(
+        err instanceof Error && err.name === 'AbortError'
+          ? 'AI 번역 서버 응답 없음 — 로컬 서버(uvicorn server.app:app)를 켜 주세요'
+          : `번역 실패: ${err instanceof Error ? err.message : String(err)}`,
+      )
+    } finally {
+      setAiBusy(false)
+    }
+  }, [aiText, aiBusy])
+
   const togglePlay = useCallback(() => {
     if (!data) return
     setPlaying((p) => {
@@ -240,6 +290,29 @@ export default function SignAvatarDemo() {
             </div>
           ) : (
             <>
+              {/* AI 번역 입력 — 임의 재난 문장을 KoBART가 글로스로 번역, 실연 동작 사전으로 합성 */}
+              <div className="mb-4">
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={aiText}
+                    onChange={(e) => setAiText(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && composeText()}
+                    placeholder="재난 문장을 입력하면 AI가 수어로 번역합니다 (예: 오늘 밤 한파주의보가 발효됩니다)"
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-space-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-glow/60 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={composeText}
+                    disabled={aiBusy || !aiText.trim()}
+                    className="shrink-0 rounded-lg border border-cyan-glow/50 bg-cyan-glow/10 px-4 py-2 text-sm font-semibold text-cyan-soft transition-all hover:bg-cyan-glow/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    {aiBusy ? '번역 중…' : 'AI 수어 번역'}
+                  </button>
+                </div>
+                {aiNote && <p className="mt-1.5 text-xs text-amber-300/90">{aiNote}</p>}
+              </div>
+
               {/* Tabs (auto-generated from manifest) */}
               <div className="mb-4 flex flex-wrap gap-2">
                 {load.status === 'loading'
@@ -261,7 +334,7 @@ export default function SignAvatarDemo() {
                             : 'border-white/10 bg-space-800 text-slate-400 hover:border-cyan-glow/40 hover:text-slate-200'
                         }`}
                       >
-                        {i + 1}. {s.korean_text.slice(0, 12)}…
+                        {s.file === '__ai__' ? `✦ AI: ${s.korean_text.slice(0, 10)}…` : `${i + 1}. ${s.korean_text.slice(0, 12)}…`}
                       </button>
                     ))}
               </div>

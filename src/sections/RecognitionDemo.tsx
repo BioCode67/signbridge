@@ -155,7 +155,7 @@ export default function RecognitionDemo() {
               웹캠 수어를 <span className="text-cyan-soft text-glow">실시간 자막</span>으로
             </>
           }
-          description="MediaPipe Holistic이 상반신·양손 관절을 추출하고 GRU 분류기가 재난 키워드를 실시간 인식해 자막으로 띄웁니다. 기본 모델은 파이프라인 실증용(합성 학습)이므로, 아래 스튜디오에서 단어를 직접 녹화·학습하면 내 손동작을 실제로 인식합니다. 영상은 브라우저 안에서만 처리됩니다."
+          description="MediaPipe Holistic이 상반신·양손 관절을 추출하고, AI Hub 16만 클립으로 학습한 트랜스포머(어휘 8,147종)가 수어 단어를 실시간 인식해 자막으로 띄웁니다. 인식된 수어로 질문하면 아바타가 수어로 응답합니다. 영상은 브라우저 안에서만 처리되며 어디로도 전송되지 않습니다."
         />
 
         <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">

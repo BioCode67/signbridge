@@ -115,14 +115,17 @@ export default function UserApp() {
   }, [playing, data])
 
   // 자동 수신 — 재생이 끝나면 잠시 뒤 다음 문자를 받는다.
+  // 사용자가 탭으로 일시정지한 상태(frame>0에서 멈춤)에서는 기다린다 —
+  // 멈춰 놓고 보는데 다음 문장이 덮으면 정지의 의미가 없다.
   useEffect(() => {
-    if (!auto || playing || busy || feed.length === 0) return
+    const pausedMidway = !playing && frame > 0
+    if (!auto || playing || pausedMidway || busy || feed.length === 0) return
     const t = window.setTimeout(() => {
       setCursor((c) => c + 1)
       void playItem(feed[cursor % feed.length])
     }, 2200)
     return () => window.clearTimeout(t)
-  }, [auto, playing, busy, feed, cursor, playItem])
+  }, [auto, playing, frame, busy, feed, cursor, playItem])
 
   // 지금 표현 중인 단어(큰 자막).
   const time = data ? frame / data.fps : 0
@@ -331,7 +334,21 @@ export default function UserApp() {
           }
         >
           {data ? (
-            <Avatar3D data={data} frame={frame} animate modelUrl={AVATARS[0].url} />
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label={playing ? '일시정지' : '재생'}
+              onClick={() => data.num_frames > 1 && setPlaying((v) => !v)}
+              onKeyDown={(e) => e.key === ' ' && data.num_frames > 1 && setPlaying((v) => !v)}
+              className="h-full w-full cursor-pointer"
+            >
+              <Avatar3D data={data} frame={frame} animate modelUrl={AVATARS[0].url} />
+              {!playing && data.num_frames > 1 && (
+                <div className="pointer-events-none absolute inset-0 grid place-items-center">
+                  <span className="rounded-full bg-space-900/80 px-8 py-6 text-5xl">▶</span>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="grid h-full place-items-center">
               <button

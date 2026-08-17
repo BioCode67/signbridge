@@ -118,7 +118,11 @@ def conjugations(stem_word: str) -> list[str]:
         stem_word + s
         for s in ("고", "지", "게", "며", "면", "니", "세요", "십시오", "시고",
                   "나요", "시나요", "셨", "시면", "는데", "지만", "려고",
-                  "신지", "시는지", "실", "십니까", "시겠")
+                  "신지", "시는지", "실", "십니까", "시겠",
+                  # 존대·추측·의향 — 창구에서 실제로 쓰이는 말투다(홀드아웃 실측에서
+                  # "오셨나요·아프신가요·잡을까요"가 통째로 빠졌다).
+                  "셨나요", "셨어요", "셨습니다", "셨는데", "신가요", "실까요", "십니다",
+                  "겠어요", "겠는데", "시죠", "시네요")
     ]
     parts = _decompose(stem_word[-1])
     if parts is None:
@@ -134,12 +138,17 @@ def conjugations(stem_word: str) -> list[str]:
                   stem_word + harmony + "서", stem_word + harmony + "야",
                   stem_word + harmony + "집니다", stem_word + harmony + "졌"]
         forms += [stem_word + "은", stem_word + "습니다", stem_word + "습니까",
-                  stem_word + "으면", stem_word + "으세요", stem_word + "으니"]
+                  stem_word + "으면", stem_word + "으세요", stem_word + "으니",
+                  stem_word + "을까요", stem_word + "을게요", stem_word + "으시면",
+                  stem_word + "으셨", stem_word + "으신가요"]
     else:
         # 받침이 없으면 'ㅂ니다'가 받침으로 붙는다: 오 + ㅂ니다 → 옵니다
         head = stem_word[:-1]
         forms.append(head + _compose(cho, jung, 17) + "니다")  # 17 = 종성 ㅂ
         forms.append(head + _compose(cho, jung, 4) + "다")  # 4 = 종성 ㄴ (온·간)
+        # 받침 없는 어간에는 'ㄹ'이 받침으로 붙는다: 되 + ㄹ까요 → 될까요
+        forms.append(head + _compose(cho, jung, 8) + "까요")
+        forms.append(head + _compose(cho, jung, 8) + "게요")
         if vowel in ("ㅏ", "ㅓ", "ㅐ", "ㅔ"):
             # 같은 모음이 겹치면 하나로 줄어든다: 가 + 아 → 가 · 서 + 어 → 서
             harmonic.append(stem_word)
@@ -190,7 +199,8 @@ def conjugations(stem_word: str) -> list[str]:
             stem_past = f[:-1] + _compose(last[0], last[1], 20)  # 20 = 종성 ㅆ
         else:
             continue
-        past += [stem_past + "어요", stem_past + "습니다", stem_past + "다", stem_past + "는데"]
+        past += [stem_past + "어요", stem_past + "습니다", stem_past + "다", stem_past + "는데",
+                 stem_past + "나요", stem_past + "습니까", stem_past + "어서", stem_past + "지만"]
     forms += past
     return forms
 

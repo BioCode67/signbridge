@@ -146,6 +146,26 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     caption = (await pg.locator("p.text-glow").first.inner_text()).strip()
     rep.check(len(caption) > 0 or played["glosses"] > 0, "받기: 자막 표시", f"'{caption[:14]}'")
 
+    # ── 행동요령: 재난 종류에 맞는 요령을 문장 단위로 수어로 본다
+    guide = pg.get_by_role("button", name="📋 행동요령")
+    if await guide.count():
+        await guide.first.click()
+        await pg.wait_for_timeout(500)
+        steps = pg.locator("button", has_text="세요")
+        rep.check(await steps.count() > 0, "받기: 행동요령 문장 목록")
+        prev = await pg.locator("[data-sign-frames]").first.evaluate("e=>e.dataset.signFrames")
+        await steps.first.click()
+        played = False
+        for _ in range(8):
+            await pg.wait_for_timeout(500)
+            now = await pg.locator("[data-sign-frames]").first.evaluate("e=>e.dataset.signFrames")
+            if now != prev and int(now) > 20:
+                played = True
+                break
+        rep.check(played, "받기: 행동요령 문장이 수어로 재생")
+    else:
+        rep.lines.append("    · 행동요령 버튼이 이번 문자에는 없어 건너뜀")
+
     # ── 화면 밖으로 밀린 요소가 없는가(폰에서 탭이 잘리던 회귀)
     overflow = await pg.evaluate(
         "() => { const d=document.documentElement;"

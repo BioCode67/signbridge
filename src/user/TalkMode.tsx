@@ -22,6 +22,7 @@ import SignStage from './SignStage'
 import { useSignPlayer } from './useSignPlayer'
 
 import { MY_INFO_FIELDS, loadMyInfo, hasMyInfo } from './myInfo'
+import { loadTalks, saveTalk, deleteTalk, clearTalks, type SavedTalk } from './talkHistory'
 
 // 카메라 인식은 MediaPipe 번들이 무거워 열 때만 불러온다.
 const SignInputPanel = lazy(() => import('./SignInputPanel'))
@@ -66,6 +67,10 @@ export default function TalkMode() {
   // 직원에게 보여주는 안내 — 창구에서 가장 먼저 필요한 것은 번역이 아니라
   // "이게 뭐고 어떻게 쓰는지"다. 장소를 고르면 한 번 자동으로 띄운다.
   const [showGuide, setShowGuide] = useState(false)
+  // 지난 대화 — 사용자가 저장을 눌렀을 때만 남는다(공용 기기에 진료 내용이 남지 않게).
+  const [talks, setTalks] = useState<SavedTalk[]>(() => loadTalks())
+  const [showTalks, setShowTalks] = useState(false)
+  const [saved2, setSaved2] = useState(false)
   // 위치 — 119에 전할 좌표. 주변 사람이 읽어 주는 용도라 큰 글씨로 띄운다.
   const [coords, setCoords] = useState<{ lat: number; lon: number; acc: number } | null>(null)
   const [locating, setLocating] = useState(false)
@@ -232,6 +237,72 @@ export default function TalkMode() {
     )
   }
 
+  if (showTalks) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setShowTalks(false)}
+            className="min-h-[44px] rounded-lg border border-white/15 px-3 py-2 text-base text-slate-300"
+          >
+            ← 뒤로
+          </button>
+          <span className="text-xl font-bold text-slate-100">📜 지난 대화</span>
+          {talks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setTalks(clearTalks())}
+              className="ml-auto min-h-[44px] rounded-lg border border-red-400/40 px-3 py-2 text-sm font-bold text-red-300"
+            >
+              전체 지우기
+            </button>
+          )}
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          <p className="mb-3 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-base leading-relaxed text-emerald-200">
+            🔒 이 기기에만 저장돼요. 누른 문장은 다시 볼 수 있어요.
+          </p>
+          {talks.map((t) => (
+            <div key={t.id} className="mb-3 rounded-2xl border border-white/10 bg-space-800 p-3">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-lg font-bold text-slate-100">{t.placeIcon} {t.place}</span>
+                <span className="text-sm text-slate-500">{t.date}</span>
+                <button
+                  type="button"
+                  onClick={() => setTalks(deleteTalk(t.id))}
+                  className="ml-auto min-h-[40px] rounded-lg border border-white/15 px-3 py-1.5 text-sm text-slate-400"
+                >
+                  지우기
+                </button>
+              </div>
+              {t.turns.map((turn, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => (turn.who === 'staff'
+                    ? void player.play(turn.text)
+                    : tts.speak(turn.text))}
+                  className={`mb-1 flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left ${
+                    turn.who === 'staff' ? 'bg-cyan-glow/10' : 'bg-amber-400/10'
+                  }`}
+                >
+                  <span className="shrink-0 text-lg">{turn.who === 'staff' ? '👔' : '🤟'}</span>
+                  <span className={`flex-1 text-base font-bold leading-snug ${
+                    turn.who === 'staff' ? 'text-cyan-soft' : 'text-amber-200'
+                  }`}>
+                    {turn.text}
+                  </span>
+                  <span className="shrink-0 text-sm text-slate-500">{turn.time}</span>
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   if (!place) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -249,6 +320,15 @@ export default function TalkMode() {
         >
           🆔 내 정보 {hasMyInfo(myInfo) ? '(적어 둠)' : '— 응급 때 보여줄 정보를 적어 두세요'}
         </button>
+        {talks.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowTalks(true)}
+            className="mb-4 w-full rounded-3xl border border-white/15 bg-space-800 py-4 text-xl font-bold text-slate-200"
+          >
+            📜 지난 대화 {talks.length}개
+          </button>
+        )}
         <p className="mb-3 text-center text-lg font-bold text-slate-300">어디에 계신가요?</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {PLACES.map((p) => (
@@ -361,13 +441,31 @@ export default function TalkMode() {
           👔 안내
         </button>
         {turns.length > 0 && (
-          <button
-            type="button"
-            onClick={() => { setTurns([]); setShown(null) }}
-            className="ml-auto min-h-[44px] rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-400"
-          >
-            대화 지우기
-          </button>
+          <>
+            {/* 저장은 **누를 때만** — 공용 기기에 앞사람의 진료 내용이 남으면 안 된다 */}
+            <button
+              type="button"
+              onClick={() => {
+                setTalks(saveTalk({
+                  place: place.name,
+                  placeIcon: place.icon,
+                  turns: turns.map(({ who, text, time }) => ({ who, text, time })),
+                }))
+                setSaved2(true)
+                window.setTimeout(() => setSaved2(false), 2000)
+              }}
+              className="ml-auto min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border border-emerald-400/40 px-3 py-2 text-sm font-bold text-emerald-300"
+            >
+              {saved2 ? '✓ 저장됨' : '💾 저장'}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTurns([]); setShown(null) }}
+              className="min-h-[44px] shrink-0 whitespace-nowrap rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-400"
+            >
+              지우기
+            </button>
+          </>
         )}
       </div>
 

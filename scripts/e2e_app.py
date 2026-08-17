@@ -192,6 +192,23 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     )
     rep.check(thread_h > 20, "대화: 기록이 화면에 보임", f"높이 {thread_h:.0f}px")
 
+    # ── 대화 저장 → 지난 대화에서 다시 보이는가(진료 안내를 나중에 확인하는 길)
+    await pg.get_by_role("button", name="💾 저장").click()
+    await pg.wait_for_timeout(400)
+    await pg.get_by_role("button", name="← 장소").click()
+    await pg.wait_for_timeout(400)
+    await pg.get_by_role("button", name=re.compile("📜 지난 대화")).click()
+    await pg.wait_for_timeout(400)
+    rep.check(await pg.locator("text=어디가 아픕니까?").count() > 0, "대화: 저장한 대화 다시 보기")
+    await pg.get_by_role("button", name="← 뒤로").click()
+    await pg.wait_for_timeout(300)
+    await pg.get_by_role("button", name="🏥 병원").click()
+    await pg.wait_for_timeout(400)
+    await pg.get_by_text("화면을 누르면 시작합니다").click()
+    await pg.wait_for_timeout(300)
+    await pg.get_by_role("button", name="🤟 내 답 카드").click()
+    await pg.wait_for_timeout(300)
+
     # ── 자유 입력 → 소리
     # 수어로 답하기 입구가 있는가 — 모어로 말하는 유일한 길이라 사라지면 안 된다
     rep.check(await pg.get_by_role("button", name="🤟 수어로 답하기").count() > 0,

@@ -37,6 +37,8 @@ from ml.signbridge.vocab import normalize_gloss  # noqa: E402
 # 조사·어미. 한국어 형태소 분석기 없이 근사한다 — 사전 품질에 결정적이진 않다.
 PARTICLE_RE = re.compile(
     r"(으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다"
+    r"|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요"
+    r"|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요"
     r"|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고"
     r"|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는"
     r"|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$"
@@ -131,7 +133,8 @@ def main() -> None:
             continue
         scored.sort(reverse=True)
         cands = [g for _, g in scored[: args.top]]
-        exact = lemma_best.get(word)
+        # 용언 표제어는 "-다"형(기다리다1)이라 어간("기다리")과 어긋난다 — 둘 다 본다.
+        exact = lemma_best.get(word) or lemma_best.get(word + "다")
         if exact:
             cands = [exact] + [g for g in cands if g != exact]
         table[word] = cands[: args.top]
@@ -142,6 +145,10 @@ def main() -> None:
     for lemma, g in lemma_best.items():
         if lemma not in table:
             table[lemma] = [g]
+            added += 1
+        # 용언은 어간형 키도 함께 — "기다리다1"을 "기다리"(어간)로도 찾게 한다.
+        if lemma.endswith("다") and len(lemma) >= 3 and lemma[:-1] not in table:
+            table[lemma[:-1]] = [g]
             added += 1
     print(f"[align] 표제어 직결 추가 {added:,}개 (Dice 미포착분)")
 

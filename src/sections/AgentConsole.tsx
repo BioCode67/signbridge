@@ -5,7 +5,7 @@ import { API_URL } from '../config'
 import Button from '../ui/Button'
 import { Orchestrator } from '../agents/orchestrator'
 import { RuleDisasterAgent } from '../agents/disasterAgent'
-import { RuleSignAgent } from '../agents/signAgent'
+import { DictSignAgent } from '../agents/dictSignAgent'
 import { SimBroadcastAgent } from '../agents/broadcastAgent'
 import { LlmQAAgent } from '../agents/qaAgent'
 import { TemplateBackbone } from '../agents/qaBackbone'
@@ -67,7 +67,9 @@ export default function AgentConsole() {
     () =>
       new Orchestrator({
         disaster: new RuleDisasterAgent(),
-        sign: new RuleSignAgent(),
+        // 규칙 기반은 조사만 떼는 최후 수단이라 동작 사전에 없는 '글로스'를 내놓는다.
+        // 화면에 보이는 글로스가 실제로 재생 가능한 것이어야 하므로 사전 기반을 쓴다.
+        sign: new DictSignAgent(),
         qa: qaAgentRef.current,
         broadcast: new SimBroadcastAgent(),
       }),

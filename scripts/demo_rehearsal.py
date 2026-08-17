@@ -37,8 +37,11 @@ Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
 """
 
 
-class Reusable(socketserver.TCPServer):
+class Reusable(socketserver.ThreadingTCPServer):
+    """요청 동시 처리 — 단일 스레드면 브라우저가 연결을 붙잡는 동안 다른 요청이 줄 선다."""
+
     allow_reuse_address = True
+    daemon_threads = True
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):

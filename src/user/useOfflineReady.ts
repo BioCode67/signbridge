@@ -45,8 +45,13 @@ export interface OfflineReady {
 }
 
 const KEY = 'sb-offline'
-/** 동시 요청 수. 너무 크면 모바일 회선에서 되레 느려지고 서버도 흔들린다. */
-const CONCURRENCY = 6
+/** 동시 요청 수.
+ *
+ *  **작게 잡는다.** 미리 받는 것은 나중을 위한 일이고, 지금 창구에 선 사람이 기다리는
+ *  것보다 중요할 수 없다. 요청에 `priority: 'low'`도 함께 붙여 브라우저가 지금 필요한
+ *  것을 먼저 처리하게 한다. (실측: 미리 받기를 켜고 끄고 잰 창구 문구 반응 시간 차이는
+ *  유의하지 않았다 — 그래도 회선이 좁은 실제 모바일에서는 이 편이 안전하다.) */
+const CONCURRENCY = 2
 
 export function useOfflineReady(): OfflineReady {
   // 초기값으로 판정한다 — effect에서 setState하면 첫 렌더가 두 번 돈다.
@@ -90,7 +95,12 @@ export function useOfflineReady(): OfflineReady {
         const file = queue.shift()
         if (!file) return
         try {
-          const res = await fetch(base + file.replace('./', ''), { cache: 'no-cache' })
+          // priority:'low' — 브라우저가 앱이 지금 필요한 요청을 먼저 처리하게 한다
+          // (크롬 계열 지원. 모르는 브라우저는 무시하므로 안전하다).
+          const res = await fetch(base + file.replace('./', ''), {
+            cache: 'no-cache',
+            priority: 'low',
+          } as RequestInit & { priority: string })
           if (!res.ok) bad++
           // 본문을 끝까지 읽어야 서비스워커가 캐시에 넣는다 — 헤더만 받고 버리면 안 된다.
           else await res.arrayBuffer()

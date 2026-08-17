@@ -44,6 +44,8 @@ export interface SignPlayer {
   bank(): Promise<BankIndex | null>
   /** 문장을 만들되 재생하지는 않는다(미리 만들어 두기). */
   compose(text: string, gloss?: string[]): Promise<Playable | null>
+  /** 곧 쓸 글로스 조각을 미리 받아 둔다(창구에 들어설 때 그 장소의 문구들). */
+  prewarm(glosses: string[]): void
 }
 
 export function useSignPlayer(): SignPlayer {
@@ -125,6 +127,27 @@ export function useSignPlayer(): SignPlayer {
     [bank, loadGloss],
   )
 
+  /** 곧 쓸 조각을 미리 받아 둔다.
+   *
+   *  실측: 처음 누른 문구는 조각을 받느라 약 2초, 이미 받아 둔 문구는 0.45초 만에
+   *  수어가 시작된다. 창구에 들어서면 그 장소에서 쓸 문구는 **이미 정해져 있으므로**
+   *  미리 받아 두면 모든 카드가 빠른 쪽이 된다. 조용히, 실패해도 그만인 작업이다. */
+  const prewarm = useCallback((glosses: string[]) => {
+    void (async () => {
+      const index = await bank()
+      if (!index) return
+      for (const g of [...new Set(glosses)]) {
+        const entry = index[g]
+        if (!entry || cacheRef.current.has(g)) continue
+        try {
+          await loadGloss(g, entry)
+        } catch {
+          /* 미리 받기는 실패해도 재생 때 다시 시도한다 */
+        }
+      }
+    })()
+  }, [bank, loadGloss])
+
   const playData = useCallback((d: Playable) => {
     setData(d)
     frameRef.current = 0
@@ -199,6 +222,6 @@ export function useSignPlayer(): SignPlayer {
 
   return {
     data, frame, playing, busy, nowGloss, time, speed,
-    setSpeed, setPlaying, play, playData, restart, bank, compose,
+    setSpeed, setPlaying, play, playData, restart, bank, compose, prewarm,
   }
 }

@@ -61,11 +61,17 @@ Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
 """
 
 
-class ReusableServer(socketserver.TCPServer):
-    """TIME_WAIT 소켓을 재사용한다 — 연달아 돌릴 때 '주소가 이미 사용 중'으로 죽지 않게.
-    (allow_reuse_address는 bind **전에** 정해져야 해서 클래스 속성으로 둔다.)"""
+class ReusableServer(socketserver.ThreadingTCPServer):
+    """TIME_WAIT 소켓 재사용 + **요청 동시 처리**.
+
+    단일 스레드 TCPServer로 두면 브라우저가 연결을 붙잡고 있는 동안 다른 요청이 줄을
+    선다. 실측에서 창구 문구 하나를 재생하는 데 5~7초가 걸리는 것처럼 보였는데,
+    앱이 아니라 **이 서버가 막고 있던 것**이었다(같은 문구를 처음 누를 때는 126ms).
+    검증 도구가 만든 지연을 앱의 지연으로 오해하면 엉뚱한 곳을 고치게 된다.
+    """
 
     allow_reuse_address = True
+    daemon_threads = True
 
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):

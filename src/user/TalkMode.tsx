@@ -122,16 +122,22 @@ export default function TalkMode() {
   const [myInfo, setMyInfo] = useState(() => loadMyInfo())
   const threadRef = useRef<HTMLDivElement>(null)
 
-  /** 직원 말 → 대화에 쌓고 수어로 보여준다. */
-  const fromStaff = useCallback((text: string, gloss?: string[]) => {
+  /** 직원 말 → 대화에 쌓고 수어로 보여준다.
+   *
+   *  `spoken`이면 마이크로 자유롭게 말한 것 — 대개 답을 기다리므로 차례를 넘긴다.
+   *  질문 카드로 물었을 때는 넘기지 않는다. 직원이 카드를 연달아 누르는 경우가 많은데
+   *  매번 차례가 넘어가면 그때마다 토글을 되돌려야 한다(실측에서 걸린 마찰). */
+  const fromStaff = useCallback((text: string, gloss?: string[], spoken?: boolean) => {
     setTurns((t) => [...t, { who: 'staff', text, gloss, time: nowTime() }])
     void player.play(text, gloss)
     // 새 말이 왔다는 신호 — 화면을 안 보고 있을 수 있다.
     navigator.vibrate?.(120)
-    // 직원이 물었으면 다음은 내가 답할 차례다 — 차례를 화면이 넘겨 준다.
-    setSide('deaf')
+    if (spoken) setSide('deaf')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.play])
+
+  /** 마이크가 확정한 문장 — 자유 발화라 답을 기다린다. */
+  const fromMic = useCallback((text: string) => fromStaff(text, undefined, true), [fromStaff])
 
   /** 농인 말 → 대화에 쌓고 소리로 내보낸다 + 화면에도 크게(둘 다 필요하다). */
   const fromDeaf = useCallback((text: string) => {
@@ -143,7 +149,7 @@ export default function TalkMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tts.speak])
 
-  const mic = useSpeechInput(fromStaff)
+  const mic = useSpeechInput(fromMic)
 
   // 대화가 길어지면 아래로 — 방금 한 말이 보여야 한다.
   useEffect(() => {
@@ -359,7 +365,13 @@ export default function TalkMode() {
             <button
               key={p.id}
               type="button"
-              onClick={() => { setPlace(p); setShowGuide(true) }}
+              onClick={() => {
+                setPlace(p)
+                setShowGuide(true)
+                // 이 창구에서 쓸 동작 조각을 미리 받아 둔다 — 직원 안내를 읽는 몇 초
+                // 사이에 끝나므로, 첫 질문 카드부터 바로 재생된다.
+                player.prewarm(p.ask.flatMap((q) => q.gloss ?? []))
+              }}
               className="rounded-3xl border border-white/10 bg-space-800 py-8 text-center transition-colors hover:border-cyan-glow/50"
             >
               <span className="block text-5xl">{p.icon}</span>

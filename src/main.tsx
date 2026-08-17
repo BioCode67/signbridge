@@ -21,3 +21,8 @@ const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, o?: {
   .requestIdleCallback
 if (ric) ric(warmDemo, { timeout: 2500 })
 else setTimeout(warmDemo, 1500)
+
+// 배포 전 점검용 — `?selftest=onnx`일 때만 돈다. 평상시 번들에 영향이 없도록 동적 import.
+if (new URLSearchParams(location.search).get('selftest') === 'onnx') {
+  void import('./ortSelfTest').then((m) => m.runOnnxSelfTest())
+}

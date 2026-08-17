@@ -21,6 +21,7 @@
     "@react-three/postprocessing": "^3.0.4",
     "@tensorflow/tfjs": "^4.22.0",
     "framer-motion": "^12.40.0",
+    "onnxruntime-web": "^1.27.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "three": "^0.184.0"

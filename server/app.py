@@ -169,7 +169,11 @@ def load_bank_entry(fname: str) -> dict:
 
 
 def _normalize_piece(entry: dict) -> dict[str, "np.ndarray"]:
-    """조각을 공통 좌표계로. (x,y는 어깨 기준 정규화 후 표준 화면으로, conf는 유지)"""
+    """조각을 공통 좌표계로. (x,y는 어깨 기준 정규화 후 표준 화면으로, conf는 유지)
+
+    3D(`keypoints3d`)가 있으면 `p3_*` 키로 같이 정규화한다 — z도 어깨폭 스케일.
+    아바타 리타게팅은 3D를 우선 쓰므로, 3D가 있는 조각은 팔 깊이가 정확해진다.
+    """
     import numpy as np
 
     pose = np.asarray(entry["keypoints"]["pose"], dtype=np.float32)
@@ -193,9 +197,39 @@ def _normalize_piece(entry: dict) -> dict[str, "np.ndarray"]:
             out[:, axis::3] = coords_new
         return out
 
+    arrays = {"pose": remap(pose), "hand_left": remap(left), "hand_right": remap(right)}
+
+    k3 = entry.get("keypoints3d")
+    if k3:
+        pose3 = np.asarray(k3["pose"], dtype=np.float32)
+        rs3 = pose3[:, _R_SHOULDER * 3 : _R_SHOULDER * 3 + 3]
+        ls3 = pose3[:, _L_SHOULDER * 3 : _L_SHOULDER * 3 + 3]
+        center3 = (rs3 + ls3) / 2.0  # [T, 3]
+        width3 = np.linalg.norm(ls3 - rs3, axis=1, keepdims=True)
+        width3[width3 < 1e-3] = 1.0
+
+        def remap3(flat: "np.ndarray") -> "np.ndarray":
+            out = flat.copy()
+            for axis in range(3):  # x, y, z 전부 좌표(conf 없음)
+                coords = out[:, axis::3]
+                missing = coords == 0.0
+                scaled = (coords - center3[:, axis : axis + 1]) / width3 * CANVAS_SHOULDER
+                offset = CANVAS_CENTER[axis] if axis < 2 else 0.0
+                coords_new = scaled + offset
+                # 깊이 추정 실패 프레임(원본에 -25,000,000 같은 값)이 정규화를 뚫고
+                # 들어온다. 어깨폭의 ±3배를 넘는 좌표는 실패로 보고 0(미검출) 처리 —
+                # 리타게팅이 미검출 점은 건너뛰므로 팔이 튀는 것보다 낫다.
+                bad = np.abs(coords_new - offset) > CANVAS_SHOULDER * 3
+                coords_new[missing | bad] = 0.0
+                out[:, axis::3] = coords_new
+            return out
+
+        for src_key, dst_key in (("pose", "p3_pose"), ("hand_left", "p3_hand_left"),
+                                 ("hand_right", "p3_hand_right")):
+            arrays[dst_key] = remap3(np.asarray(k3[src_key], dtype=np.float32))
+
     # fps가 다른 조각은 30fps로 리샘플한다.
     fps = float(entry.get("fps") or BANK_FPS)
-    arrays = {"pose": remap(pose), "hand_left": remap(left), "hand_right": remap(right)}
     if abs(fps - BANK_FPS) > 0.5:
         length = max(2, int(round(len(pose) * BANK_FPS / fps)))
         src = np.linspace(0, len(pose) - 1, length)
@@ -240,7 +274,9 @@ def compose(req: ComposeRequest):
             continue
         arrays = _normalize_piece(load_bank_entry(info["file"]))
         if pieces:
-            blend = {k: _blend(pieces[-1][k], arrays[k], BLEND_FRAMES) for k in arrays}
+            # 이전·다음 조각이 공유하는 키만 보간한다(3D는 양쪽 다 있을 때만).
+            shared = pieces[-1].keys() & arrays.keys()
+            blend = {k: _blend(pieces[-1][k], arrays[k], BLEND_FRAMES) for k in shared}
             pieces.append(blend)
             cursor_frames += BLEND_FRAMES
         start = cursor_frames / BANK_FPS
@@ -253,7 +289,7 @@ def compose(req: ComposeRequest):
         return {"error": "뱅크에 있는 글로스가 없습니다", "gloss": glosses, "missing": missing}
 
     merged = {k: np.concatenate([p[k] for p in pieces]) for k in ("pose", "hand_left", "hand_right")}
-    return {
+    result = {
         "korean_text": req.text,
         "fps": BANK_FPS,
         "num_frames": int(len(merged["pose"])),
@@ -262,6 +298,14 @@ def compose(req: ComposeRequest):
         "gloss_missing": missing,
         "backend": "kobart-t2g+bank",
     }
+    # 모든 조각이 3D를 가질 때만 keypoints3d를 붙인다 — 2D·3D 조각이 섞이면
+    # 리타게팅 기준이 프레임마다 바뀌어 팔이 튄다.
+    if all("p3_pose" in p for p in pieces):
+        result["keypoints3d"] = {
+            k: np.round(np.concatenate([p[f"p3_{k}"] for p in pieces]), 1).tolist()
+            for k in ("pose", "hand_left", "hand_right")
+        }
+    return result
 
 
 @app.get("/health")

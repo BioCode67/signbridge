@@ -93,7 +93,8 @@ ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   data/daily_vocab.txt  창구 생활 어휘 — 빈도로 잘리면 안 되는 낱말 목록
 scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
 scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠진 낱말)
-scripts/check_translation_cases.mjs  오역 회귀 검사(사례 25건)
+scripts/check_translation_cases.mjs  오역 회귀 검사(사례 34건)
+scripts/demo_rehearsal.py  시연 대본 조작을 그대로 눌러 보는 리허설
   jobs/              check_workspace · train_* · pbs_extract
                      rebuild_data.sh(웹 데이터 전부 재생성) · deploy_model.sh(모델 교체)
   README.md          전략·데이터셋·실행 절차     ← 먼저 읽을 것

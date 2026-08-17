@@ -31,6 +31,10 @@ export default function UserApp() {
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(false)
   const [auto, setAuto] = useState(true)
+  // 재생 속도 — 수어 숙련도에 따라 선호가 다르다(학습자·고령 농인은 느리게).
+  const [speed, setSpeed] = useState(1)
+  const speedRef = useRef(1)
+  useEffect(() => { speedRef.current = speed }, [speed])
   // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
   const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>('watch')
 
@@ -92,7 +96,7 @@ export default function UserApp() {
     lastRef.current = 0
     const step = (ts: number) => {
       if (!playingRef.current) return
-      if (ts - lastRef.current >= 1000 / data.fps) {
+      if (ts - lastRef.current >= 1000 / data.fps / speedRef.current) {
         lastRef.current = ts
         const next = frameRef.current + 1
         if (next >= data.num_frames) {
@@ -365,7 +369,7 @@ export default function UserApp() {
 
       {/* 하단 큰 버튼들 */}
       {tab === 'watch' && (
-      <nav className="grid grid-cols-2 gap-2 border-t border-white/10 p-3">
+      <nav className="grid grid-cols-[1fr_1fr_auto] gap-2 border-t border-white/10 p-3">
         <button
           type="button"
           disabled={!data || busy}
@@ -388,6 +392,14 @@ export default function UserApp() {
           className="rounded-2xl border border-cyan-glow/50 bg-cyan-glow/10 py-4 text-xl font-bold text-cyan-soft disabled:opacity-40"
         >
           ⏭ 다음
+        </button>
+        <button
+          type="button"
+          onClick={() => setSpeed((v) => (v === 1 ? 0.6 : v === 0.6 ? 1.4 : 1))}
+          title="재생 속도"
+          className="rounded-2xl border border-white/15 bg-space-800 px-5 py-4 text-xl font-bold text-slate-200"
+        >
+          {speed === 1 ? '1×' : speed === 0.6 ? '🐢' : '⚡'}
         </button>
       </nav>
       )}

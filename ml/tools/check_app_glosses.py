@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+"""앱이 쓰는 글로스가 동작 사전에 실제로 있는지 확인한다.
+
+    python3 ml/tools/check_app_glosses.py
+
+**왜 필요한가.** 장소 상용구(`src/user/places.ts`)는 사람이 손으로 매핑한 글로스를
+직접 지정한다. 동작 사전(`public/data/bank.json`)을 다시 만들면 어휘 구성이 바뀌는데,
+없는 글로스는 재생 때 **조용히 건너뛴다.** 그 결과가 특히 고약하다:
+
+  - 글로스가 전부 없으면 합성이 실패해 아바타가 **가만히 서 있다**
+  - 화면에는 한국어 원문이 그대로 떠 있어 **정상 동작처럼 보인다**
+  - 창구에서 이걸 겪는 사람은 "앱이 고장났다"가 아니라 "내 말이 전달됐나?"를 의심한다
+
+실측에서 실제로 났다 — 동작 사전을 9,505종으로 다시 만든 뒤 상용구 30개 중 **17개**의
+글로스가 사라져 병원·약국·긴급 문구가 재생되지 않았다. 화면만 봐서는 알 수 없었다.
+`feature_parity`가 학습·추론 특징을 지키는 것처럼, 이 검사는 앱 문구와 동작 사전의
+정합을 지킨다. **동작 사전을 다시 만들면 반드시 실행할 것.**
+
+종료 코드: 0 정상 · 1 없는 글로스 있음
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+BANK = ROOT / "public" / "data" / "bank.json"
+PLACES = ROOT / "src" / "user" / "places.ts"
+ALIGN = ROOT / "public" / "data" / "align.json"
+
+# label과 gloss 배열을 짝지어 뽑는다. 문구 하나가 한 줄이라 이 정도로 충분하다.
+PHRASE_RE = re.compile(r"label: '([^']+)'.*?gloss: \[([^\]]*)\]", re.S)
+LEMMA_RE = re.compile(r"[0-9#:]+$")
+
+
+def load_bank() -> dict:
+    if not BANK.exists():
+        print(f"[glosses] ✗ 동작 사전이 없습니다: {BANK}")
+        print("          bash ml/jobs/... 로 export_web_bank를 먼저 실행하세요")
+        sys.exit(1)
+    return json.loads(BANK.read_text(encoding="utf-8"))
+
+
+def suggest(missing: str, bank: dict) -> list[str]:
+    """없는 글로스에 대해 갈아 끼울 후보를 찾아 준다 — 같은 표제어의 다른 변이형 우선."""
+    lemma = LEMMA_RE.sub("", missing)
+    if not lemma:
+        return []
+    same = [k for k in bank if LEMMA_RE.sub("", k) == lemma]
+    if same:
+        return sorted(same)[:4]
+    near = [k for k in bank if LEMMA_RE.sub("", k).startswith(lemma)]
+    return sorted(near, key=len)[:4]
+
+
+def main() -> None:
+    bank = load_bank()
+    text = PLACES.read_text(encoding="utf-8")
+
+    total_phrases = 0
+    total_glosses = 0
+    broken: list[tuple[str, list[str], list[str]]] = []
+
+    for m in PHRASE_RE.finditer(text):
+        label = m.group(1)
+        glosses = [g.strip().strip("'") for g in m.group(2).split(",") if g.strip()]
+        if not glosses:
+            continue
+        total_phrases += 1
+        total_glosses += len(glosses)
+        missing = [g for g in glosses if g not in bank]
+        if missing:
+            broken.append((label, glosses, missing))
+
+    print(f"[glosses] 동작 사전 {len(bank):,}종")
+    print(f"[glosses] 상용구 {total_phrases}개 · 글로스 {total_glosses}개")
+
+    # 번역 사전이 가리키는 글로스도 함께 본다 — 여기가 어긋나면 임의 문장 번역이 빈다.
+    if ALIGN.exists():
+        align = json.loads(ALIGN.read_text(encoding="utf-8"))
+        targets = {g for cands in align.values() for g in cands}
+        gone = sorted(targets - set(bank))
+        rate = 100 * (1 - len(gone) / max(1, len(targets)))
+        print(f"[glosses] 번역 사전 대상 {len(targets):,}종 중 재생 가능 {rate:.1f}%")
+        if gone:
+            print(f"          재생 불가 {len(gone)}종 예: {gone[:8]}")
+
+    if not broken:
+        print("[glosses] ✓ 모든 상용구가 재생 가능합니다")
+        return
+
+    print(f"\n[glosses] ✗ 재생되지 않는 상용구 {len(broken)}개\n")
+    for label, glosses, missing in broken:
+        print(f"  {label}")
+        print(f"    지정: {glosses}")
+        for g in missing:
+            cands = suggest(g, bank)
+            print(f"    없음: {g}  →  후보: {cands if cands else '(대체어 없음 — 문구를 다시 쓰세요)'}")
+    print("\n  src/user/places.ts 의 gloss를 위 후보로 바꾸고 다시 실행하세요.")
+    sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

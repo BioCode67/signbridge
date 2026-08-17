@@ -8,15 +8,14 @@
 //
 // 1차 버전은 "받기" 흐름: 재난문자 수신 → 아바타가 수어로 → 큰 자막.
 // "말하기"(수어로 질문)는 소개 페이지의 인식 데모로 이동한다(2차에서 이 화면에 통합).
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { SignData } from '../sections/sign/signTypes'
-import { composeGlosses, type BankIndex } from '../sections/sign/composeLocal'
-import { DictSignAgent } from '../agents/dictSignAgent'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { RuleDisasterAgent } from '../agents/disasterAgent'
 import type { Severity } from '../agents/types'
-import { AVATARS } from '../sections/sign/avatars'
 import { categoryKo, type FeedItem } from '../sections/sign/LiveConsole'
 import { guideFor } from './safetyGuides'
+import { useSignPlayer } from './useSignPlayer'
+import { useOfflineReady } from './useOfflineReady'
+import SignStage from './SignStage'
 
 // 심각도 → 색·라벨. 색만으로 구분하지 않도록 라벨을 함께 쓴다(색각 배려).
 const SEVERITY_UI: Record<Severity, { label: string; cls: string }> = {
@@ -30,26 +29,18 @@ const SEVERITY_UI: Record<Severity, { label: string; cls: string }> = {
 // 한 글자 행정단위(도·시·구·동·읍·면)는 앞이 2글자 이상일 때만 지역으로 본다.
 const REGION_RE = /([가-힣]{2,6}(?:특별시|광역시|자치시|자치도|시|군|구|도|동|읍|면))(?![가-힣])/
 
-const Avatar3D = lazy(() => import('../sections/sign/Avatar3D'))
 // 말하기(웹캠 인식)는 MediaPipe 번들이 무거워 탭을 열 때만 불러온다.
 const SpeakMode = lazy(() => import('./SpeakMode'))
-const PlaceMode = lazy(() => import('./PlaceMode'))
-
-type Playable = SignData & { gloss_missing?: string[] }
+const TalkMode = lazy(() => import('./TalkMode'))
 
 export default function UserApp() {
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [cursor, setCursor] = useState(0)
-  const [data, setData] = useState<Playable | null>(null)
-  const [frame, setFrame] = useState(0)
-  const [playing, setPlaying] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(false)
   const [auto, setAuto] = useState(true)
-  // 재생 속도 — 수어 숙련도에 따라 선호가 다르다(학습자·고령 농인은 느리게).
-  const [speed, setSpeed] = useState(1)
-  const speedRef = useRef(1)
-  useEffect(() => { speedRef.current = speed }, [speed])
+  // 수어 재생기 — 번역·합성·프레임 루프를 담은 훅. 대화 화면도 같은 훅을 쓴다.
+  const player = useSignPlayer()
+  const { data, frame, playing, busy, speed } = player
   // 자막 크기 — 저시력·고령 사용자용. 기기에 기억한다.
   const [fontScale, setFontScale] = useState<0 | 1 | 2>(() => {
     const saved = Number(localStorage.getItem('sb-font') ?? 1)
@@ -70,6 +61,8 @@ export default function UserApp() {
   // 행동요령 패널 — 재난 종류에 맞는 요령을 문장 단위로 수어로 본다.
   const [showGuide, setShowGuide] = useState(false)
   const guide = guideFor(notice?.category)
+  // 오프라인 준비 상태 — 필수 세트는 알아서 받고, 전체는 사용자가 누를 때.
+  const offline = useOfflineReady()
   // 홈 화면 설치 — 브라우저가 설치 가능하다고 알려올 때만 버튼을 보인다.
   // 재난 앱은 홈 화면에 있어야 위급할 때 바로 연다.
   const installRef = useRef<{ prompt: () => Promise<unknown> } | null>(null)
@@ -84,17 +77,6 @@ export default function UserApp() {
     return () => window.removeEventListener('beforeinstallprompt', onPrompt)
   }, [])
 
-  const frameRef = useRef(0)
-  const playingRef = useRef(false)
-  const rafRef = useRef(0)
-  const lastRef = useRef(0)
-  useEffect(() => { playingRef.current = playing }, [playing])
-
-  // 번역기 준비물(사전·뱅크)은 한 번만 받는다.
-  const dictRef = useRef<DictSignAgent | null>(null)
-  const bankRef = useRef<BankIndex | null>(null)
-  const cacheRef = useRef(new Map<string, SignData>())
-
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/feed.json`)
       .then((r) => (r.ok ? r.json() : []))
@@ -102,34 +84,8 @@ export default function UserApp() {
       .catch(() => setFeed([]))
   }, [])
 
-  const compose = useCallback(async (text: string): Promise<Playable | null> => {
-    if (!dictRef.current) dictRef.current = new DictSignAgent()
-    const base = import.meta.env.BASE_URL
-    if (!bankRef.current) {
-      const res = await fetch(`${base}data/bank.json`)
-      if (!res.ok) return null
-      bankRef.current = (await res.json()) as BankIndex
-    }
-    const { gloss, unmatched } = await dictRef.current.convert(text)
-    const composed = await composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
-      const hit = cacheRef.current.get(name)
-      if (hit) return hit
-      const res = await fetch(`${base}data/glosses/${entry.file}`)
-      if (!res.ok) throw new Error(name)
-      const json = (await res.json()) as SignData
-      cacheRef.current.set(name, json)
-      return json
-    })
-    // 번역 단계에서 빠진 낱말(지명 등)도 낱말 카드로 — 동작 사전에 없는 글로스와 합친다.
-    if (composed && unmatched?.length) {
-      composed.gloss_missing = [...new Set([...(composed.gloss_missing ?? []), ...unmatched])]
-    }
-    return composed
-  }, [])
-
   // 재난문자 한 건을 수어로 만들어 재생한다. 새 알림은 화면 번쩍임으로 알린다(소리 금지).
   const playItem = useCallback(async (item: FeedItem) => {
-    setBusy(true)
     setFlash(true)
     // 진동 벨 — 화면을 안 보고 있어도 주머니 속 진동으로 새 알림을 안다.
     // 소리를 못 듣는 사용자에게 진동은 소리의 역할을 한다(미지원 기기는 무시).
@@ -142,39 +98,11 @@ export default function UserApp() {
       severity: disasterRef.current.assess({ text: item.text }).severity,
       region: REGION_RE.exec(item.text)?.[1],
     })
-    const composed = await compose(item.text)
-    setBusy(false)
+    const composed = await player.play(item.text)
     if (!composed) return
     setHistory((h) => [{ time: new Date().toTimeString().slice(0, 5), item }, ...h].slice(0, 20))
-    setData(composed)
-    frameRef.current = 0
-    setFrame(0)
-    setPlaying(true)
-  }, [compose])
-
-  // 재생 루프.
-  useEffect(() => {
-    if (!playing || !data) return
-    lastRef.current = 0
-    const step = (ts: number) => {
-      if (!playingRef.current) return
-      if (ts - lastRef.current >= 1000 / data.fps / speedRef.current) {
-        lastRef.current = ts
-        const next = frameRef.current + 1
-        if (next >= data.num_frames) {
-          frameRef.current = 0
-          setFrame(0)
-          setPlaying(false)
-          return
-        }
-        frameRef.current = next
-        setFrame(next)
-      }
-      rafRef.current = requestAnimationFrame(step)
-    }
-    rafRef.current = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(rafRef.current)
-  }, [playing, data])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.play])
 
   // 자동 수신 — 재생이 끝나면 잠시 뒤 다음 문자를 받는다.
   // 사용자가 탭으로 일시정지한 상태(frame>0에서 멈춤)에서는 기다린다 —
@@ -189,16 +117,6 @@ export default function UserApp() {
     return () => window.clearTimeout(t)
   }, [auto, playing, frame, busy, feed, cursor, playItem])
 
-  // 지금 표현 중인 단어(큰 자막).
-  const time = data ? frame / data.fps : 0
-  const nowGloss = useMemo(() => {
-    if (!data) return ''
-    return data.gloss_sequence
-      .filter((g) => time >= g.start && time <= g.end)
-      .map((g) => g.gloss.replace(/[0-9#:]+$/, ''))
-      .join(' ')
-  }, [data, time])
-
   // 사전 탭 — bank 색인에서 찾고, 고르면 받기 화면에서 그 단어 수어를 재생한다.
   const [dictQuery, setDictQuery] = useState('')
   const [dictHits, setDictHits] = useState<string[]>([])
@@ -206,13 +124,9 @@ export default function UserApp() {
     setDictQuery(q)
     const query = q.trim()
     if (!query) { setDictHits([]); return }
-    const base = import.meta.env.BASE_URL
-    if (!bankRef.current) {
-      const res = await fetch(`${base}data/bank.json`)
-      if (!res.ok) return
-      bankRef.current = (await res.json()) as BankIndex
-    }
-    const keys = Object.keys(bankRef.current)
+    const index = await player.bank()
+    if (!index) return
+    const keys = Object.keys(index)
     const starts = keys.filter((k) => k.startsWith(query))
     const contains = keys.filter((k) => !k.startsWith(query) && k.includes(query))
     let hits = [...starts, ...contains]
@@ -228,69 +142,26 @@ export default function UserApp() {
       hits = keys.filter((k) => chosung(k).startsWith(query))
     }
     setDictHits(hits.slice(0, 18))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.bank])
 
   const playDictWord = useCallback(async (gloss: string) => {
-    if (!bankRef.current) return
-    const base = import.meta.env.BASE_URL
-    const composed = await composeGlosses(gloss, [gloss], bankRef.current, async (name, entry) => {
-      const hit = cacheRef.current.get(name)
-      if (hit) return hit
-      const res = await fetch(`${base}data/glosses/${entry.file}`)
-      if (!res.ok) throw new Error(name)
-      const json = (await res.json()) as SignData
-      cacheRef.current.set(name, json)
-      return json
-    })
-    if (!composed) return
     setTab('watch')
     setAuto(false)
     setNotice(null)
-    setData({ ...composed, korean_text: gloss.replace(/[0-9#:]+$/, '') })
-    frameRef.current = 0
-    setFrame(0)
-    setPlaying(true)
-  }, [])
+    // 단어 하나를 그 자체 글로스로 재생한다 — 원문은 번호를 뗀 표제어로 보여준다.
+    const composed = await player.play(gloss.replace(/[0-9#:]+$/, ''), [gloss])
+    if (composed) player.playData({ ...composed, korean_text: gloss.replace(/[0-9#:]+$/, '') })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.play, player.playData])
 
   const onAnswer = useCallback((text: string, gloss?: string[], keepNotice?: boolean) => {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
     if (!keepNotice) setNotice(null) // 행동요령 재생은 배지를 유지한다(요령 버튼 재진입용)
-    void (async () => {
-      // 글로스가 직접 지정된 문구(장소 모드)는 번역을 거치지 않고 바로 합성한다.
-      let composed: Playable | null = null
-      if (gloss && gloss.length) {
-        const base = import.meta.env.BASE_URL
-        if (!bankRef.current) {
-          const res = await fetch(`${base}data/bank.json`)
-          if (res.ok) bankRef.current = (await res.json()) as BankIndex
-        }
-        if (bankRef.current) {
-          composed = await composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
-            const hit = cacheRef.current.get(name)
-            if (hit) return hit
-            const res = await fetch(`${base}data/glosses/${entry.file}`)
-            if (!res.ok) throw new Error(name)
-            const json = (await res.json()) as SignData
-            cacheRef.current.set(name, json)
-            return json
-          })
-        }
-      }
-      if (!composed) composed = await compose(text)
-      if (!composed) {
-        // 조용히 실패하면 사용자는 고장으로 느낀다 — 문장이라도 크게 띄운다.
-        setData({ korean_text: text, fps: 30, num_frames: 1,
-                  gloss_sequence: [], keypoints: { pose: [[]], hand_left: [[]], hand_right: [[]] } })
-        setFrame(0); setPlaying(false)
-        return
-      }
-      setData(composed)
-      frameRef.current = 0
-      setFrame(0)
-      setPlaying(true)
-    })()
-  }, [compose])
+    void player.play(text, gloss)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.play])
 
   const item = feed.length ? feed[(cursor - 1 + feed.length) % feed.length] : null
 
@@ -304,34 +175,22 @@ export default function UserApp() {
         }`}
       />
 
-      {/* 상단바 — 최소한만 */}
-      <header className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
+      {/* 상단바 — 최소한만.
+          폰 폭(390px)에서는 제목·탭·버튼이 한 줄에 들어가지 않아 탭 글자가 세로로 깨지고
+          '사전'이 화면 밖으로 밀렸다. 좁으면 두 줄(제목 줄 + 탭 줄)로 접는다. */}
+      <header className="flex flex-col gap-2 border-b border-white/10 px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3">
+        <div className="flex items-center gap-2 sm:contents">
         <span className="text-lg font-bold text-white">🤟 SignBridge</span>
         {item && (
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
-            className="rounded-md bg-amber-400/15 px-2 py-1 text-sm font-bold text-amber-300"
+            className="min-h-[44px] rounded-md bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-300"
             title="지나간 알림 보기"
           >
             {categoryKo(item.category)} ▾
           </button>
         )}
-        <div className="flex gap-1 rounded-xl border border-white/10 bg-space-900 p-1">
-          {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['place', '🏥 장소'], ['dict', '📖 사전']] as const).map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              aria-pressed={tab === id}
-              className={`rounded-lg px-3 py-1.5 text-base font-bold ${
-                tab === id ? 'bg-cyan-glow/20 text-cyan-soft' : 'text-slate-400'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
         <button
           type="button"
           onClick={() => setAuto((v) => !v)}
@@ -343,6 +202,26 @@ export default function UserApp() {
           }`}
         >
           {auto ? '📡 받는 중' : '📡 받기'}
+        </button>
+        {/* 오프라인 준비 — 재난 때는 회선이 먼저 끊긴다. 미리 받아 두면 그때도 번역된다.
+            필수 세트는 조용히 자동으로 받고, 전체(아바타·고빈도 1,200종)는 용량을 밝혀
+            사용자가 알고 누르게 한다. */}
+        <button
+          type="button"
+          disabled={offline.busy || offline.level === 'full'}
+          onClick={offline.prepareFull}
+          title="회선이 없어도 쓸 수 있게 미리 받아 둡니다"
+          className={`min-h-[44px] rounded-xl border px-3 py-2 text-base font-bold ${
+            offline.level === 'full'
+              ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
+              : 'border-white/15 bg-space-800 text-slate-300'
+          }`}
+        >
+          {offline.busy
+            ? `📥 ${offline.percent}%`
+            : offline.level === 'full'
+              ? '📴 준비됨'
+              : `📥 오프라인${offline.fullMb ? ` ${offline.fullMb}MB` : ''}`}
         </button>
         {canInstall && (
           <button
@@ -364,6 +243,23 @@ export default function UserApp() {
         >
           ✕
         </a>
+        </div>
+        {/* 탭 — 좁은 화면에서는 두 번째 줄 전체를 차지해 네 칸이 고르게 눌린다 */}
+        <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/10 bg-space-900 p-1 sm:flex sm:gap-1">
+          {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['place', '💬 대화'], ['dict', '📖 사전']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              aria-pressed={tab === id}
+              className={`whitespace-nowrap rounded-lg px-2 py-2 text-sm font-bold sm:px-3 sm:py-1.5 sm:text-base ${
+                tab === id ? 'bg-cyan-glow/20 text-cyan-soft' : 'text-slate-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </header>
 
       {/* 사전 — 단어를 찾아 수어를 본다. 찾으면 받기 화면에서 재생한다. */}
@@ -395,10 +291,10 @@ export default function UserApp() {
         </div>
       )}
 
-      {/* 장소 모드 — 병원·주민센터·택시에서 직원과 함께 쓰는 화면 */}
+      {/* 대화 모드 — 병원·택시·관공서에서 직원과 말을 주고받는 화면(마이크·소리 포함) */}
       {tab === 'place' && (
         <Suspense fallback={<div className="grid flex-1 place-items-center text-slate-400">여는 중…</div>}>
-          <PlaceMode onSign={onAnswer} />
+          <TalkMode />
         </Suspense>
       )}
 
@@ -474,70 +370,22 @@ export default function UserApp() {
         </div>
       )}
 
-      {/* 아바타 — 화면의 주인공 */}
+      {/* 아바타 — 화면의 주인공. 대화 화면과 같은 무대(SignStage)를 쓴다. */}
       {tab === 'watch' && (
-      <div className="relative min-h-0 flex-1">
-        <Suspense
-          fallback={
-            <div className="grid h-full place-items-center text-slate-500">
-              <span className="animate-pulse text-5xl">🤟</span>
-            </div>
-          }
-        >
-          {data ? (
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label={playing ? '일시정지' : '재생'}
-              onClick={() => data.num_frames > 1 && setPlaying((v) => !v)}
-              onKeyDown={(e) => e.key === ' ' && data.num_frames > 1 && setPlaying((v) => !v)}
-              className="h-full w-full cursor-pointer"
+        <SignStage
+          player={player}
+          fontScale={fontScale}
+          idle={
+            <button
+              type="button"
+              onClick={() => feed.length && void playItem(feed[cursor % feed.length])}
+              className="rounded-3xl border-2 border-cyan-glow/60 bg-cyan-glow/10 px-10 py-8 text-2xl font-bold text-cyan-soft"
             >
-              <Avatar3D data={data} frame={frame} animate modelUrl={AVATARS[0].url} />
-              {!playing && data.num_frames > 1 && (
-                <div className="pointer-events-none absolute inset-0 grid place-items-center">
-                  <span className="rounded-full bg-space-900/80 px-8 py-6 text-5xl">▶</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="grid h-full place-items-center">
-              <button
-                type="button"
-                onClick={() => feed.length && void playItem(feed[cursor % feed.length])}
-                className="rounded-3xl border-2 border-cyan-glow/60 bg-cyan-glow/10 px-10 py-8 text-2xl font-bold text-cyan-soft"
-              >
-                ▶ 시작
-              </button>
-            </div>
-          )}
-        </Suspense>
-
-        {busy && (
-          <div className="absolute inset-x-0 top-4 text-center">
-            <span className="rounded-full bg-space-900/90 px-4 py-2 text-base text-cyan-soft">
-              수어로 바꾸는 중…
-            </span>
-          </div>
-        )}
-
-        {/* 재생 진행바 — 문장이 얼마나 남았는지 한눈에 */}
-        {data && data.num_frames > 1 && (
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-white/5">
-            <div
-              className="h-full bg-cyan-glow/70 transition-[width] duration-100"
-              style={{ width: `${(frame / Math.max(1, data.num_frames - 1)) * 100}%` }}
-            />
-          </div>
-        )}
-
-        {/* 큰 자막 — 지금 단어 + 원문 */}
-        {data && (
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-space-950 via-space-950/85 to-transparent px-4 pb-4 pt-16 text-center">
-            {/* 낱말 카드 — 수어로 표현하지 못한 낱말(주로 지명·기관명)을 큰 글씨로.
-                지문자 데이터가 아직 없어 동작으론 못 보여주지만, 정보가 사라지면 안 된다. */}
-            {/* 요약 배지 — 무슨 일이(종류), 얼마나(심각도), 어디서(지역). 한눈에. */}
-            {notice && (
+              ▶ 시작
+            </button>
+          }
+          badges={
+            notice && (
               <div className="mb-2 flex flex-wrap items-center justify-center gap-1.5">
                 <span className={`rounded-lg border px-2.5 py-1 text-base font-extrabold ${SEVERITY_UI[notice.severity].cls}`}>
                   {SEVERITY_UI[notice.severity].label}
@@ -555,74 +403,24 @@ export default function UserApp() {
                 {guide && (
                   <button
                     type="button"
-                    onClick={() => { setShowGuide(true); setAuto(false); setPlaying(false) }}
+                    onClick={(e) => { e.stopPropagation(); setShowGuide(true); setAuto(false); player.setPlaying(false) }}
                     className="rounded-lg border border-emerald-400/50 bg-emerald-400/15 px-2.5 py-1 text-base font-bold text-emerald-300"
                   >
                     📋 행동요령
                   </button>
                 )}
               </div>
-            )}
-            {!!data.gloss_missing?.length && (
-              <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
-                {data.gloss_missing.map((w, i) => (
-                  <span
-                    key={`${w}-${i}`}
-                    className="rounded-xl border-2 border-amber-400/70 bg-amber-400/15 px-3 py-1.5 text-xl font-extrabold text-amber-200"
-                  >
-                    {w.replace(/[0-9#:]+$/, '') || w}
-                  </span>
-                ))}
-              </div>
-            )}
-            {/* 문장 진행 — 전체 글로스열에서 지금 어디쯤인지. 지난 단어는 밝게 남는다. */}
-            {data.gloss_sequence.length > 1 && (
-              <div className="mb-1 flex flex-wrap items-center justify-center gap-1">
-                {data.gloss_sequence.map((g, i) => {
-                  const state = time > g.end ? 'done' : time >= g.start ? 'now' : 'todo'
-                  return (
-                    <span
-                      key={`${g.gloss}-${i}`}
-                      className={`rounded-md px-1.5 py-0.5 text-sm font-bold ${
-                        state === 'now'
-                          ? 'bg-cyan-glow/30 text-cyan-soft'
-                          : state === 'done'
-                            ? 'text-slate-300'
-                            : 'text-slate-600'
-                      }`}
-                    >
-                      {g.gloss.replace(/[0-9#:]+$/, '')}
-                    </span>
-                  )
-                })}
-              </div>
-            )}
-            <p className={`font-extrabold tracking-wide text-cyan-soft text-glow ${
-              ['text-2xl sm:text-3xl', 'text-3xl sm:text-4xl', 'text-5xl sm:text-6xl'][fontScale]
-            }`}>
-              {nowGloss || ' '}
-            </p>
-            <p className={`mx-auto mt-2 max-w-2xl leading-relaxed text-slate-300 ${
-              ['text-xs sm:text-sm', 'text-sm sm:text-base', 'text-lg sm:text-xl'][fontScale]
-            }`}>
-              {data.korean_text}
-            </p>
-          </div>
-        )}
-      </div>
+            )
+          }
+        />
       )}
-
       {/* 하단 큰 버튼들 */}
       {tab === 'watch' && (
       <nav className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 border-t border-white/10 p-3">
         <button
           type="button"
           disabled={!data || busy}
-          onClick={() => {
-            frameRef.current = 0
-            setFrame(0)
-            setPlaying(true)
-          }}
+          onClick={player.restart}
           className="rounded-2xl border border-white/15 bg-space-800 py-4 text-xl font-bold text-slate-200 disabled:opacity-40"
         >
           🔁 다시
@@ -640,7 +438,7 @@ export default function UserApp() {
         </button>
         <button
           type="button"
-          onClick={() => setSpeed((v) => (v === 1 ? 0.6 : v === 0.6 ? 1.4 : 1))}
+          onClick={() => player.setSpeed(speed === 1 ? 0.6 : speed === 0.6 ? 1.4 : 1)}
           title="재생 속도"
           className="rounded-2xl border border-white/15 bg-space-800 px-5 py-4 text-xl font-bold text-slate-200"
         >

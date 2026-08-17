@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build && node scripts/inject-sw-precache.mjs",
+    "build": "tsc -b && vite build && node scripts/inject-sw-precache.mjs && node scripts/build-offline-manifest.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

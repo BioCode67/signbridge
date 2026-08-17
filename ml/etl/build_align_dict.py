@@ -103,6 +103,18 @@ def main() -> None:
 
     print(f"[align] 문장 {sentences:,} · 낱말 {len(word_count):,} · 글로스 {len(gloss_count):,}")
 
+    # 글로스 ID는 "조심1"처럼 한국어 표제어+번호다. 표제어가 낱말과 정확히 같으면
+    # 그 자체가 가장 믿을 만한 번역이다 — Dice가 잡음으로 엉뚱한 후보를 1위에 올려도
+    # (실례: 조심→비닐하우스0) 표제어 일치가 있으면 그걸 앞세운다.
+    lemma_re = re.compile(r"[0-9#:]+$")
+    lemma_best: dict[str, str] = {}
+    for g in (playable if playable is not None else gloss_count):
+        lemma = lemma_re.sub("", g)
+        if len(lemma) >= MIN_STEM:
+            # 번호가 작은 변이형(기본형)을 남긴다: 조심1 > 조심2
+            if lemma not in lemma_best or g < lemma_best[lemma]:
+                lemma_best[lemma] = g
+
     table: dict[str, list[str]] = {}
     for word, counts in pair_count.items():
         if word_count[word] < args.min_pair:
@@ -118,7 +130,20 @@ def main() -> None:
         if not scored:
             continue
         scored.sort(reverse=True)
-        table[word] = [g for _, g in scored[: args.top]]
+        cands = [g for _, g in scored[: args.top]]
+        exact = lemma_best.get(word)
+        if exact:
+            cands = [exact] + [g for g in cands if g != exact]
+        table[word] = cands[: args.top]
+
+    # 공기 통계에 안 잡혔더라도 표제어가 곧 낱말인 글로스는 사전에 넣는다 —
+    # 지명·희귀어 커버리지가 공짜로 늘어난다.
+    added = 0
+    for lemma, g in lemma_best.items():
+        if lemma not in table:
+            table[lemma] = [g]
+            added += 1
+    print(f"[align] 표제어 직결 추가 {added:,}개 (Dice 미포착분)")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(

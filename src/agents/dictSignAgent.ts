@@ -71,6 +71,7 @@ export class DictSignAgent implements SignAgent {
     }
 
     const gloss: string[] = []
+    const unmatched: string[] = []
     const push = (g: string) => {
       // 같은 글로스가 연달아 나오면 한 번만 — 수어에서 반복은 다른 의미가 된다.
       if (gloss[gloss.length - 1] !== g) gloss.push(g)
@@ -100,8 +101,12 @@ export class DictSignAgent implements SignAgent {
         }
         if (parts.length >= 2) {
           for (const part of parts) push(lookup(part)![0])
+          continue
         }
       }
+      // 여기까지 왔으면 이 낱말은 번역에서 빠진다 — 어간형으로 기록해 둔다.
+      const stem = stemKorean(raw)
+      if (!unmatched.includes(stem)) unmatched.push(stem)
     }
 
     if (gloss.length === 0) {
@@ -109,6 +114,6 @@ export class DictSignAgent implements SignAgent {
       return this.fallback.convert(text)
     }
     this.lastBackend = 'dict'
-    return { text, gloss }
+    return { text, gloss, unmatched }
   }
 }

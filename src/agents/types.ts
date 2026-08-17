@@ -47,6 +47,9 @@ export interface SignConversion {
   gloss: string[]
   /** 데모 아바타 재생에 연결 가능한 데이터 파일(있으면). */
   clipId?: string
+  /** 사전에서 글로스를 찾지 못해 번역에서 빠진 낱말(주로 지명·기관명).
+   *  버리면 정보가 사라진다 — 화면이 낱말 카드로 보여준다. */
+  unmatched?: string[]
 }
 
 /** (c) Q&A 응답 결과. */

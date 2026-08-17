@@ -67,8 +67,8 @@ export default function UserApp() {
       if (!res.ok) return null
       bankRef.current = (await res.json()) as BankIndex
     }
-    const { gloss } = await dictRef.current.convert(text)
-    return composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
+    const { gloss, unmatched } = await dictRef.current.convert(text)
+    const composed = await composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
       const hit = cacheRef.current.get(name)
       if (hit) return hit
       const res = await fetch(`${base}data/glosses/${entry.file}`)
@@ -77,6 +77,11 @@ export default function UserApp() {
       cacheRef.current.set(name, json)
       return json
     })
+    // 번역 단계에서 빠진 낱말(지명 등)도 낱말 카드로 — 동작 사전에 없는 글로스와 합친다.
+    if (composed && unmatched?.length) {
+      composed.gloss_missing = [...new Set([...(composed.gloss_missing ?? []), ...unmatched])]
+    }
+    return composed
   }, [])
 
   // 재난문자 한 건을 수어로 만들어 재생한다. 새 알림은 화면 번쩍임으로 알린다(소리 금지).
@@ -157,7 +162,19 @@ export default function UserApp() {
     const keys = Object.keys(bankRef.current)
     const starts = keys.filter((k) => k.startsWith(query))
     const contains = keys.filter((k) => !k.startsWith(query) && k.includes(query))
-    setDictHits([...starts, ...contains].slice(0, 18))
+    let hits = [...starts, ...contains]
+    // 초성 검색 — "ㅈㅈ"처럼 자음만 치면 초성열이 그걸로 시작하는 단어를 찾는다.
+    // 한 글자씩 정확히 치기 어려운 사용자(고령·저시력)를 위한 지름길.
+    if (hits.length === 0 && /^[ㄱ-ㅎ]+$/.test(query)) {
+      const CHO = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ'
+      const chosung = (s: string) =>
+        [...s].map((ch) => {
+          const c = ch.charCodeAt(0) - 0xac00
+          return c >= 0 && c < 11172 ? CHO[Math.floor(c / 588)] : ch
+        }).join('')
+      hits = keys.filter((k) => chosung(k).startsWith(query))
+    }
+    setDictHits(hits.slice(0, 18))
   }, [])
 
   const playDictWord = useCallback(async (gloss: string) => {
@@ -416,6 +433,20 @@ export default function UserApp() {
         {/* 큰 자막 — 지금 단어 + 원문 */}
         {data && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-space-950 via-space-950/85 to-transparent px-4 pb-4 pt-16 text-center">
+            {/* 낱말 카드 — 수어로 표현하지 못한 낱말(주로 지명·기관명)을 큰 글씨로.
+                지문자 데이터가 아직 없어 동작으론 못 보여주지만, 정보가 사라지면 안 된다. */}
+            {!!data.gloss_missing?.length && (
+              <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
+                {data.gloss_missing.map((w, i) => (
+                  <span
+                    key={`${w}-${i}`}
+                    className="rounded-xl border-2 border-amber-400/70 bg-amber-400/15 px-3 py-1.5 text-xl font-extrabold text-amber-200"
+                  >
+                    {w.replace(/[0-9#:]+$/, '') || w}
+                  </span>
+                ))}
+              </div>
+            )}
             <p className="text-3xl font-extrabold tracking-wide text-cyan-soft text-glow sm:text-4xl">
               {nowGloss || ' '}
             </p>

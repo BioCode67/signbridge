@@ -105,10 +105,18 @@ export function useSpeechInput(onFinal: (text: string) => void): SpeechInput {
     rec.onerror = (event) => {
       // no-speech는 잠깐 조용했을 뿐이라 오류로 보여줄 일이 아니다.
       if (event.error === 'no-speech' || event.error === 'aborted') return
+      // 오류 문구는 **다음에 무엇을 하면 되는지**까지 말해야 한다. 창구에서 "network"
+      // 같은 말을 보면 사람은 멈춰 선다. 특히 음성 인식은 브라우저가 구글 서버로
+      // 보내 처리하므로 **오프라인에서는 원리상 동작하지 않는다** — 재난 때 흔한 상황이라
+      // 그때 무엇으로 대신할지(질문 카드·직접 쓰기)를 함께 알려 준다.
       setError(
         event.error === 'not-allowed'
-          ? '마이크 권한이 거부되었습니다. 주소창의 자물쇠에서 허용해 주세요.'
-          : `음성 인식 오류: ${event.error}`,
+          ? '마이크 권한이 거부되었습니다. 주소창의 자물쇠 표시에서 허용해 주세요.'
+          : event.error === 'network'
+            ? '인터넷이 없어 음성 인식을 할 수 없어요. 아래 질문 카드나 직접 쓰기를 써 주세요.'
+            : event.error === 'audio-capture'
+              ? '마이크를 찾지 못했어요. 마이크를 연결하거나 질문 카드를 눌러 주세요.'
+              : `음성 인식이 멈췄어요 (${event.error}). 질문 카드를 눌러 주세요.`,
       )
       wantRef.current = false
       setListening(false)

@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BANK = ROOT / "public" / "data" / "bank.json"
 PLACES = ROOT / "src" / "user" / "places.ts"
 ALIGN = ROOT / "public" / "data" / "align.json"
+AGENT = ROOT / "src" / "agents" / "dictSignAgent.ts"
 
 # label과 gloss 배열을 짝지어 뽑는다. 문구 하나가 한 줄이라 이 정도로 충분하다.
 PHRASE_RE = re.compile(r"label: '([^']+)'.*?gloss: \[([^\]]*)\]", re.S)
@@ -87,6 +88,26 @@ def main() -> None:
         print(f"[glosses] 번역 사전 대상 {len(targets):,}종 중 재생 가능 {rate:.1f}%")
         if gone:
             print(f"          재생 불가 {len(gone)}종 예: {gone[:8]}")
+
+    # 숫자·단위 글로스 — 번역기가 코드에 박아 쓰는 것들. 이게 빠지면 날짜·금액·규모가
+    # **조용히 사라진다**(실측: '월' 31회, '점' 8회가 번역은 됐는데 동작이 없어 증발).
+    agent = AGENT.read_text(encoding="utf-8")
+    hard: set[str] = set()
+    for block, pattern in (
+        ("DIGIT_GLOSS", r"const DIGIT_GLOSS = \[([^\]]*)\]"),
+        ("PLACE_GLOSS", r"const PLACE_GLOSS = \[([^\]]*)\]"),
+    ):
+        m = re.search(pattern, agent)
+        if m:
+            hard |= {x.strip().strip("'") for x in m.group(1).split(",") if x.strip().strip("' ")}
+    m = re.search(r"const UNIT_GLOSS: Record<string, string> = \{(.*?)\}", agent, re.S)
+    if m:
+        hard |= set(re.findall(r":\s*'([^']+)'", m.group(1)))
+    hard |= {"공", "점"}  # 자릿수 읽기·소수점에서 코드가 직접 만들어 쓴다
+    gone = sorted(g for g in hard if g not in bank)
+    print(f"[glosses] 숫자·단위 글로스 {len(hard)}종 중 재생 가능 {len(hard) - len(gone)}종")
+    if gone:
+        broken.append(("숫자·단위 글로스(코드 상수)", sorted(hard), gone))
 
     if not broken:
         print("[glosses] ✓ 모든 상용구가 재생 가능합니다")

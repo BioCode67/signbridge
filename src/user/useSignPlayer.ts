@@ -90,10 +90,21 @@ export function useSignPlayer(): SignPlayer {
       if (gloss?.length) return composeGlosses(text, gloss, index, loadGloss)
       if (!dictRef.current) dictRef.current = new DictSignAgent()
       const { gloss: translated, unmatched } = await dictRef.current.convert(text)
-      const composed = await composeGlosses(text, translated, index, loadGloss)
+      const composed = translated.length
+        ? await composeGlosses(text, translated, index, loadGloss)
+        : null
       // 번역에서 빠진 낱말(지명 등)도 낱말 카드로 — 정보가 조용히 사라지면 안 된다.
       if (composed && unmatched?.length) {
         composed.gloss_missing = [...new Set([...(composed.gloss_missing ?? []), ...unmatched])]
+      }
+      // 한 낱말도 표현 못 하는 문장 — 동작은 없지만 **낱말은 남긴다.** 빈 화면보다
+      // "이 말들은 수어로 못 보여드려요"가 정확하고, 상대에게 보여줄 것도 남는다.
+      if (!composed && unmatched?.length) {
+        return {
+          korean_text: text, fps: 30, num_frames: 1, gloss_sequence: [],
+          keypoints: { pose: [[]], hand_left: [[]], hand_right: [[]] },
+          gloss_missing: [...new Set(unmatched)],
+        }
       }
       return composed
     },

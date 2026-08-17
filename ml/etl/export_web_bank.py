@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import sys
 from collections import Counter
@@ -73,6 +74,10 @@ def main() -> None:
                         help="빈도를 셀 index.jsonl 디렉터리(복수 가능 — 재난+일상)")
     parser.add_argument("--out", type=Path, required=True, help="public/data")
     parser.add_argument("--top", type=int, default=3000)
+    parser.add_argument("--must", type=Path, default=None,
+                        help="빈도와 무관하게 반드시 실을 낱말 목록(한 줄에 하나)")
+    parser.add_argument("--clean", action="store_true",
+                        help="기존 조각을 모두 지우고 다시 쓴다(기본은 증분)")
     args = parser.parse_args()
 
     bank = json.loads((args.bank / "bank.json").read_text(encoding="utf-8"))
@@ -94,28 +99,72 @@ def main() -> None:
         f" (전체 출현 {total:,}회)"
     )
 
+    # 빈도만으로 고르면 **일상어가 통째로 잘린다.** 빈도는 재난문자 말뭉치에서 세는데,
+    # 앱이 서는 자리는 병원·택시·관공서 창구다. 실측에서 결과·수술·도장·요금·안전벨트·
+    # 알레르기 같은 낱말이 전체 사전에는 있는데 웹 사전에서 빠져 있었다 — 그 자리에서
+    # 가장 필요한 말들이다. 그래서 생활 어휘는 빈도와 무관하게 싣는다.
+    if args.must:
+        want = {w.strip() for w in args.must.read_text(encoding="utf-8").splitlines()
+                if w.strip() and not w.startswith("#")}
+        lemma_re = re.compile(r"[0-9#:]+$")
+        by_lemma: dict[str, list[str]] = {}
+        for g in bank:
+            by_lemma.setdefault(lemma_re.sub("", g), []).append(g)
+        have = set(chosen)
+        added, hit = [], 0
+        for word in sorted(want):
+            variants = by_lemma.get(word)
+            if not variants:
+                continue
+            hit += 1
+            # 표제어당 변이형 둘까지만 — 하나는 기본형, 하나는 대안. 그 이상은 용량만 먹는다.
+            for g in sorted(variants)[:2]:
+                if g not in have:
+                    have.add(g)
+                    added.append(g)
+        chosen = chosen + added
+        print(f"[web] 생활 어휘 {len(want):,}개 중 사전에 있는 것 {hit:,}개 → 조각 {len(added):,}종 추가")
+        missing = sorted(w for w in want if w not in by_lemma)
+        if missing:
+            print(f"[web] 사전에 없는 생활 어휘 {len(missing)}개: {missing[:15]}")
+
     gloss_dir = args.out / "glosses"
-    if gloss_dir.exists():
+    if args.clean and gloss_dir.exists():
         shutil.rmtree(gloss_dir)
     gloss_dir.mkdir(parents=True, exist_ok=True)
 
+    # 증분이 기본이다. 어휘를 조금 늘릴 때마다 9,500개를 다시 쓰면 30분이 날아가고,
+    # 그동안 public/data/glosses가 비어 앱이 통째로 멈춘다(rmtree 후 재작성 구간).
+    existing = {f.name for f in gloss_dir.glob("*.json")}
+    keep = {bank[n]["file"] for n in chosen}
+
     web_index: dict[str, dict] = {}
-    written = 0
+    written = reused = 0
     for name in chosen:
         info = bank[name]
-        raw = json.loads((args.bank / "glosses" / info["file"]).read_text(encoding="utf-8"))
-        data = compact(raw)
-        (gloss_dir / info["file"]).write_text(
-            json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
-        )
+        target = gloss_dir / info["file"]
+        if info["file"] in existing:
+            data = json.loads(target.read_text(encoding="utf-8"))
+            reused += 1
+        else:
+            raw = json.loads((args.bank / "glosses" / info["file"]).read_text(encoding="utf-8"))
+            data = compact(raw)
+            target.write_text(
+                json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+            )
+            written += 1
+            if written % 200 == 0:
+                print(f"  [web] 새로 쓴 조각 {written:,}", flush=True)
         web_index[name] = {
             "file": info["file"],
             "frames": data["num_frames"],
             "fps": data["fps"],
         }
-        written += 1
-        if written % 500 == 0:
-            print(f"  [web] {written:,}/{len(chosen):,}", flush=True)
+
+    stale = existing - keep
+    for f in stale:
+        (gloss_dir / f).unlink()
+    print(f"[web] 새로 {written:,}종 · 재사용 {reused:,}종 · 정리 {len(stale):,}종")
 
     (args.out / "bank.json").write_text(
         json.dumps(web_index, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"

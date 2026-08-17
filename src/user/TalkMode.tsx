@@ -14,12 +14,15 @@
 // 소리를 못 듣는 사용자에게 **소리가 나갔다는 사실**은 보이지 않는다. 그래서 말이
 // 나갈 때마다 "소리로 전달했어요"를 눈으로 확인시킨다 — 이게 없으면 전달됐는지
 // 알 수 없어 같은 카드를 반복해서 누르게 된다.
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { PLACES, type Place } from './places'
 import { useSpeechInput } from '../hooks/useSpeechInput'
 import { useSpeechOutput } from '../hooks/useSpeechOutput'
 import SignStage from './SignStage'
 import { useSignPlayer } from './useSignPlayer'
+
+// 카메라 인식은 MediaPipe 번들이 무거워 열 때만 불러온다.
+const SignInputPanel = lazy(() => import('./SignInputPanel'))
 
 /** 대화 한 줄. 누가 말했나로 표현 방식이 갈린다(직원=소리로 들어옴, 농인=소리로 나감). */
 interface Turn {
@@ -53,6 +56,8 @@ export default function TalkMode() {
   const [draft, setDraft] = useState('')
   // 지금 말할 사람 — 하단 입력을 한쪽만 띄운다(폰에서 세로 여유 확보 + 차례 표시).
   const [side, setSide] = useState<'staff' | 'deaf'>('staff')
+  // 수어로 답하기 — 카메라를 열어 내 수어를 읽고 소리로 내보낸다.
+  const [signing, setSigning] = useState(false)
   // 자주 쓰는 문장 — 사람마다 다르다(지병·주소·복용약). 기기에 남는다.
   const [saved, setSaved] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('sb-phrases') ?? '[]') } catch { return [] }
@@ -92,6 +97,36 @@ export default function TalkMode() {
   // 화면을 벗어나면 마이크를 끈다 — 창구 대화가 계속 녹음되면 안 된다.
   const micStop = mic.stop
   useEffect(() => () => micStop(), [micStop])
+
+  // 유휴 자동 초기화 — 키오스크·창구 태블릿은 **여러 사람이 돌려 쓰는 기기**다.
+  // 앞사람이 "머리가 아파요"라고 답한 대화가 다음 사람 화면에 남아 있으면 안 된다.
+  // 5분 손대지 않으면 대화를 지우고 장소 선택으로 돌아간다(개인 폰에서도 해롭지 않다 —
+  // 대화가 없으면 아무 일도 하지 않는다).
+  useEffect(() => {
+    if (turns.length === 0) return
+    const IDLE_MS = 5 * 60 * 1000
+    let timer = window.setTimeout(() => {
+      setTurns([])
+      setShown(null)
+      setPlace(null)
+      micStop()
+    }, IDLE_MS)
+    const bump = () => {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        setTurns([])
+        setShown(null)
+        setPlace(null)
+        micStop()
+      }, IDLE_MS)
+    }
+    const events = ['pointerdown', 'keydown'] as const
+    for (const e of events) window.addEventListener(e, bump)
+    return () => {
+      window.clearTimeout(timer)
+      for (const e of events) window.removeEventListener(e, bump)
+    }
+  }, [turns.length, micStop])
 
   // 위급 화면 — 화면 전체를 빨갛게, 문구는 방 건너에서도 읽히게.
   if (sos >= 0) {
@@ -164,6 +199,14 @@ export default function TalkMode() {
 
   const answers = [...COMMON_ANSWERS, ...place.answer, ...saved]
 
+  if (signing) {
+    return (
+      <Suspense fallback={<div className="grid flex-1 place-items-center text-slate-400">카메라 여는 중…</div>}>
+        <SignInputPanel onSend={fromDeaf} onClose={() => setSigning(false)} />
+      </Suspense>
+    )
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {/* 상단바 */}
@@ -187,8 +230,13 @@ export default function TalkMode() {
         )}
       </div>
 
+      {/* 넓은 화면(태블릿 가로·키오스크)에서는 위아래가 아니라 좌우로 나눈다.
+          창구에 놓인 태블릿은 대개 가로다 — 세로로만 쌓으면 아바타가 작아지고
+          대화 기록이 눌린다. 폭이 있으면 폭을 쓰는 편이 둘 다 살린다. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="flex min-h-0 flex-col lg:w-1/2 lg:border-r lg:border-white/10">
       {/* 아바타 — 직원 말이 수어로 오는 곳 */}
-      <div className="flex min-h-[30vh] flex-col sm:min-h-[40vh]">
+      <div className="flex min-h-[30vh] flex-col sm:min-h-[40vh] lg:min-h-0 lg:flex-1">
         <SignStage
           player={player}
           compact
@@ -311,10 +359,12 @@ export default function TalkMode() {
         </div>
       )}
 
-      {/* 아래: 지금 말할 사람의 입력만 보여준다.
+      </div>
+
+      {/* 아래(넓은 화면에서는 오른쪽): 지금 말할 사람의 입력만 보여준다.
           폰 화면(390×844)에서 두 사람의 카드를 동시에 펼치면 대화 기록이 0px로 눌린다.
           한쪽만 띄우면 세로 여유가 생기고, "지금 누구 차례인가"도 화면이 알려준다. */}
-      <div className="shrink-0 border-t border-white/10 bg-space-900/60">
+      <div className="flex shrink-0 flex-col border-t border-white/10 bg-space-900/60 lg:w-1/2 lg:border-t-0">
         {/* 마이크는 차례와 무관하게 항상 보인다 — 직원이 자유롭게 말하는 것이
             이 화면의 가장 중요한 입구다. 차례에 따라 숨으면 직원이 못 찾는다. */}
         <div className="px-3 pt-3">
@@ -357,7 +407,7 @@ export default function TalkMode() {
           ))}
         </div>
 
-        <div className="max-h-[30vh] overflow-y-auto px-3 pb-3">
+        <div className="max-h-[30vh] overflow-y-auto px-3 pb-3 lg:max-h-none lg:min-h-0 lg:flex-1">
           {side === 'staff' ? (
             <>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
@@ -375,13 +425,23 @@ export default function TalkMode() {
             </>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => setWriting((v) => !v)}
-                className="mb-2 w-full rounded-2xl border-2 border-amber-400/50 bg-amber-400/10 py-4 text-xl font-extrabold text-amber-200"
-              >
-                ⌨ 카드에 없는 말 쓰기
-              </button>
+              <div className="mb-2 grid grid-cols-2 gap-2">
+                {/* 수어로 답하기 — 카드도 한글도 거치지 않는 **모어로 말하는** 길이다. */}
+                <button
+                  type="button"
+                  onClick={() => setSigning(true)}
+                  className="rounded-2xl border-2 border-cyan-glow/50 bg-cyan-glow/10 py-4 text-xl font-extrabold text-cyan-soft"
+                >
+                  🤟 수어로 답하기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWriting((v) => !v)}
+                  className="rounded-2xl border-2 border-amber-400/50 bg-amber-400/10 py-4 text-xl font-extrabold text-amber-200"
+                >
+                  ⌨ 글로 쓰기
+                </button>
+              </div>
               <div className="flex flex-wrap gap-2">
                 {answers.map((a, i) => (
                   <button
@@ -397,6 +457,7 @@ export default function TalkMode() {
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   )

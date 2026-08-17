@@ -28,6 +28,9 @@ const STOP_WORDS = new Set([
   '통하여', '따라', '따른', '대한', '대해', '관련', '관한', '해당',
   '등의', '등을', '등이', '및', '또는', '그리고', '기타', '위하여', '인하여',
   '시까지', '분부터', '시부터', '분까지', '실시',
+  // 창구 대화 실측에서 새로 드러난 잡음 — 공손·의뢰 표현
+  '주세요', '주시', '드릴까요', '드릴게요', '드립니다', '드려요', '하겠습니다',
+  '하시겠어요', '하시겠습니까', '부탁드립니다', '말씀해', '말씀', '여쭤',
 ])
 
 /** 미매칭 보고(낱말 카드)에서 뺄 기능어·상투구 — 정보가 없어 카드로 띄우면 소음이다.
@@ -86,10 +89,61 @@ export function numberGlosses(num: string): string[] {
   return out
 }
 
+// ── 한글 수사 → 숫자 ─────────────────────────────────────────────────
+// **왜 필요한가.** 재난문자는 숫자를 아라비아 숫자로 쓰지만, 창구에서 **말로** 들어오는
+// 문장은 한글이다 — 음성 인식이 "만 오천 원", "삼십 분", "아홉 시"로 받아 적는다.
+// 숫자로 적힌 것만 읽으면 금액·시각이 통째로 사라진다(실측: 진료비·요금 문장 전부 실패).
+const SINO_DIGIT: Record<string, number> = {
+  영: 0, 공: 0, 일: 1, 이: 2, 삼: 3, 사: 4, 오: 5, 육: 6, 륙: 6, 칠: 7, 팔: 8, 구: 9,
+}
+const SINO_PLACE: Record<string, number> = { 십: 10, 백: 100, 천: 1000, 만: 10000 }
+// 고유어 수사 — 시각·개수에 쓴다(세 시, 두 명). 관형형(한·두·세·네)도 함께.
+const NATIVE_NUM: Record<string, number> = {
+  하나: 1, 한: 1, 둘: 2, 두: 2, 셋: 3, 세: 3, 넷: 4, 네: 4, 다섯: 5, 여섯: 6,
+  일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 스물: 20, 스무: 20, 서른: 30, 마흔: 40,
+  쉰: 50, 예순: 60, 일흔: 70, 여든: 80, 아흔: 90,
+}
+
+/** 한글 수사 한 덩어리를 숫자로. 수사가 아니면 null. */
+export function readKoreanNumber(token: string): number | null {
+  if (token in NATIVE_NUM) return NATIVE_NUM[token]
+  // 열하나·스물셋처럼 십 단위 + 낱개
+  for (const tens of ['아흔', '여든', '일흔', '예순', '쉰', '마흔', '서른', '스물', '열']) {
+    if (token.startsWith(tens) && token.length > tens.length) {
+      const rest = NATIVE_NUM[token.slice(tens.length)]
+      if (rest !== undefined && rest < 10) return NATIVE_NUM[tens] + rest
+    }
+  }
+  // 한자어 수사 — 삼십사, 오천, 만 …
+  let total = 0
+  let chunk = 0
+  let seen = false
+  for (const ch of token) {
+    if (ch in SINO_DIGIT) {
+      chunk = chunk * 10 + SINO_DIGIT[ch]
+      seen = true
+    } else if (ch in SINO_PLACE) {
+      const place = SINO_PLACE[ch]
+      if (place === 10000) {
+        total = (total + (chunk || 1)) * 10000
+        chunk = 0
+      } else {
+        total += (chunk || 1) * place
+        chunk = 0
+      }
+      seen = true
+    } else {
+      return null // 수사가 아닌 글자가 섞였다
+    }
+  }
+  return seen ? total + chunk : null
+}
+
 // 숫자 바로 뒤의 한 글자 단위 — 그 자체가 수어 글로스로 있는 것만.
 // ('일'은 숫자 1과 같은 표기라 날짜 "3일"도 자연스럽게 "삼 일"이 된다.)
 const UNIT_GLOSS: Record<string, string> = {
   시: '시', 분: '분', 도: '도', 명: '명', 층: '층0', 일: '일', 년: '년',
+  원: '원', 개: '개', 번: '번', 월: '월', 주: '주',
 }
 
 export class DictSignAgent implements SignAgent {
@@ -139,9 +193,38 @@ export class DictSignAgent implements SignAgent {
     const lookup = (w: string): string[] | undefined => table[w] ?? table[stemKorean(w)]
 
     // 전화번호 | 숫자 | 한글 낱말 — 문장 순서를 지키며 훑는다.
+    // 앞뒤를 봐야 하는 판정이 있어(한 글자 수사는 뒤에 단위가 올 때만 수사로 본다)
+    // 한 번에 모아 놓고 색인으로 돈다.
     const SCAN_RE = /(\d{2,4}-\d{3,4}-\d{4})|(\d+(?:\.\d+)?)|([가-힣]+)/g
+    const matches = [...text.matchAll(SCAN_RE)]
     let afterNumber = false
-    for (const m of text.matchAll(SCAN_RE)) {
+    // 한글 수사가 이어지면 합쳐 읽는다: "만" + "오천" → 15000
+    let pending: number | null = null
+    const flushNumber = () => {
+      if (pending === null) return
+      for (const g of numberGlosses(String(pending))) push(g)
+      pending = null
+      afterNumber = true
+    }
+    for (let mi = 0; mi < matches.length; mi++) {
+      const m = matches[mi]
+      if (m[3]) {
+        const word = m[3]
+        const value = readKoreanNumber(word)
+        if (value !== null) {
+          // 한 글자 수사(일·이·삼·오·만…)는 낱말과 겹친다. 뒤에 단위가 와야 수사로 본다
+          // — "만 오천 원"은 수, "만 나이"의 '만'은 수가 아니다.
+          const next = matches[mi + 1]?.[3]
+          const unitNext = next !== undefined && UNIT_GLOSS[next[0]] !== undefined
+          if (word.length >= 2 || unitNext || pending !== null) {
+            // 큰 자리 뒤에 작은 자리가 이어지면 더한다(만 → 오천 → 15000)
+            pending = pending === null ? value
+              : pending > value ? pending + value : pending * value
+            continue
+          }
+        }
+      }
+      flushNumber()
       if (m[1]) {
         // 전화번호: 자릿수 읽기 (032 → 공 삼 이)
         for (const g of numberGlosses(m[1].replace(/-/g, ''))) push(g)
@@ -213,9 +296,15 @@ export class DictSignAgent implements SignAgent {
       }
     }
 
+    flushNumber()
+
     if (gloss.length === 0) {
-      this.lastBackend = 'rule'
-      return this.fallback.convert(text)
+      // 사전은 멀쩡한데 아는 낱말이 하나도 없는 문장이다. 규칙 폴백은 한국어 낱말을
+      // 그대로 "글로스"라고 내놓지만 동작 사전에 그런 조각이 없어 **아바타가 서 있는다** —
+      // 화면상 정상처럼 보이는 조용한 실패다(실측: 일상 문장 22종이 이렇게 증발).
+      // 표현할 수 없다는 사실을 낱말 카드로 정직하게 보여주는 편이 낫다.
+      this.lastBackend = 'dict'
+      return { text, gloss: [], unmatched }
     }
     this.lastBackend = 'dict'
     return { text, gloss, unmatched }

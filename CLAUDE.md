@@ -25,6 +25,31 @@ python -m ml.tools.feature_parity     # 둘 중 하나라도 건드리면 반드
 
 Node 22의 타입 스트리핑으로 TS를 직접 실행해 수치를 대조한다. 현재 **오차 0**.
 
+### 앱 글로스 == 동작 사전
+
+`src/user/places.ts`의 상용구 글로스와 `dictSignAgent.ts`의 숫자·단위 글로스는
+동작 사전(`public/data/bank.json`)에 **실존해야 한다.** 없으면 재생 때 조용히
+건너뛰어 **아바타가 가만히 서 있는데 한국어 원문은 그대로 떠 있다** — 화면만 봐서는
+정상으로 보인다. 실측에서 사전 재생성 뒤 상용구 30개 중 17개가, '월'이 31회,
+'점'이 8회 이렇게 증발했다.
+
+```bash
+python3 ml/tools/check_app_glosses.py   # 동작 사전을 다시 만들면 반드시 실행
+```
+
+### 화면이 아니라 수치로 검증
+
+이 앱의 실패는 대부분 "화면은 정상인데 알맹이가 없는" 모양이다. 눈으로는 못 잡는다.
+
+```bash
+npm run build && python3 scripts/e2e_app.py    # 폰·태블릿·키오스크 3종 실조작
+```
+
+재생 프레임 수·소리로 나간 문장·요소 크기를 수치로 확인한다(`data-sign-*` 계측점).
+**dev 서버(5173)로 검증하지 말 것** — Vite dev는 실행 중 새로 생긴
+`public/data/glosses/` 파일을 index.html로 폴백해(200 text/html) 모든 합성이 실패한다.
+배포본에서는 정상이다. 이 차이로 한동안 회귀를 오인했다.
+
 ### 평가는 수어자 분리로
 
 같은 사람이 학습·평가에 함께 있으면 모델이 그 사람 버릇을 외워 정확도가 부풀려진다.
@@ -41,7 +66,10 @@ server/app.py        KoGPT2 Q&A FastAPI (선택)
 ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   signbridge/        features · models · dataset · openpose · naming · pack
   etl/               aihub_disaster · aihub_sl · prepare · merge_index · extract_mediapipe
-  tools/             feature_parity(필수 검증) · schema_report(원본 구조 확인)
+  tools/             feature_parity(필수 검증) · check_app_glosses(앱↔사전 정합) · schema_report
+  data/daily_vocab.txt  창구 생활 어휘 — 빈도로 잘리면 안 되는 낱말 목록
+scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
+scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠진 낱말)
   jobs/              check_workspace · train_* · pbs_extract
   README.md          전략·데이터셋·실행 절차     ← 먼저 읽을 것
   KOREN_SETUP.md     이 워크스페이스 운영

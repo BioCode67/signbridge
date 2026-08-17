@@ -57,6 +57,9 @@ STOP_WORDS = {
     "통하여", "따라", "따른", "대한", "대해", "관련", "관한", "해당",
     "등의", "등을", "등이", "및", "또는", "그리고", "기타", "위하여", "인하여",
     "시까지", "분부터", "시부터", "분까지", "실시",
+    # 창구 대화 실측에서 새로 드러난 잡음 — 공손·의뢰 표현(주세요→매일1 같은 오역원)
+    "주세요", "주시", "드릴까요", "드릴게요", "드립니다", "드려요", "하겠습니다",
+    "하시겠어요", "하시겠습니까", "부탁드립니다", "말씀해", "말씀", "여쭤",
 }
 
 # 수동 시드 — 통계가 놓치는 고빈도 대응을 사람이 확정한 것. 자신 있는 것만 넣는다.
@@ -70,6 +73,80 @@ SEED_OVERRIDES = {
     "많은": "많다1",
     "여진": "지진1",
 }
+
+
+# ── 용언 활용형 만들기 ────────────────────────────────────────────────
+# **왜 빌드 시점에 하나.** 창구 대화 실측에서 빠진 낱말의 대부분이 활용형이었다
+# (기다려·찍어·보여·뽑고·드세요·났나요…). 런타임 어간 추출기를 더 똑똑하게 만들 수도
+# 있지만, 그러면 `dictSignAgent.ts`와 규칙을 **양쪽에서 똑같이** 유지해야 한다 —
+# 이 프로젝트에서 가장 찾기 어려운 실패가 바로 그 비대칭이다. 활용형을 미리 펼쳐
+# 사전 키로 넣으면 런타임은 그대로 두고도 찾을 수 있다.
+#
+# 어간 + 아/어 가 한 글자로 합쳐지는 것을 되돌리는 규칙(한글 조합 계산):
+#   하 + 여 → 해 · 기다리 + 어 → 기다려 · 보 + 아 → 봐 · 주 + 어 → 줘
+_CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+_JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+# 어간 끝 모음 → 아/어가 붙어 합쳐진 모음
+_FUSE = {"ㅣ": "ㅕ", "ㅗ": "ㅘ", "ㅜ": "ㅝ", "ㅚ": "ㅙ", "ㅏ": "ㅏ", "ㅓ": "ㅓ", "ㅐ": "ㅐ", "ㅔ": "ㅔ"}
+# 양성모음이면 '아', 아니면 '어'가 붙는다(모음조화).
+_BRIGHT = {"ㅏ", "ㅗ", "ㅑ", "ㅛ"}
+
+
+def _decompose(ch: str) -> tuple[int, int, int] | None:
+    code = ord(ch) - 0xAC00
+    if not (0 <= code < 11172):
+        return None
+    return code // 588, (code % 588) // 28, code % 28
+
+
+def _compose(cho: int, jung: int, jong: int) -> str:
+    return chr(0xAC00 + cho * 588 + jung * 28 + jong)
+
+
+def conjugations(stem_word: str) -> list[str]:
+    """어간 하나에서 자주 쓰는 활용형을 만든다. 확실한 것만 — 과생성은 오역이 된다."""
+    if len(stem_word) < 1:
+        return []
+    # 종결·연결 어미. 런타임 어간 추출기가 떼지 못하거나(나요·시나요),
+    # 떼고 나면 한 글자만 남아 버려지는 것들(오세요 → '오')을 키로 직접 넣는다.
+    forms = [
+        stem_word + s
+        for s in ("고", "지", "게", "며", "면", "니", "세요", "십시오", "시고",
+                  "나요", "시나요", "셨", "시면", "는데", "지만", "려고")
+    ]
+    parts = _decompose(stem_word[-1])
+    if parts is None:
+        return forms
+    cho, jung, jong = parts
+    vowel = _JUNG[jung]
+    if jong:
+        # 받침이 있으면 합쳐지지 않고 그대로 붙는다: 찍 + 어 → 찍어
+        harmony = "아" if vowel in _BRIGHT else "어"
+        forms += [stem_word + harmony, stem_word + harmony + "요",
+                  stem_word + harmony + "서", stem_word + harmony + "야",
+                  stem_word + harmony + "집니다", stem_word + harmony + "졌"]
+        forms += [stem_word + "은", stem_word + "습니다", stem_word + "습니까",
+                  stem_word + "으면", stem_word + "으세요", stem_word + "으니"]
+    else:
+        # 받침이 없으면 'ㅂ니다'가 받침으로 붙는다: 오 + ㅂ니다 → 옵니다
+        head = stem_word[:-1]
+        forms.append(head + _compose(cho, jung, 17) + "니다")  # 17 = 종성 ㅂ
+        forms.append(head + _compose(cho, jung, 4) + "다")  # 4 = 종성 ㄴ (온·간)
+        if vowel in ("ㅏ", "ㅓ", "ㅐ", "ㅔ"):
+            # 같은 모음이 겹치면 하나로 줄어든다: 가 + 아 → 가 · 서 + 어 → 서
+            forms += [stem_word, stem_word + "요", stem_word + "서"]
+        elif vowel in _FUSE:
+            fused = stem_word[:-1] + _compose(cho, _JUNG.index(_FUSE[vowel]), 0)
+            forms += [fused, fused + "요", fused + "서", fused + "야"]
+    # '하다' 용언은 '해'로 — 가장 흔한 불규칙이라 따로 둔다(공부하다 → 공부해)
+    if stem_word.endswith("하"):
+        forms.append(stem_word[:-1] + "해")
+    # ㄹ 불규칙 — 받침 ㄹ은 ㄴ·ㅂ·ㅅ 앞에서 떨어진다: 들다 → 드세요·듭니다, 살다 → 사세요
+    if parts is not None and jong == 8:  # 8 = 종성 ㄹ
+        bare = stem_word[:-1] + _compose(cho, jung, 0)
+        forms += [bare + "세요", bare + "십시오", bare + "니", bare + "시고",
+                  bare[:-1] + _compose(cho, jung, 17) + "니다"]
+    return forms
 
 
 def stem(word: str) -> str:
@@ -181,6 +258,20 @@ def main() -> None:
             table[lemma[:-1]] = [g]
             added += 1
     print(f"[align] 표제어 직결 추가 {added:,}개 (Dice 미포착분)")
+
+    # 용언 활용형 — 창구 대화에서 빠진 낱말의 대부분이 이것이었다(기다려·찍어·뽑고…).
+    # 이미 있는 키는 건드리지 않는다(Dice가 실제로 관측한 대응이 우선).
+    conj = 0
+    for lemma, g in list(lemma_best.items()):
+        # 어간이 한 글자여도 만든다(있다·하다·가다·오다·보다·먹다 — 가장 흔한 용언들이다).
+        # 예전 조건 len(lemma) < 3 이 이들을 통째로 걸러 "있나요·오세요"가 사전에 없었다.
+        if not lemma.endswith("다") or len(lemma) < 2:
+            continue
+        for form in conjugations(lemma[:-1]):
+            if len(form) >= MIN_STEM and form not in table and form not in STOP_WORDS:
+                table[form] = [g]
+                conj += 1
+    print(f"[align] 용언 활용형 추가 {conj:,}개")
 
     # 복합어 통짜 키 제거 — "대피바랍니다"·"안전사고"처럼 두 낱말 이상으로 분해되는
     # 키는 지운다. 통짜 키의 Dice 매핑은 잡음이기 쉽고(실측: 대피바랍니다→낚시1,

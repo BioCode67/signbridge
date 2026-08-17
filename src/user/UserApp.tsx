@@ -94,6 +94,9 @@ export default function UserApp() {
   const playItem = useCallback(async (item: FeedItem) => {
     setBusy(true)
     setFlash(true)
+    // 진동 벨 — 화면을 안 보고 있어도 주머니 속 진동으로 새 알림을 안다.
+    // 소리를 못 듣는 사용자에게 진동은 소리의 역할을 한다(미지원 기기는 무시).
+    navigator.vibrate?.([300, 120, 300])
     window.setTimeout(() => setFlash(false), 900)
     const composed = await compose(item.text)
     setBusy(false)

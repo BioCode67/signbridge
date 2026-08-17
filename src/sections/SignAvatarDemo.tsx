@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import { API_URL } from '../config'
@@ -28,7 +29,7 @@ const SPEEDS = [0.5, 1, 1.5] as const
 
 /** Strip the trailing disambiguation marks ("오늘1", "차오르다1#") for display. */
 function cleanGloss(g: string): string {
-  return g.replace(/[0-9#:]+$/, '')
+  return glossLabel(g)
 }
 
 // AI 번역 서버(FastAPI /compose). 주소는 src/config.ts(VITE_API_URL)에서 온다.
@@ -389,7 +390,7 @@ export default function SignAvatarDemo() {
       return json
     })
     if (!composed) return
-    setComposed({ ...composed, korean_text: `수어 사전: ${gloss.replace(/[0-9#:]+$/, '')}`, file: '__ai__' } as never)
+    setComposed({ ...composed, korean_text: `수어 사전: ${glossLabel(gloss)}`, file: '__ai__' } as never)
     setIndex(0); setFrame(0); frameRef.current = 0; setPlaying(true)
   }, [])
 
@@ -617,7 +618,7 @@ export default function SignAvatarDemo() {
                         onClick={() => void playDictWord(g)}
                         className="rounded border border-white/10 bg-space-800 px-2 py-1 text-[11px] text-slate-300 transition-colors hover:border-cyan-glow/50 hover:text-cyan-soft"
                       >
-                        {g.replace(/[0-9#:]+$/, '') || g}
+                        {glossLabel(g)}
                         <span className="ml-0.5 text-slate-600">{(g.match(/[0-9]+$/) ?? [''])[0]}</span>
                       </button>
                     ))}

@@ -45,7 +45,7 @@ export default function SpeakMode({ onAnswer }: Props) {
     setBusy(true)
     try {
       if (!orchestratorRef.current) orchestratorRef.current = new Orchestrator()
-      const tokens = rec.transcript.map((t) => t.replace(/[0-9#:]+$/, ''))
+      const tokens = rec.transcript.map(glossLabel)
       const result = await orchestratorRef.current.run({ tokens, question: tokens.join(' ') })
       onAnswer(result.qa?.answer ?? result.assessment.summary)
       rec.clearTranscript()

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 import { motion } from 'framer-motion'
 import * as tf from '@tensorflow/tfjs'
 import SectionHeading from '../ui/SectionHeading'
@@ -87,7 +88,7 @@ export default function RecognitionDemo() {
     try {
       if (!orchestratorRef.current) orchestratorRef.current = new Orchestrator()
       // 인식 라벨은 "대피1" 꼴이라 뒤의 구분 숫자를 떼고 질문 문장으로 잇는다.
-      const tokens = rec.transcript.map((t) => t.replace(/[0-9#:]+$/, ''))
+      const tokens = rec.transcript.map(glossLabel)
       const question = tokens.join(' ')
       const result = await orchestratorRef.current.run({ tokens, question })
       const answer = result.qa?.answer ?? result.assessment.summary
@@ -381,7 +382,7 @@ export default function RecognitionDemo() {
                   <>
                     {/* 왕복 검증에서 뜻이 어긋났다 — 원문을 앞세우고 복원문은 참고로 */}
                     <p className="font-semibold text-amber-300">
-                      원문 수어: {rec.transcript.map((t) => t.replace(/[0-9#:]+$/, '')).join(' · ')}
+                      원문 수어: {rec.transcript.map(glossLabel).join(' · ')}
                     </p>
                     <p className="mt-1 text-slate-400">
                       ⚠️ AI 복원(자체 검증 저신뢰): {sentence}
@@ -391,7 +392,7 @@ export default function RecognitionDemo() {
                   <>
                     <p className="text-slate-200">{sentence}</p>
                     <p className="mt-1 text-[10.5px] text-slate-500">
-                      원문 수어: {rec.transcript.map((t) => t.replace(/[0-9#:]+$/, '')).join(' · ')}
+                      원문 수어: {rec.transcript.map(glossLabel).join(' · ')}
                     </p>
                   </>
                 )}

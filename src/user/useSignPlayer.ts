@@ -11,6 +11,7 @@
  * 담지 않는 것: 재난문자 피드·수신 이력·요약 배지 — 그건 받기 화면의 관심사다.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 import type { SignData } from '../sections/sign/signTypes'
 import { composeGlosses, type BankIndex, type BankEntry } from '../sections/sign/composeLocal'
 import { DictSignAgent } from '../agents/dictSignAgent'
@@ -228,7 +229,7 @@ export function useSignPlayer(): SignPlayer {
     if (!data) return ''
     return data.gloss_sequence
       .filter((g) => time >= g.start && time <= g.end)
-      .map((g) => g.gloss.replace(/[0-9#:]+$/, ''))
+      .map((g) => glossLabel(g.gloss))
       .join(' ')
   }, [data, time])
 

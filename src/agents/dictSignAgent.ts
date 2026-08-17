@@ -10,6 +10,7 @@
 // 배우진 못하지만 어휘 대응("한파→춥다1", "대피→도망1")은 실제 데이터에서 나온 것이라
 // 기존 규칙 기반과는 품질이 다르다.
 import type { SignAgent, SignConversion } from './types'
+import { glossLabel } from './glossLabel'
 import { RuleSignAgent } from './signAgent'
 
 /** 조사·어미 근사 제거 — 파이썬 쪽 build_align_dict.py와 **같은 규칙**이어야 한다.
@@ -360,7 +361,7 @@ export class DictSignAgent implements SignAgent {
         // 어순표는 **표제어**(번호를 뗀 형태) 기준이다 — 번역기가 '조심'을 내놓는데
         // 표가 '조심1'로 돼 있어 한 번도 맞지 않던 적이 있다.
         const known = c.glosses
-          .map((g) => order[g.replace(/[0-9#:]+$/, '')])
+          .map((g) => order[glossLabel(g)])
           .find((v) => v !== undefined)
         if (known !== undefined) c.bias = known
       }

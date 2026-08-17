@@ -8,6 +8,7 @@
 // 자동 수신은 AI Hub 실데이터에서 뽑은 재난문자 246건(41개 유형)을 순서대로 흘린다.
 // 지어낸 문장이 아니라는 점이 이 데모의 근거가 된다.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { glossLabel } from '../../agents/glossLabel'
 
 export interface FeedItem {
   category: string
@@ -216,7 +217,7 @@ export default function LiveConsole({ translate, playing }: Props) {
                   key={`${g}-${i}`}
                   className="rounded bg-cyan-glow/10 px-1.5 py-0.5 text-[11px] text-cyan-soft"
                 >
-                  {g.replace(/[0-9#:]+$/, '')}
+                  {glossLabel(g)}
                 </span>
               ))}
             </p>

@@ -42,10 +42,16 @@ export default {
           '0%, 100%': { transform: 'translateY(0px)' },
           '50%': { transform: 'translateY(-12px)' },
         },
+        // 음성 인식 중 글로스가 하나씩 나타날 때
+        'pop-in': {
+          '0%': { opacity: '0', transform: 'scale(.9)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
       },
       animation: {
         'pulse-glow': 'pulse-glow 3s ease-in-out infinite',
         'float-slow': 'float-slow 6s ease-in-out infinite',
+        'pop-in': 'pop-in .18s ease-out',
       },
     },
   },

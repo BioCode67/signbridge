@@ -351,6 +351,24 @@ export default function SignAvatarDemo() {
     }, [composeText]),
   )
 
+  // 말하는 **도중에** 글로스를 미리 보여 준다.
+  // 확정 전까지 화면이 비어 있으면 "받아쓰기만 하는 것"처럼 보인다. 중간 결과를
+  // 사전으로 즉시 훑어 단어가 쌓이는 것을 보이면 번역이 진행 중임이 드러난다.
+  // (실제 합성은 확정된 문장으로만 한다 — 중간 결과로 합성하면 같은 문장을 여러 번 만든다)
+  const [previewGloss, setPreviewGloss] = useState<string[]>([])
+  useEffect(() => {
+    if (!speech.interim) {
+      setPreviewGloss([])
+      return
+    }
+    let alive = true
+    if (!dictAgentRef.current) dictAgentRef.current = new DictSignAgent()
+    void dictAgentRef.current.convert(speech.interim).then((r) => {
+      if (alive) setPreviewGloss(r.gloss)
+    })
+    return () => { alive = false }
+  }, [speech.interim])
+
   const togglePlay = useCallback(() => {
     if (!data) return
     setPlaying((p) => {
@@ -488,6 +506,24 @@ export default function SignAvatarDemo() {
                     {aiBusy ? '번역 중…' : 'AI 수어 번역'}
                   </button>
                 </div>
+                {/* 말하는 중 실시간 글로스 — 번역이 진행 중임을 보여 준다 */}
+                {speech.listening && (
+                  <div className="mt-2 flex min-h-[28px] flex-wrap items-center gap-1">
+                    <span className="mr-1 text-[10.5px] text-slate-500">수어 변환 중</span>
+                    {previewGloss.length === 0 ? (
+                      <span className="text-[11px] text-slate-600">말씀하시면 단어가 나타납니다…</span>
+                    ) : (
+                      previewGloss.map((g, i) => (
+                        <span
+                          key={`${g}-${i}`}
+                          className="animate-pop-in rounded bg-cyan-glow/15 px-1.5 py-0.5 text-[11px] text-cyan-soft"
+                        >
+                          {cleanGloss(g)}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                )}
                 {aiNote && <p className="mt-1.5 text-xs text-amber-300/90">{aiNote}</p>}
                 {speech.error && <p className="mt-1.5 text-xs text-red-300/90">{speech.error}</p>}
               </div>

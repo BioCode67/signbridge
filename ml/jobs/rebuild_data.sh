@@ -22,7 +22,8 @@ TOP=${TOP:-10000}
 echo "── 1/5 웹 동작 사전 (빈도 상위 $TOP + 생활 어휘 보장)"
 # shellcheck disable=SC2086
 python -m ml.etl.export_web_bank --bank "$BANK" --index $INDEX \
-  --out public/data --top "$TOP" --must ml/data/daily_vocab.txt
+  --out public/data --top "$TOP" \
+  --must ml/data/daily_vocab.txt ml/data/daily_vocab_aihub.txt
 
 echo "── 2/5 번역 사전 (Dice + 표제어 직결 + 활용형)"
 python -m ml.etl.build_align_dict --data "$SCRIPT" \

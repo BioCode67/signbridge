@@ -74,8 +74,8 @@ def main() -> None:
                         help="빈도를 셀 index.jsonl 디렉터리(복수 가능 — 재난+일상)")
     parser.add_argument("--out", type=Path, required=True, help="public/data")
     parser.add_argument("--top", type=int, default=3000)
-    parser.add_argument("--must", type=Path, default=None,
-                        help="빈도와 무관하게 반드시 실을 낱말 목록(한 줄에 하나)")
+    parser.add_argument("--must", type=Path, nargs="*", default=None,
+                        help="빈도와 무관하게 반드시 실을 낱말 목록(한 줄에 하나, 복수 가능)")
     parser.add_argument("--clean", action="store_true",
                         help="기존 조각을 모두 지우고 다시 쓴다(기본은 증분)")
     args = parser.parse_args()
@@ -108,8 +108,12 @@ def main() -> None:
     # 알레르기 같은 낱말이 전체 사전에는 있는데 웹 사전에서 빠져 있었다 — 그 자리에서
     # 가장 필요한 말들이다. 그래서 생활 어휘는 빈도와 무관하게 싣는다.
     if args.must:
-        want = {w.strip() for w in args.must.read_text(encoding="utf-8").splitlines()
-                if w.strip() and not w.startswith("#")}
+        want = {
+            w.strip()
+            for path in args.must
+            for w in path.read_text(encoding="utf-8").splitlines()
+            if w.strip() and not w.startswith("#")
+        }
         lemma_re = re.compile(r"[0-9#:]+$")
         by_lemma: dict[str, list[str]] = {}
         for g in bank:

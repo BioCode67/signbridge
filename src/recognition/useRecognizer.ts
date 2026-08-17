@@ -25,6 +25,10 @@ export interface UseRecognizerResult {
   modelStatus: ModelStatus
   current: Prediction | null
   transcript: string[]
+  /** transcript와 같은 길이 — 낱말별 상위 후보(1위가 현재 값) */
+  transcriptAlts: string[][]
+  /** i번째 낱말을 후보 중 하나로 바꾼다 */
+  replaceWord(index: number, label: string): void
   clearTranscript: () => void
   pushFrame: (features: Float32Array | null) => void
   /** 링버퍼에서 최근 윈도우를 리샘플해 반환(스튜디오 녹화 캡처용). */
@@ -42,6 +46,27 @@ export interface UseRecognizerResult {
   top3: { label: string; confidence: number }[]
 }
 
+/** 확률 배열에서 상위 k개를 뽑는다. */
+function topK(
+  probs: ArrayLike<number>,
+  labels: readonly string[],
+  k: number,
+): { label: string; confidence: number }[] {
+  const picks: { label: string; confidence: number }[] = []
+  const taken = new Set<number>()
+  for (let n = 0; n < k; n++) {
+    let best = -1
+    let bestP = 0
+    for (let i = 0; i < probs.length; i++) {
+      if (!taken.has(i) && probs[i] > bestP) { bestP = probs[i]; best = i }
+    }
+    if (best < 0) break
+    taken.add(best)
+    picks.push({ label: labels[best] ?? '?', confidence: bestP })
+  }
+  return picks
+}
+
 export function useRecognizer(enabled: boolean): UseRecognizerResult {
   const recognizerRef = useRef<Recognizer>(new Recognizer())
   const onnxRef = useRef<OnnxRecognizer>(new OnnxRecognizer())
@@ -55,6 +80,8 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle')
   const [current, setCurrent] = useState<Prediction | null>(null)
   const [transcript, setTranscript] = useState<string[]>([])
+  /** 확정된 낱말마다의 상위 후보 — 사용자가 골라 고칠 수 있게. */
+  const [transcriptAlts, setTranscriptAlts] = useState<string[][]>([])
 
   // 자막 확정용 debounce 상태.
   const pendingRef = useRef<{ label: string; hits: number }>({ label: '', hits: 0 })
@@ -75,7 +102,13 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
 
   const clearTranscript = useCallback(() => {
     setTranscript([])
+    setTranscriptAlts([])
     lastCommittedRef.current = ''
+  }, [])
+
+  /** 확정된 낱말을 후보 중 하나로 바꾼다 — 인식이 틀렸을 때 사용자가 고치는 길. */
+  const replaceWord = useCallback((index: number, label: string) => {
+    setTranscript((t) => t.map((w, i) => (i === index ? label : w)))
   }, [])
 
   const reloadDefault = useCallback(() => {
@@ -141,6 +174,12 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
         ) {
           lastCommittedRef.current = pred.label
           setTranscript((t) => [...t, pred.label].slice(-24))
+          // **후보를 함께 남긴다.** 낱말 하나를 78.6%로 맞히는 모델이라, 틀린 말이
+          // 소리로 나가면 창구에서 바로 오해가 된다. 사용자가 후보에서 골라
+          // 고칠 수 있게 하면 top-5(90.8%)의 정확도를 손가락 한 번으로 쓰게 된다.
+          const labels = backend === 'aihub' ? onnxRef.current.labels : KSL_LABELS
+          const alts = pred.probs ? topK(pred.probs, labels, 5).map((c) => c.label) : [pred.label]
+          setTranscriptAlts((a) => [...a, alts].slice(-24))
         }
       } else {
         pendingRef.current = { label: '', hits: 0 }
@@ -175,6 +214,8 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
   }, [enabled, backend])
 
   // 상위 후보 3개 — probs 전체에서 한 번 훑어 뽑는다(8천 클래스여도 밀리초 미만).
+  // (topK를 쓰지 않고 여기 그대로 둔 이유: 렌더 중 ref를 읽는 것을 린터가 잡는다.
+  //  확정 시점의 후보는 효과 안에서 topK로 뽑으므로 그쪽은 문제가 없다.)
   const top3 = useMemo(() => {
     if (!current?.probs) return []
     const labels = backend === 'aihub' ? onnxRef.current.labels : KSL_LABELS
@@ -198,6 +239,8 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
     modelStatus,
     current,
     transcript,
+    transcriptAlts,
+    replaceWord,
     clearTranscript,
     pushFrame,
     captureWindow,

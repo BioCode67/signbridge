@@ -20,9 +20,13 @@ import { DictSignAgent } from '../src/agents/dictSignAgent.ts'
 
 const bank = JSON.parse(readFileSync('public/data/bank.json', 'utf8'))
 const align = JSON.parse(readFileSync('public/data/align.json', 'utf8'))
+const order = JSON.parse(readFileSync('public/data/order.json', 'utf8'))
 
-// 브라우저 코드는 fetch로 사전을 받는다 — 파일에서 읽어 주는 가짜 fetch를 끼운다.
-globalThis.fetch = async () => ({ ok: true, json: async () => align })
+// 브라우저 코드는 사전과 어순표를 각각 fetch로 받는다 — URL을 보고 갈라 주는 가짜 fetch.
+globalThis.fetch = async (url) => ({
+  ok: true,
+  json: async () => (String(url).includes('order.json') ? order : align),
+})
 
 const file = process.argv[2]
 const sentences = file

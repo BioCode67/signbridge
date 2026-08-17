@@ -14,9 +14,17 @@ import { readFileSync } from 'node:fs'
 import { DictSignAgent } from '../src/agents/dictSignAgent.ts'
 
 const align = JSON.parse(readFileSync('public/data/align.json', 'utf8'))
-globalThis.fetch = async () => ({ ok: true, json: async () => align })
+const order = JSON.parse(readFileSync('public/data/order.json', 'utf8'))
+// 번역기는 사전과 어순표를 각각 받아온다 — 스텁도 **URL을 보고** 갈라 주어야 한다.
+// (한동안 모든 요청에 사전을 돌려주는 바람에 어순 검사가 조용히 무력화돼 있었다.)
+globalThis.fetch = async (url) => ({
+  ok: true,
+  json: async () => (String(url).includes('order.json') ? order : align),
+})
 
-const { cases } = JSON.parse(readFileSync('scripts/translation_cases.json', 'utf8'))
+const { cases, koreanCases = [] } = JSON.parse(
+  readFileSync('scripts/translation_cases.json', 'utf8'),
+)
 const agent = new DictSignAgent('align.json')
 const lemma = (g) => g.replace(/[0-9#:]+$/, '')
 
@@ -26,15 +34,33 @@ for (const c of cases) {
   const lemmas = gloss.map(lemma)
   const missing = (c.must ?? []).filter((w) => !lemmas.includes(w))
   const wrong = (c.never ?? []).filter((w) => lemmas.includes(w))
-  if (missing.length === 0 && wrong.length === 0) continue
+  // 어순 — 수어는 [언제·어디] → [무슨 일] → [당부] 순서다. 낱말이 다 나와도
+  // 순서가 한국어 그대로면 농인에게는 어색하다.
+  const wantOrder = c.order ?? []
+  const spots = wantOrder.map((w) => lemmas.indexOf(w))
+  const orderBroken = spots.some((v, i) => v < 0 || (i > 0 && v < spots[i - 1]))
+  if (missing.length === 0 && wrong.length === 0 && !orderBroken) continue
   failed++
   console.log(`  ✗ ${c.text}`)
   console.log(`     번역: ${lemmas.join(' ') || '(없음)'}`)
   if (missing.length) console.log(`     빠짐: ${missing.join(', ')}`)
   if (wrong.length) console.log(`     오역: ${wrong.join(', ')}  ← 과거에 났던 오역이 되살아났다`)
+  if (orderBroken) console.log(`     어순: ${wantOrder.join(' → ')} 순서여야 한다`)
 }
 
-console.log(`\n[cases] ${cases.length}개 중 ${cases.length - failed}개 통과`)
+// 반대 방향 — 수어 낱말열을 직원이 듣는 한국어 문장으로. 어미 하나가 어긋나면
+// "머리 어제 아프다"처럼 들려 되묻게 된다.
+const { glossesToKorean } = await import('../src/agents/glossToKorean.ts')
+for (const c of koreanCases) {
+  const got = glossesToKorean(c.glosses)
+  if (got === c.text) continue
+  failed++
+  console.log(`  ✗ ${c.glosses.join(' ')}`)
+  console.log(`     기대: ${c.text}`)
+  console.log(`     실제: ${got}`)
+}
+
+console.log(`\n[cases] ${cases.length + koreanCases.length}개 중 ${cases.length + koreanCases.length - failed}개 통과`)
 if (failed) {
   console.log('[cases] ✗ 번역 회귀가 있습니다 — 사전 규칙을 되짚어 보세요')
   process.exit(1)

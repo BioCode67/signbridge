@@ -44,7 +44,8 @@ const sizeOf = (rel) => {
 
 const essential = new Set()
 // 작은 공통 파일 — 이게 없으면 번역 자체가 안 된다.
-for (const f of ['./data/bank.json', './data/align.json', './data/feed.json']) essential.add(f)
+for (const f of ['./data/bank.json', './data/align.json', './data/order.json', './data/feed.json'])
+  essential.add(f)
 for (const g of phraseGlosses) {
   const f = fileOf(g)
   if (f) essential.add(f)

@@ -34,7 +34,18 @@ Node 22의 타입 스트리핑으로 TS를 직접 실행해 수치를 대조한�
 '점'이 8회 이렇게 증발했다.
 
 ```bash
-python3 ml/tools/check_app_glosses.py   # 동작 사전을 다시 만들면 반드시 실행
+bash ml/jobs/rebuild_data.sh            # 동작 사전 → 번역 사전 → 어순표 → 검사 2종
+python3 ml/tools/check_app_glosses.py   # (위 스크립트에 포함) 개별 실행도 가능
+```
+
+**순서가 중요하다.** 번역 사전·어순표는 동작 사전을 보고 만들어진다. 동작 사전만 다시
+만들고 나머지를 두면 사라진 글로스를 가리키는 번역이 남아 아바타가 조용히 서 있는다.
+
+학습이 끝나면 모델도 갈아 끼운다 — 실측에서 60에폭을 돌리는 동안 앱에는 **에폭 27짜리**가
+붙어 있었다(화면상 차이가 없어 아무도 몰랐다).
+
+```bash
+bash ml/jobs/deploy_model.sh ~/sbruns/iso-v2
 ```
 
 ### 화면이 아니라 수치로 검증
@@ -84,6 +95,7 @@ scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
 scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠진 낱말)
 scripts/check_translation_cases.mjs  오역 회귀 검사(사례 25건)
   jobs/              check_workspace · train_* · pbs_extract
+                     rebuild_data.sh(웹 데이터 전부 재생성) · deploy_model.sh(모델 교체)
   README.md          전략·데이터셋·실행 절차     ← 먼저 읽을 것
   KOREN_SETUP.md     이 워크스페이스 운영
   KOREN_RESOURCES.md AI Cloud / HPC / KOREN VM 역할 분담

@@ -31,7 +31,7 @@ export default function UserApp() {
   const [flash, setFlash] = useState(false)
   const [auto, setAuto] = useState(true)
   // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
-  const [tab, setTab] = useState<'watch' | 'speak'>('watch')
+  const [tab, setTab] = useState<'watch' | 'speak' | 'dict'>('watch')
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -129,6 +129,46 @@ export default function UserApp() {
       .join(' ')
   }, [data, time])
 
+  // 사전 탭 — bank 색인에서 찾고, 고르면 받기 화면에서 그 단어 수어를 재생한다.
+  const [dictQuery, setDictQuery] = useState('')
+  const [dictHits, setDictHits] = useState<string[]>([])
+  const searchDict = useCallback(async (q: string) => {
+    setDictQuery(q)
+    const query = q.trim()
+    if (!query) { setDictHits([]); return }
+    const base = import.meta.env.BASE_URL
+    if (!bankRef.current) {
+      const res = await fetch(`${base}data/bank.json`)
+      if (!res.ok) return
+      bankRef.current = (await res.json()) as BankIndex
+    }
+    const keys = Object.keys(bankRef.current)
+    const starts = keys.filter((k) => k.startsWith(query))
+    const contains = keys.filter((k) => !k.startsWith(query) && k.includes(query))
+    setDictHits([...starts, ...contains].slice(0, 18))
+  }, [])
+
+  const playDictWord = useCallback(async (gloss: string) => {
+    if (!bankRef.current) return
+    const base = import.meta.env.BASE_URL
+    const composed = await composeGlosses(gloss, [gloss], bankRef.current, async (name, entry) => {
+      const hit = cacheRef.current.get(name)
+      if (hit) return hit
+      const res = await fetch(`${base}data/glosses/${entry.file}`)
+      if (!res.ok) throw new Error(name)
+      const json = (await res.json()) as SignData
+      cacheRef.current.set(name, json)
+      return json
+    })
+    if (!composed) return
+    setTab('watch')
+    setAuto(false)
+    setData({ ...composed, korean_text: gloss.replace(/[0-9#:]+$/, '') })
+    frameRef.current = 0
+    setFrame(0)
+    setPlaying(true)
+  }, [])
+
   const onAnswer = useCallback((text: string) => {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
@@ -163,7 +203,7 @@ export default function UserApp() {
           </span>
         )}
         <div className="flex gap-1 rounded-xl border border-white/10 bg-space-900 p-1">
-          {([['watch', '📺 받기'], ['speak', '🤟 말하기']] as const).map(([id, label]) => (
+          {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['dict', '📖 사전']] as const).map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -197,6 +237,35 @@ export default function UserApp() {
           ✕
         </a>
       </header>
+
+      {/* 사전 — 단어를 찾아 수어를 본다. 찾으면 받기 화면에서 재생한다. */}
+      {tab === 'dict' && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <input
+            type="search"
+            value={dictQuery}
+            onChange={(e) => void searchDict(e.target.value)}
+            placeholder="🔍 단어 찾기"
+            autoFocus
+            className="w-full rounded-2xl border border-white/15 bg-space-900 px-5 py-4 text-xl text-slate-100 placeholder:text-slate-500 focus:border-cyan-glow/60 focus:outline-none"
+          />
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {dictHits.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => void playDictWord(g)}
+                className="rounded-2xl border border-white/10 bg-space-800 px-3 py-5 text-xl font-bold text-slate-200 transition-colors hover:border-cyan-glow/50 hover:text-cyan-soft"
+              >
+                {g.replace(/[0-9#:]+$/, '') || g}
+              </button>
+            ))}
+          </div>
+          {dictQuery && dictHits.length === 0 && (
+            <p className="mt-8 text-center text-lg text-slate-500">😢 없는 단어예요</p>
+          )}
+        </div>
+      )}
 
       {/* 말하기 — 내 수어를 카메라로 */}
       {tab === 'speak' && (

@@ -33,8 +33,26 @@ GLOSS_SEPARATOR = " "
 
 
 def build_pairs(
-    data_dir: Path, split: str, direction: str, merge_variants: bool
+    data_dir: Path,
+    split: str,
+    direction: str,
+    merge_variants: bool,
+    subseq_aug: float = 0.0,
+    seed: int = 0,
 ) -> list[dict[str, str]]:
+    """(글로스열, 한국어) 학습쌍을 만든다.
+
+    `subseq_aug > 0`이면 gloss2text 방향에서 **글로스 부분열 증강**을 켠다.
+    실측 배경: 전체 글로스열(평균 15개 안팎)을 넣으면 모델이 정답 수준으로 복원하지만,
+    5개짜리 짧은 열(웹캠 인식이 실제로 내는 형태)을 넣으면 재난문자 상투구로 미끄러져
+    뜻을 뒤집기도 한다("도망"→"자제"). 분포 밖 입력이 원인이므로, 학습쌍의 일부를
+    연속 부분열로 잘라 같은 한국어 문장에 대응시켜 분포를 넓힌다. 부분열이 문장 전체
+    의미를 담지 못하는 잡음도 생기지만, 짧은 입력에서 핵심(재난·행동)을 지키는 쪽이
+    수어 인식 후단에서는 더 중요하다.
+    """
+    import random
+
+    rng = random.Random(seed)
     pairs: list[dict[str, str]] = []
     for record in read_index(data_dir / "index.jsonl", split):
         korean = (record.korean_text or "").strip()
@@ -48,6 +66,12 @@ def build_pairs(
         gloss_text = GLOSS_SEPARATOR.join(glosses)
         if direction == "gloss2text":
             pairs.append({"source": gloss_text, "target": korean})
+            if subseq_aug > 0 and len(glosses) >= 6 and rng.random() < subseq_aug:
+                # 3~8개짜리 연속 부분열 하나를 추가한다.
+                length = rng.randint(3, min(8, len(glosses) - 1))
+                start = rng.randint(0, len(glosses) - length)
+                sub = GLOSS_SEPARATOR.join(glosses[start : start + length])
+                pairs.append({"source": sub, "target": korean})
         else:
             pairs.append({"source": korean, "target": gloss_text})
     return pairs
@@ -68,9 +92,13 @@ def main() -> None:
     parser.add_argument("--max-target", type=int, default=128)
     parser.add_argument("--merge-variants", action="store_true")
     parser.add_argument("--dump-pairs", action="store_true", help="학습 없이 쌍만 확인")
+    parser.add_argument(
+        "--subseq-aug", type=float, default=0.0,
+        help="gloss2text 전용: 글로스 부분열 증강 비율(0~1). 짧은 인식 출력에 강해진다",
+    )
     args = parser.parse_args()
 
-    train_pairs = build_pairs(args.data, "train", args.direction, args.merge_variants)
+    train_pairs = build_pairs(args.data, "train", args.direction, args.merge_variants, subseq_aug=args.subseq_aug)
     val_pairs = build_pairs(args.data, "val", args.direction, args.merge_variants)
     print(f"[nlp] {args.direction}: 학습 {len(train_pairs)}쌍 / 검증 {len(val_pairs)}쌍")
     if train_pairs:

@@ -15,9 +15,20 @@ import { RuleSignAgent } from './signAgent'
 /** 조사·어미 근사 제거 — 파이썬 쪽 build_align_dict.py와 **같은 규칙**이어야 한다.
  *  한쪽만 고치면 사전 키가 어긋나 조용히 못 찾는다. */
 const PARTICLE_RE =
-  /(으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$/
-const TOKEN_RE = /[가-힣]+/g
+  /(으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|드리오니|되오니|하오니|오니|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$/
 const MIN_STEM = 2
+
+/** 번역 제외어 — 한국어 문법·공손 표현으로, 수어에서는 표현하지 않는다.
+ *  이런 낱말의 통계 매핑은 실측 감사에서 전부 잡음이었다(바랍니다→조심1 등).
+ *  **build_align_dict.py의 STOP_WORDS와 같은 목록이어야 한다.** */
+const STOP_WORDS = new Set([
+  '바랍니다', '바라며', '바람니다', '주시기', '주십시오', '있습니다', '있는',
+  '있으니', '있으면', '없습니다', '않도록', '않기', '됩니다', '되도록',
+  '합니다', '하시기', '하도록', '인해', '인한', '위해', '위한', '통해',
+  '통하여', '따라', '따른', '대한', '대해', '관련', '관한', '해당',
+  '등의', '등을', '등이', '및', '또는', '그리고', '기타', '위하여', '인하여',
+  '시까지', '분부터', '시부터', '분까지', '실시',
+])
 
 /** 미매칭 보고(낱말 카드)에서 뺄 기능어·상투구 — 정보가 없어 카드로 띄우면 소음이다.
  *  번역 자체에는 영향이 없다(원래도 매칭 안 되던 말들). */
@@ -39,6 +50,47 @@ export function stemKorean(word: string): string {
 }
 
 export type AlignTable = Record<string, string[]>
+
+// ── 숫자 → 수어 글로스열 ─────────────────────────────────────────────
+// 재난문자의 숫자(규모 4.0, 3일, 전화번호)는 한글 토큰화에서 통째로 사라졌다.
+// 동작 사전에 숫자 수어(공~구·십·백·천·만·점)가 있으므로 한국식 수 읽기로 변환한다.
+//   342   → 삼 백 사 십 이       4.0 → 사 점 영
+//   032-… → 공 삼 이 …(자릿수 읽기 — 전화번호는 자리값으로 읽지 않는다)
+const DIGIT_GLOSS = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
+const PLACE_GLOSS = ['', '십', '백', '천', '만']
+
+export function numberGlosses(num: string): string[] {
+  const out: string[] = []
+  const digitwise = (s: string) => {
+    for (const ch of s) out.push(ch === '0' ? '공' : DIGIT_GLOSS[Number(ch)])
+  }
+  const [int, frac] = num.split('.')
+  // 0으로 시작하거나 다섯 자리 초과(전화번호·우편번호류)는 자릿수 읽기.
+  if (/^0/.test(int) || int.length > 5) {
+    digitwise(int)
+  } else {
+    for (let i = 0; i < int.length; i++) {
+      const d = Number(int[i])
+      const place = int.length - 1 - i
+      if (d === 0) continue
+      // 십·백·천은 1을 생략해 읽는다(일십 → 십). 만 단위는 일만처럼 읽지만 단순화.
+      if (!(d === 1 && place >= 1 && place <= 3)) out.push(DIGIT_GLOSS[d])
+      if (place >= 1) out.push(PLACE_GLOSS[place])
+    }
+    if (out.length === 0) out.push('영')
+  }
+  if (frac !== undefined) {
+    out.push('점')
+    for (const ch of frac) out.push(ch === '0' ? '영' : DIGIT_GLOSS[Number(ch)])
+  }
+  return out
+}
+
+// 숫자 바로 뒤의 한 글자 단위 — 그 자체가 수어 글로스로 있는 것만.
+// ('일'은 숫자 1과 같은 표기라 날짜 "3일"도 자연스럽게 "삼 일"이 된다.)
+const UNIT_GLOSS: Record<string, string> = {
+  시: '시', 분: '분', 도: '도', 명: '명', 층: '층0', 일: '일', 년: '년',
+}
 
 export class DictSignAgent implements SignAgent {
   private table: AlignTable | null = null
@@ -86,8 +138,40 @@ export class DictSignAgent implements SignAgent {
     }
     const lookup = (w: string): string[] | undefined => table[w] ?? table[stemKorean(w)]
 
-    for (const raw of text.match(TOKEN_RE) ?? []) {
+    // 전화번호 | 숫자 | 한글 낱말 — 문장 순서를 지키며 훑는다.
+    const SCAN_RE = /(\d{2,4}-\d{3,4}-\d{4})|(\d+(?:\.\d+)?)|([가-힣]+)/g
+    let afterNumber = false
+    for (const m of text.matchAll(SCAN_RE)) {
+      if (m[1]) {
+        // 전화번호: 자릿수 읽기 (032 → 공 삼 이)
+        for (const g of numberGlosses(m[1].replace(/-/g, ''))) push(g)
+        afterNumber = false
+        continue
+      }
+      if (m[2]) {
+        for (const g of numberGlosses(m[2])) push(g)
+        afterNumber = true
+        continue
+      }
+      const raw = m[3]
+      // 숫자 뒤의 단위(3일·14시·5층)는 한 글자여도 살린다 — 조사가 붙어도("14시에")
+      // 단위 글자 + 조사뿐이면 단위로 본다.
+      if (afterNumber && UNIT_GLOSS[raw[0]]) {
+        const rest = raw.slice(1)
+        if (rest === '' || rest.replace(PARTICLE_RE, '') === '') {
+          push(UNIT_GLOSS[raw[0]])
+          afterNumber = false
+          continue
+        }
+      }
+      if (raw.length === 1) {
+        afterNumber = false
+        continue
+      }
+      afterNumber = false
       if (raw.length < MIN_STEM) continue
+      // 문법·공손 표현은 번역하지 않는다(수어에 대응 표현이 없다). 카드에도 안 띄운다.
+      if (STOP_WORDS.has(raw) || STOP_WORDS.has(stemKorean(raw))) continue
       const hit = lookup(raw)
       if (hit?.length) { push(hit[0]); continue }
       // 복합어 최장일치 분해 — 재난문자는 "실외활동자제"처럼 낱말을 붙여 쓴다.
@@ -95,20 +179,30 @@ export class DictSignAgent implements SignAgent {
       // (예: 실외활동자제 → 실외+활동+자제). 두 조각 이상 해석될 때만 채택한다 —
       // 한 조각짜리 우연 매칭은 오역 위험이 크다.
       if (raw.length >= 4) {
-        const parts: string[] = []
+        // 조각은 두 종류: 사전에 있는 낱말(글로스로 번역)과 번역 제외어(소비만 하고
+        // 글로스 없음). "대피바랍니다" = 대피(번역) + 바랍니다(제외) → 도망1.
+        const parts: { piece: string; stop: boolean }[] = []
         let i = 0
         while (i < raw.length) {
           let matched = ''
+          let isStop = false
           for (let len = Math.min(raw.length - i, 6); len >= MIN_STEM; len--) {
             const piece = raw.slice(i, i + len)
+            if (STOP_WORDS.has(piece)) { matched = piece; isStop = true; break }
             if (lookup(piece)?.length) { matched = piece; break }
           }
           if (!matched) { i += 1; continue }
-          parts.push(matched)
+          parts.push({ piece: matched, stop: isStop })
           i += matched.length
         }
-        if (parts.length >= 2) {
-          for (const part of parts) push(lookup(part)![0])
+        const glossed = parts.filter((p) => !p.stop)
+        if (parts.length >= 2 && glossed.length >= 1) {
+          for (const part of glossed) push(lookup(part.piece)![0])
+          continue
+        }
+        // "주시기바랍니다"처럼 전부 제외어 조각이면 조용히 소비한다(카드 소음 방지).
+        if (parts.length >= 1 && glossed.length === 0
+            && parts.reduce((n, p) => n + p.piece.length, 0) === raw.length) {
           continue
         }
       }

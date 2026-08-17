@@ -38,13 +38,38 @@ from ml.signbridge.vocab import normalize_gloss  # noqa: E402
 PARTICLE_RE = re.compile(
     r"(으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다"
     r"|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요"
-    r"|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요"
+    r"|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|드리오니|되오니|하오니|오니"
     r"|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고"
     r"|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는"
     r"|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$"
 )
 TOKEN_RE = re.compile(r"[가-힣]+")
 MIN_STEM = 2
+
+# 번역 제외어 — 한국어 문법·공손 표현으로, 수어에서는 표현하지 않는 말들.
+# 실측 감사에서 이런 낱말의 Dice 매핑이 전부 잡음이었다(바랍니다→조심1,
+# 주시기→자동차2, 있습니다→기차1, 시까지→노래1 …). 키를 만들지 않으면
+# 잡음이 사전에 들어올 길 자체가 없다. **TS(dictSignAgent.ts)와 같은 목록 유지.**
+STOP_WORDS = {
+    "바랍니다", "바라며", "바람니다", "주시기", "주십시오", "있습니다", "있는",
+    "있으니", "있으면", "없습니다", "않도록", "않기", "됩니다", "되도록",
+    "합니다", "하시기", "하도록", "인해", "인한", "위해", "위한", "통해",
+    "통하여", "따라", "따른", "대한", "대해", "관련", "관한", "해당",
+    "등의", "등을", "등이", "및", "또는", "그리고", "기타", "위하여", "인하여",
+    "시까지", "분부터", "시부터", "분까지", "실시",
+}
+
+# 수동 시드 — 통계가 놓치는 고빈도 대응을 사람이 확정한 것. 자신 있는 것만 넣는다.
+# (실측 감사에서 발견된 잡음 1위 후보를 교정: 곳으로→편하다1 등)
+SEED_OVERRIDES = {
+    "곳으로": "장소1",
+    "곳에서": "장소1",
+    "안전": "안전1",
+    "안전한": "안전한1",
+    "주민들": "주민0",
+    "많은": "많다1",
+    "여진": "지진1",
+}
 
 
 def stem(word: str) -> str:
@@ -61,7 +86,10 @@ def stem(word: str) -> str:
 
 
 def tokenize(text: str) -> list[str]:
-    return [stem(t) for t in TOKEN_RE.findall(text) if len(t) >= MIN_STEM]
+    return [
+        stem(t) for t in TOKEN_RE.findall(text)
+        if len(t) >= MIN_STEM and t not in STOP_WORDS and stem(t) not in STOP_WORDS
+    ]
 
 
 def main() -> None:
@@ -135,6 +163,8 @@ def main() -> None:
         cands = [g for _, g in scored[: args.top]]
         # 용언 표제어는 "-다"형(기다리다1)이라 어간("기다리")과 어긋난다 — 둘 다 본다.
         exact = lemma_best.get(word) or lemma_best.get(word + "다")
+        if not exact and word.endswith("기"):
+            exact = lemma_best.get(word[:-1] + "다")  # 마시기 → 마시다
         if exact:
             cands = [exact] + [g for g in cands if g != exact]
         table[word] = cands[: args.top]
@@ -151,6 +181,44 @@ def main() -> None:
             table[lemma[:-1]] = [g]
             added += 1
     print(f"[align] 표제어 직결 추가 {added:,}개 (Dice 미포착분)")
+
+    # 복합어 통짜 키 제거 — "대피바랍니다"·"안전사고"처럼 두 낱말 이상으로 분해되는
+    # 키는 지운다. 통짜 키의 Dice 매핑은 잡음이기 쉽고(실측: 대피바랍니다→낚시1,
+    # 민방위훈련→시간:15분), 키가 없으면 브라우저가 최장일치 분해로 각 조각을
+    # 정확히 번역한다. 표제어 직결 키(그 자체가 사전 표제어)는 지우지 않는다.
+    def decomposes(word: str) -> bool:
+        parts = 0
+        i = 0
+        while i < len(word):
+            matched = 0
+            for length in range(min(len(word) - i, 6), MIN_STEM - 1, -1):
+                piece = word[i : i + length]
+                if piece != word and (piece in table or piece in STOP_WORDS):
+                    matched = length
+                    break
+            if not matched:
+                return False  # 전체가 조각으로 덮이지 않으면 통짜 키를 유지
+            parts += 1
+            i += matched
+        return parts >= 2
+
+    pruned = 0
+    for word in list(table):
+        if len(word) >= 4 and word not in lemma_best and decomposes(word):
+            del table[word]
+            pruned += 1
+    print(f"[align] 분해 가능한 복합 키 {pruned:,}개 제거 (조각 번역 우선)")
+
+    # 수동 시드는 마지막에 강제 — 통계·프루닝 결과와 무관하게 1순위를 보장한다.
+    seeded = 0
+    for word, g in SEED_OVERRIDES.items():
+        if playable is not None and g not in playable:
+            print(f"[align] ⚠️ 시드 {word}→{g} 는 동작 사전에 없어 건너뜀")
+            continue
+        prev = [x for x in table.get(word, []) if x != g]
+        table[word] = [g] + prev[: args.top - 1]
+        seeded += 1
+    print(f"[align] 수동 시드 {seeded}개 적용")
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(

@@ -73,6 +73,16 @@ export default function UserApp() {
   // 재난 앱은 홈 화면에 있어야 위급할 때 바로 연다.
   const installRef = useRef<{ prompt: () => Promise<unknown> } | null>(null)
   const [canInstall, setCanInstall] = useState(false)
+  // 아이폰 사파리에는 설치 프롬프트가 없다(beforeinstallprompt 미지원). 그래서 위 버튼이
+  // 영영 나타나지 않고, 아이폰 사용자는 **설치할 수 있다는 사실 자체를 모른다.**
+  // 국내 사용자 상당수가 아이폰이라 안내가 없으면 그만큼이 앱을 못 쓰는 셈이다.
+  const [iosHint, setIosHint] = useState(() => {
+    if (typeof navigator === 'undefined') return false
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const standalone = (navigator as unknown as { standalone?: boolean }).standalone === true
+      || window.matchMedia?.('(display-mode: standalone)').matches
+    return ios && !standalone && localStorage.getItem('sb-ios-hint') !== 'off'
+  })
   useEffect(() => {
     const onPrompt = (e: Event) => {
       e.preventDefault()
@@ -180,6 +190,18 @@ export default function UserApp() {
           flash ? 'border-amber-400 opacity-100' : 'border-transparent opacity-0'
         }`}
       />
+
+      {/* 아이폰 설치 안내 — 한 번 닫으면 다시 띄우지 않는다 */}
+      {iosHint && (
+        <button
+          type="button"
+          onClick={() => { localStorage.setItem('sb-ios-hint', 'off'); setIosHint(false) }}
+          className="shrink-0 border-b border-cyan-glow/30 bg-cyan-glow/10 px-4 py-2 text-left text-sm leading-snug text-cyan-soft"
+        >
+          📲 <b>아이폰</b>: 아래 <b>공유</b> 버튼 → <b>“홈 화면에 추가”</b>를 누르면
+          앱처럼 열리고 회선이 없어도 동작해요. <span className="text-slate-400">(눌러서 닫기)</span>
+        </button>
+      )}
 
       {/* 상단바 — 최소한만.
           폰 폭(390px)에서는 제목·탭·버튼이 한 줄에 들어가지 않아 탭 글자가 세로로 깨지고

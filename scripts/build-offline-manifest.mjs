@@ -101,7 +101,22 @@ const manifest = {
   phrases: phraseGlosses.size,
 }
 
+// 빌드가 스스로 지키게 한다 — 이 결함들은 조용해서(받는 데 성공한 것처럼 보인다)
+// 사람 눈으로는 다시 놓치기 쉽다.
 if (manifest.phrases === 0) throw new Error('오프라인 목록: 상용구 글로스를 하나도 찾지 못했습니다')
+
+const all = [...manifest.essential, ...manifest.extended]
+const noExt = all.filter((f) => !/\.[a-z0-9]+$/i.test(f))
+if (noExt.length) {
+  throw new Error(`오프라인 목록에 파일이 아닌 항목이 있습니다(디렉터리는 404가 납니다): ${noExt.join(', ')}`)
+}
+const zero = all.filter((f) => sizeOf(f) === 0)
+if (zero.length) {
+  throw new Error(`오프라인 목록에 실제로 없는 파일이 있습니다: ${zero.slice(0, 5).join(', ')}`)
+}
+if (!all.some((f) => f.includes('ksl-iso/model.onnx'))) {
+  throw new Error('오프라인 목록에 인식 모델이 없습니다 — 오프라인에서 수어 입력이 죽습니다')
+}
 
 writeFileSync(join(DIST, 'data/offline.json'), JSON.stringify(manifest))
 const mb = (n) => (n / 1024 / 1024).toFixed(1)

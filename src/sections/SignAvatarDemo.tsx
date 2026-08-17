@@ -48,6 +48,8 @@ export default function SignAvatarDemo() {
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState<number>(1)
   const [mode, setMode] = useState<DisplayMode>('3d')
+  // 자막 — 수어를 모르는 청중에게 아바타 동작과 단어를 연결해 준다. 기본 켬.
+  const [captions, setCaptions] = useState(true)
   const [avatarUrl, setAvatarUrl] = useState(AVATARS[0].url)
   const [customUrl, setCustomUrl] = useState('')
   const objUrlRef = useRef<string | null>(null)
@@ -250,6 +252,15 @@ export default function SignAvatarDemo() {
     return s
   }, [data, time])
 
+  // 자막에 띄울 현재 글로스. 여러 층렬이 겹치면 시작이 이른 것부터 붙여 보여 준다.
+  const currentGlossText = useMemo(() => {
+    if (!data) return ''
+    return [...activeGloss]
+      .sort((a, b) => data.gloss_sequence[a].start - data.gloss_sequence[b].start)
+      .map((i) => cleanGloss(data.gloss_sequence[i].gloss))
+      .join(' · ')
+  }, [data, activeGloss])
+
   return (
     <section id="demo" className="section-pad relative">
       {/* ambient glow behind the stage */}
@@ -416,6 +427,19 @@ export default function SignAvatarDemo() {
                       {MODE_LABELS[m]}
                     </button>
                   ))}
+                  <button
+                    type="button"
+                    onClick={() => setCaptions((c) => !c)}
+                    aria-pressed={captions}
+                    title="현재 표현 중인 수어 단어를 자막으로 표시"
+                    className={`rounded-md border px-2.5 py-1.5 text-[11px] transition-colors ${
+                      captions
+                        ? 'border-cyan-glow bg-cyan-glow text-space-950 font-bold'
+                        : 'border-white/10 bg-space-900/80 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    자막
+                  </button>
                 </div>
 
                 {/* 3D mode renders its own R3F canvas; 2D modes use the 2D canvas. */}
@@ -435,7 +459,21 @@ export default function SignAvatarDemo() {
                   <canvas ref={canvasRef} className="block h-full w-full" />
                 )}
 
-                {mode === '3d' && (
+                {/* 자막 오버레이 — 지금 어느 단어를 표현 중인지 보여 준다.
+                    발표에서 "아바타가 팔을 움직인다"와 "무슨 말을 하는 중이다"는 다르다.
+                    수어를 모르는 청중에게 이 연결을 보여 주는 게 자막의 역할이다. */}
+                {captions && data && (
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-space-900/95 via-space-900/70 to-transparent px-4 pb-3 pt-10">
+                    <p className="truncate text-center text-[11px] text-slate-400">
+                      {data.korean_text}
+                    </p>
+                    <p className="mt-1 text-center text-lg font-bold tracking-wide text-cyan-soft text-glow sm:text-xl">
+                      {currentGlossText || ' '}
+                    </p>
+                  </div>
+                )}
+
+                {mode === '3d' && !captions && (
                   <span className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded-full border border-white/10 bg-space-900/70 px-3 py-1 text-[10.5px] text-slate-400 backdrop-blur-sm">
                     드래그로 360° 회전 · 휠로 확대
                   </span>

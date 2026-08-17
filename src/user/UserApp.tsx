@@ -14,6 +14,7 @@ import type { Severity } from '../agents/types'
 import { categoryKo, type FeedItem } from '../sections/sign/LiveConsole'
 import { guideFor } from './safetyGuides'
 import { useSignPlayer } from './useSignPlayer'
+import { glossLabel } from '../agents/glossLabel'
 import { useOfflineReady } from './useOfflineReady'
 import SignStage from './SignStage'
 
@@ -173,6 +174,15 @@ export default function UserApp() {
         }).join('')
       hits = keys.filter((k) => chosung(k).startsWith(query))
     }
+    // 같은 이름으로 보이는 변이형(병원0·병원1·병원1@)은 하나만 남긴다 —
+    // 화면에 똑같은 카드가 넷 뜨면 무엇을 눌러야 하는지 알 수 없다.
+    const seen = new Set<string>()
+    hits = hits.filter((g) => {
+      const label = glossLabel(g)
+      if (seen.has(label)) return false
+      seen.add(label)
+      return true
+    })
     setDictHits(hits.slice(0, 18))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.bank])
@@ -182,8 +192,8 @@ export default function UserApp() {
     setAuto(false)
     setNotice(null)
     // 단어 하나를 그 자체 글로스로 재생한다 — 원문은 번호를 뗀 표제어로 보여준다.
-    const composed = await player.play(gloss.replace(/[0-9#:]+$/, ''), [gloss])
-    if (composed) player.playData({ ...composed, korean_text: gloss.replace(/[0-9#:]+$/, '') })
+    const composed = await player.play(glossLabel(gloss), [gloss])
+    if (composed) player.playData({ ...composed, korean_text: glossLabel(gloss) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.play, player.playData])
 
@@ -331,7 +341,7 @@ export default function UserApp() {
                 onClick={() => void playDictWord(g)}
                 className="rounded-2xl border border-white/10 bg-space-800 px-3 py-5 text-xl font-bold text-slate-200 transition-colors hover:border-cyan-glow/50 hover:text-cyan-soft"
               >
-                {g.replace(/[0-9#:]+$/, '') || g}
+                {glossLabel(g)}
               </button>
             ))}
           </div>

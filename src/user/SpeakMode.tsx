@@ -4,6 +4,7 @@
 // 다르다: 설명 없이 카메라가 주인공, 인식된 단어는 크게, 버튼은 둘뿐(지우기·질문).
 // MediaPipe 번들이 무거워 이 컴포넌트는 lazy로만 불러온다.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 import { useHolistic } from '../recognition/useHolistic'
 import { useRecognizer } from '../recognition/useRecognizer'
 import { Orchestrator } from '../agents/orchestrator'
@@ -88,7 +89,7 @@ export default function SpeakMode({ onAnswer }: Props) {
         {running && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-4 pt-14 text-center">
             <p className={`text-4xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-500'}`}>
-              {confident && rec.current ? rec.current.label.replace(/[0-9#:]+$/, '') : '…'}
+              {confident && rec.current ? glossLabel(rec.current.label) : '…'}
             </p>
             {/* 후보 2~3위 — AI가 무엇과 헷갈리는지 투명하게. 인식이 애매할 때
                 사용자가 "아, 비슷한 동작이구나"를 바로 안다. */}
@@ -96,7 +97,7 @@ export default function SpeakMode({ onAnswer }: Props) {
               <p className="mt-1 flex justify-center gap-2 text-sm text-slate-400">
                 {rec.top3.slice(1).map((c) => (
                   <span key={c.label}>
-                    {c.label.replace(/[0-9#:]+$/, '')} {Math.round(c.confidence * 100)}%
+                    {glossLabel(c.label)} {Math.round(c.confidence * 100)}%
                   </span>
                 ))}
               </p>

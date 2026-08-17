@@ -4,6 +4,7 @@
 // `compact`로 자막을 한 줄로 줄인다. 무대의 문법은 두 화면에서 같아야 한다 —
 // 같은 앱 안에서 아바타가 있는 곳마다 다르게 보이면 사용자가 매번 다시 배운다.
 import { lazy, Suspense } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 import { AVATARS } from '../sections/sign/avatars'
 import type { SignPlayer } from './useSignPlayer'
 
@@ -90,7 +91,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
                   key={`${w}-${i}`}
                   className="rounded-xl border-2 border-amber-400/70 bg-amber-400/15 px-2.5 py-1 text-lg font-extrabold text-amber-200"
                 >
-                  {w.replace(/[0-9#:]+$/, '') || w}
+                  {glossLabel(w)}
                 </span>
               ))}
             </div>
@@ -108,7 +109,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
                         : state === 'done' ? 'text-slate-300' : 'text-slate-600'
                     }`}
                   >
-                    {g.gloss.replace(/[0-9#:]+$/, '')}
+                    {glossLabel(g.gloss)}
                   </span>
                 )
               })}

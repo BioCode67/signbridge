@@ -8,6 +8,7 @@
 //
 // 수어 입력(대화)과 질문 탭이 같은 화면 문법을 쓰도록 한 곳에 둔다.
 import { useState } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 
 interface Props {
   /** 확정된 낱말(글로스 ID) */
@@ -17,7 +18,7 @@ interface Props {
   onReplace(index: number, label: string): void
 }
 
-const bare = (g: string) => g.replace(/[0-9#:]+$/, '')
+const bare = glossLabel
 
 export default function RecognizedWords({ words, alts, onReplace }: Props) {
   const [fixing, setFixing] = useState<number | null>(null)

@@ -12,6 +12,7 @@
 // 카메라 영상은 **어디로도 전송되지 않는다**(브라우저 안에서 추론). 병원 창구에서
 // 쓰는 물건이라 이 사실이 중요하다 — 화면에도 적어 둔다.
 import { useCallback, useEffect, useRef } from 'react'
+import { glossLabel } from '../agents/glossLabel'
 import { useHolistic } from '../recognition/useHolistic'
 import { useRecognizer } from '../recognition/useRecognizer'
 import type { LandmarkFrame } from '../recognition/landmarks'
@@ -43,7 +44,7 @@ export default function SignInputPanel({ onSend, onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const words = rec.transcript.map((t) => t.replace(/[0-9#:]+$/, ''))
+  const words = rec.transcript.map(glossLabel)
   const confident = rec.current !== null && rec.current.confidence >= 0.5
 
   return (
@@ -79,7 +80,7 @@ export default function SignInputPanel({ onSend, onClose }: Props) {
         {running && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-3 pb-3 pt-10 text-center">
             <p className={`text-3xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-500'}`}>
-              {confident && rec.current ? rec.current.label.replace(/[0-9#:]+$/, '') : '…'}
+              {confident && rec.current ? glossLabel(rec.current.label) : '…'}
             </p>
             {words.length > 0 && (
               <>

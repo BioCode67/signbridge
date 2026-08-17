@@ -1,3 +1,4 @@
+import { glossLabel } from './glossLabel'
 // 글로스열 → 말이 되는 한국어. **농인이 수어로 답한 것을 직원이 듣는 쪽**이다.
 //
 // **왜 필요한가.** 수어 인식은 낱말을 하나씩 내놓는다. 그대로 소리로 내보내면
@@ -67,7 +68,7 @@ const isVerb = (lemma: string) => lemma.length >= 2 && lemma.endsWith('다')
  *   3) 나머지는 그대로 띄어 쓴다
  */
 export function glossesToKorean(glosses: string[]): string {
-  const lemmas = glosses.map((g) => g.replace(/[0-9#:]+$/, '')).filter(Boolean)
+  const lemmas = glosses.map(glossLabel).filter(Boolean)
   if (lemmas.length === 0) return ''
   const lastVerb = lemmas.map(isVerb).lastIndexOf(true)
   const words = lemmas.map((lemma, i) => {

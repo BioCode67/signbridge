@@ -281,6 +281,8 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
             best = st
     rep.check(best["frames"] > 20, "오프라인: 창구 문구가 수어로 재생",
               f"{best['frames']}프레임 · 단어 {best['glosses']}개")
+    # 인터넷이 없으면 마이크는 원리상 안 된다 — 그 사실과 대안을 화면이 말해야 한다.
+    rep.check(await pg.get_by_text("인터넷이 없어요").count() > 0, "오프라인: 마이크 대안 안내")
 
     if keep or rep.fails:
         await pg.screenshot(path=str(ROOT / "e2e_오프라인.png"))

@@ -73,6 +73,19 @@ export default function TalkMode() {
   const [saved2, setSaved2] = useState(false)
   // 답 화면 뒤집기 — 창구에 폰을 놓고 마주 앉으면 상대에게는 글씨가 거꾸로 보인다.
   const [flipped, setFlipped] = useState(false)
+  // 인터넷 유무 — 음성 인식은 **원리상 서버를 타므로 오프라인에서 동작하지 않는다.**
+  // 끊긴 걸 모르고 마이크만 계속 누르면 창구에서 시간을 버린다. 미리 알리고 대안을 말한다.
+  const [online, setOnline] = useState(() => navigator.onLine)
+  useEffect(() => {
+    const up = () => setOnline(true)
+    const down = () => setOnline(false)
+    window.addEventListener('online', up)
+    window.addEventListener('offline', down)
+    return () => {
+      window.removeEventListener('online', up)
+      window.removeEventListener('offline', down)
+    }
+  }, [])
   // 자막 크기·재생 속도 — 저시력·고령 사용자와 수어 학습자에게 필요하다.
   // 받기 화면과 같은 값을 쓴다(기기에 기억되므로 한 번만 맞추면 된다).
   const [fontScale, setFontScale] = useState<0 | 1 | 2>(() => {
@@ -125,6 +138,8 @@ export default function TalkMode() {
     setTurns((t) => [...t, { who: 'deaf', text, time: nowTime() }])
     setShown(text)
     tts.speak(text)
+    // 말이 나갔다는 감각 — 소리를 못 들으니 손끝으로 알려 준다.
+    navigator.vibrate?.(60)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tts.speak])
 
@@ -586,7 +601,7 @@ export default function TalkMode() {
         <div className="px-3 pt-3">
           <button
             type="button"
-            disabled={!mic.supported}
+            disabled={!mic.supported || !online}
             onClick={mic.toggle}
             className={`w-full rounded-2xl border-2 py-4 text-xl font-extrabold transition-colors disabled:opacity-40 ${
               mic.listening
@@ -596,6 +611,11 @@ export default function TalkMode() {
           >
             {mic.listening ? '⏹ 말하기 끝' : '🎙 직원이 말하면 수어로'}
           </button>
+          {!online && (
+            <p className="mt-1 text-center text-sm font-bold text-amber-300">
+              📴 인터넷이 없어요 — 마이크는 안 되지만 질문 카드·글쓰기·수어는 그대로 됩니다
+            </p>
+          )}
           {!mic.supported && (
             <p className="mt-1 text-center text-sm text-amber-300">
               이 브라우저는 마이크 인식을 지원하지 않아요. 아래 카드를 눌러 주세요.

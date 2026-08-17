@@ -146,6 +146,14 @@ export default function Navbar() {
               <Button href="#demo" variant="primary" className="mt-2 w-full" onClick={() => setOpen(false)}>
                 실시간 데모
               </Button>
+              {/* 모바일에서 당사자 진입이 빠져 있으면 정작 주 사용자가 못 찾는다 */}
+              <a
+                href="#/app"
+                onClick={() => setOpen(false)}
+                className="mt-1 w-full rounded-full border border-amber-400/50 bg-amber-400/10 px-4 py-3 text-center text-base font-semibold text-amber-300"
+              >
+                🤟 수어 이용자 화면
+              </a>
             </div>
           </motion.div>
         )}

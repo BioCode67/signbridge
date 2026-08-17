@@ -26,3 +26,13 @@ else setTimeout(warmDemo, 1500)
 if (new URLSearchParams(location.search).get('selftest') === 'onnx') {
   void import('./ortSelfTest').then((m) => m.runOnnxSelfTest())
 }
+
+// 오프라인 지원 — 재난 상황은 네트워크가 가장 먼저 불안해지는 순간이다.
+// 한 번 방문한 사용자는 그 뒤 오프라인에서도 앱이 열린다(sw.js 런타임 캐시).
+if ('serviceWorker' in navigator && !location.hostname.includes('localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
+      /* http 로컬 등 미지원 환경 — 조용히 넘어간다 */
+    })
+  })
+}

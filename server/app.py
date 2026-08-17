@@ -395,11 +395,19 @@ def gloss_to_text(req: G2TRequest):
         except Exception:
             pass  # 검증 실패는 복원 자체를 막지 않는다 — 점수만 보수적으로 둘 수도 없으니 1.0 유지
 
+    # ── 환각 방어 — 입력 글로스에 없는 구체 숫자를 지어내면 저신뢰로 내린다.
+    # 부분열 증강 실험(g2t-v2)에서 "경주시 남남서쪽 6km 규모 4.3"처럼 글로스에 없는
+    # 수치·지명을 창작하는 실패를 관측했다. 안전 안내에서 가짜 수치는 오역보다 위험하다.
+    src_digits = set(re.findall(r"\d+", " ".join(req.gloss)))
+    out_digits = set(re.findall(r"\d+", text))
+    invented = out_digits - src_digits - {"1", "2", "3"}  # 소수 서수는 관용 허용
+    hallucinated = len(invented) > 0
+
     return G2TResponse(
         gloss=req.gloss,
         text=text,
         consistency=round(consistency, 3),
-        low_confidence=consistency < 0.5,
+        low_confidence=consistency < 0.5 or hallucinated,
         roundtrip_gloss=roundtrip,
     )
 

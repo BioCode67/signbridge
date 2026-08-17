@@ -53,6 +53,8 @@ export default function SignAvatarDemo() {
   const [mode, setMode] = useState<DisplayMode>('3d')
   // 자막 — 수어를 모르는 청중에게 아바타 동작과 단어를 연결해 준다. 기본 켬.
   const [captions, setCaptions] = useState(true)
+  // 연속 방송 — 문장이 끝나면 다음 문장으로 이어 재생(무인 재난방송 시연용).
+  const [broadcast, setBroadcast] = useState(false)
   const [avatarUrl, setAvatarUrl] = useState(AVATARS[0].url)
   const [customUrl, setCustomUrl] = useState('')
   const objUrlRef = useRef<string | null>(null)
@@ -102,6 +104,12 @@ export default function SignAvatarDemo() {
   useEffect(() => { frameRef.current = frame }, [frame])
   useEffect(() => { speedRef.current = speed }, [speed])
   useEffect(() => { playingRef.current = playing }, [playing])
+  // rAF 루프가 최신 값을 읽되 루프를 다시 만들지 않도록 ref로 거울을 둔다.
+  // (재생 중 이 값들이 바뀌어도 애니메이션이 끊기면 안 된다)
+  const broadcastRef = useRef(false)
+  const sentencesRef = useRef(0)
+  useEffect(() => { broadcastRef.current = broadcast }, [broadcast])
+  useEffect(() => { sentencesRef.current = sentences.length }, [sentences.length])
 
   // --- Size the canvas backing store to its CSS box (DPR-aware) ---
   const syncCanvasSize = useCallback(() => {
@@ -153,9 +161,15 @@ export default function SignAvatarDemo() {
         lastRef.current = ts
         let next = frameRef.current + 1
         if (next >= data.num_frames) {
-          next = 0
           frameRef.current = 0
           setFrame(0)
+          // 연속 방송: 문장이 끝나면 다음 문장으로 넘어가 계속 재생한다.
+          // 실제 재난방송은 한 문장으로 끝나지 않는다 — 여러 공지가 순서대로 나간다.
+          if (broadcastRef.current) {
+            setIndex((i) => (i + 1) % Math.max(1, sentencesRef.current))
+            rafRef.current = requestAnimationFrame(step)
+            return
+          }
           setPlaying(false)
           return
         }
@@ -668,6 +682,23 @@ export default function SignAvatarDemo() {
                   className="rounded-lg border border-white/10 px-5 py-2.5 text-sm text-slate-300 transition-colors hover:border-cyan-glow/40 hover:text-cyan-soft"
                 >
                   처음으로
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const on = !broadcast
+                    setBroadcast(on)
+                    if (on) setPlaying(true) // 켜면 바로 방송이 시작돼야 자연스럽다
+                  }}
+                  aria-pressed={broadcast}
+                  title="문장이 끝나면 다음 문장으로 이어 재생 — 무인 재난방송 시연"
+                  className={`rounded-lg border px-4 py-2.5 text-sm transition-colors ${
+                    broadcast
+                      ? 'border-cyan-glow bg-cyan-glow/10 font-semibold text-cyan-soft'
+                      : 'border-white/10 text-slate-300 hover:border-cyan-glow/40 hover:text-cyan-soft'
+                  }`}
+                >
+                  {broadcast ? '📡 연속 방송 중' : '📡 연속 방송'}
                 </button>
                 <div className="flex gap-1">
                   {SPEEDS.map((s) => (

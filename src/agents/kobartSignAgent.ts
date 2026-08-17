@@ -6,7 +6,9 @@
 import type { SignAgent, SignConversion } from './types'
 import { RuleSignAgent } from './signAgent'
 
-const DEFAULT_URL = 'http://localhost:8000'
+import { API_URL } from '../config'
+
+const DEFAULT_URL = API_URL
 const TIMEOUT_MS = 12000
 
 export class KoBartSignAgent implements SignAgent {

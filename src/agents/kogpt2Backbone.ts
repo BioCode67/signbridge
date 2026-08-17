@@ -3,7 +3,9 @@
 // 타임아웃·오류 시 예외를 던져 QAAgent가 템플릿 백본으로 폴백하게 한다.
 import type { BackboneContext, LanguageBackbone } from './qaBackbone'
 
-const DEFAULT_URL = 'http://localhost:8000'
+import { API_URL } from '../config'
+
+const DEFAULT_URL = API_URL
 const TIMEOUT_MS = 12000
 
 export class KoGPT2Backbone implements LanguageBackbone {

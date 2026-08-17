@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
+import { API_URL } from '../config'
 import Button from '../ui/Button'
 import { Orchestrator } from '../agents/orchestrator'
 import { RuleDisasterAgent } from '../agents/disasterAgent'
@@ -80,7 +81,7 @@ export default function AgentConsole() {
 
   // KoGPT2 백본 토글.
   const [useKoGPT2, setUseKoGPT2] = useState(false)
-  const [serverUrl, setServerUrl] = useState('http://localhost:8000')
+  const [serverUrl, setServerUrl] = useState(API_URL)
   const [serverOk, setServerOk] = useState<boolean | null>(null)
 
   const toggleBackbone = async (on: boolean) => {

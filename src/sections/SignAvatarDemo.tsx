@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
+import { API_URL, API_IS_REMOTE } from '../config'
 import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
 import { AVATARS } from './sign/avatars'
@@ -25,8 +26,8 @@ function cleanGloss(g: string): string {
   return g.replace(/[0-9#:]+$/, '')
 }
 
-// AI 번역 서버(FastAPI /compose). 없으면 이 입력창만 비활성 — 수록 문장 재생은 그대로 동작.
-const COMPOSE_URL = 'http://localhost:8000/compose'
+// AI 번역 서버(FastAPI /compose). 주소는 src/config.ts(VITE_API_URL)에서 온다.
+// 서버가 없어도 수록 문장 재생·아바타는 그대로 동작한다.
 
 export default function SignAvatarDemo() {
   const load = useSignData()
@@ -184,7 +185,7 @@ export default function SignAvatarDemo() {
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 20000)
-      const res = await fetch(COMPOSE_URL, {
+      const res = await fetch(`${API_URL}/compose`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         signal: ctrl.signal,
@@ -203,9 +204,13 @@ export default function SignAvatarDemo() {
         setAiNote(`동작 사전에 없는 단어 ${json.gloss_missing.length}개는 건너뜀`)
       }
     } catch (err) {
+      // 배포본은 외부 API가 잠들어 있을 수 있다(무료 호스팅 콜드 스타트).
+      const timedOut = err instanceof Error && err.name === 'AbortError'
       setAiNote(
-        err instanceof Error && err.name === 'AbortError'
-          ? 'AI 번역 서버 응답 없음 — 로컬 서버(uvicorn server.app:app)를 켜 주세요'
+        timedOut
+          ? API_IS_REMOTE
+            ? 'AI 서버가 깨어나는 중입니다(무료 호스팅 첫 요청은 1분쯤 걸립니다). 잠시 후 다시 눌러 주세요.'
+            : 'AI 번역 서버 응답 없음 — 로컬 서버(uvicorn server.app:app)를 켜 주세요'
           : `번역 실패: ${err instanceof Error ? err.message : String(err)}`,
       )
     } finally {

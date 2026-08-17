@@ -158,9 +158,15 @@ export default function SignAvatarDemo() {
     const step = (ts: number) => {
       if (!playingRef.current) return
       const interval = 1000 / data.fps / speedRef.current
-      if (ts - lastRef.current >= interval) {
-        lastRef.current = ts
-        const next = frameRef.current + 1
+      if (lastRef.current === 0) lastRef.current = ts
+      const elapsed = ts - lastRef.current
+      if (elapsed >= interval) {
+        // **지난 시간만큼 건너뛴다.** 한 틱에 한 프레임씩만 넘기면 화면이 느린 기기에서
+        // 수어가 슬로모션이 된다 — 수어는 속도가 뜻의 일부라 늘어지면 틀린 수어가 된다.
+        // (사용자 앱의 useSignPlayer와 같은 규칙. 한쪽만 고치면 두 화면의 속도가 갈린다.)
+        const advance = Math.min(Math.floor(elapsed / interval), 6)
+        lastRef.current += advance * interval
+        const next = frameRef.current + advance
         if (next >= data.num_frames) {
           frameRef.current = 0
           setFrame(0)

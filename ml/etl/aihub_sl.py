@@ -274,6 +274,10 @@ def main() -> None:
     parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int, default=0)
+    # HPC 여러 VM에 나눠 돌릴 때: 클립을 정렬 순서 기준 modulo로 가른다.
+    # 같은 목록·같은 정렬이면 샤드가 겹치지도 빠지지도 않는다.
+    parser.add_argument("--shard", type=int, default=0, help="이 샤드 번호(0부터)")
+    parser.add_argument("--num-shards", type=int, default=1, help="전체 샤드 수")
     parser.add_argument(
         "--force-2d",
         action="store_true",
@@ -307,6 +311,9 @@ def main() -> None:
                 continue
         payloads.append((stem, morpheme_index.get(stem), paths, args.out, args.fps, not args.force_2d))
 
+    if args.num_shards > 1:
+        payloads = [p for i, p in enumerate(payloads) if i % args.num_shards == args.shard]
+        print(f"[etl] 샤드 {args.shard}/{args.num_shards} → {len(payloads)}개 담당")
     if args.limit:
         payloads = payloads[: args.limit]
     if not payloads:

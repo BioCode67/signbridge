@@ -71,14 +71,37 @@ export class DictSignAgent implements SignAgent {
     }
 
     const gloss: string[] = []
+    const push = (g: string) => {
+      // 같은 글로스가 연달아 나오면 한 번만 — 수어에서 반복은 다른 의미가 된다.
+      if (gloss[gloss.length - 1] !== g) gloss.push(g)
+    }
+    const lookup = (w: string): string[] | undefined => table[w] ?? table[stemKorean(w)]
+
     for (const raw of text.match(TOKEN_RE) ?? []) {
       if (raw.length < MIN_STEM) continue
-      // 원형 → 어간 순으로 찾는다. "한파가"는 어간 "한파"에서 맞는다.
-      const hit = table[raw] ?? table[stemKorean(raw)]
-      if (!hit || hit.length === 0) continue
-      const best = hit[0]
-      // 같은 글로스가 연달아 나오면 한 번만 — 수어에서 반복은 다른 의미가 된다.
-      if (gloss[gloss.length - 1] !== best) gloss.push(best)
+      const hit = lookup(raw)
+      if (hit?.length) { push(hit[0]); continue }
+      // 복합어 최장일치 분해 — 재난문자는 "실외활동자제"처럼 낱말을 붙여 쓴다.
+      // 어간 제거만으로는 못 쪼개므로, 사전 키로 앞에서부터 가장 길게 잘라 나간다.
+      // (예: 실외활동자제 → 실외+활동+자제). 두 조각 이상 해석될 때만 채택한다 —
+      // 한 조각짜리 우연 매칭은 오역 위험이 크다.
+      if (raw.length >= 4) {
+        const parts: string[] = []
+        let i = 0
+        while (i < raw.length) {
+          let matched = ''
+          for (let len = Math.min(raw.length - i, 6); len >= MIN_STEM; len--) {
+            const piece = raw.slice(i, i + len)
+            if (lookup(piece)?.length) { matched = piece; break }
+          }
+          if (!matched) { i += 1; continue }
+          parts.push(matched)
+          i += matched.length
+        }
+        if (parts.length >= 2) {
+          for (const part of parts) push(lookup(part)![0])
+        }
+      }
     }
 
     if (gloss.length === 0) {

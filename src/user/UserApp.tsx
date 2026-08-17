@@ -12,8 +12,22 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { SignData } from '../sections/sign/signTypes'
 import { composeGlosses, type BankIndex } from '../sections/sign/composeLocal'
 import { DictSignAgent } from '../agents/dictSignAgent'
+import { RuleDisasterAgent } from '../agents/disasterAgent'
+import type { Severity } from '../agents/types'
 import { AVATARS } from '../sections/sign/avatars'
 import { categoryKo, type FeedItem } from '../sections/sign/LiveConsole'
+
+// 심각도 → 색·라벨. 색만으로 구분하지 않도록 라벨을 함께 쓴다(색각 배려).
+const SEVERITY_UI: Record<Severity, { label: string; cls: string }> = {
+  emergency: { label: '긴급', cls: 'border-red-400 bg-red-500/20 text-red-200' },
+  warning: { label: '경보', cls: 'border-orange-400 bg-orange-400/20 text-orange-200' },
+  watch: { label: '주의', cls: 'border-amber-300 bg-amber-300/15 text-amber-200' },
+  info: { label: '안내', cls: 'border-slate-400 bg-slate-400/15 text-slate-300' },
+}
+// 문자 원문에서 지역 근사 추출 — 행정단위 접미사가 붙은 첫 낱말.
+// 접미사 뒤가 한글이면 낱말 중간이다("철새도래지"의 "철새도" 오인 방지).
+// 한 글자 행정단위(도·시·구·동·읍·면)는 앞이 2글자 이상일 때만 지역으로 본다.
+const REGION_RE = /([가-힣]{2,6}(?:특별시|광역시|자치시|자치도|시|군|구|도|동|읍|면))(?![가-힣])/
 
 const Avatar3D = lazy(() => import('../sections/sign/Avatar3D'))
 // 말하기(웹캠 인식)는 MediaPipe 번들이 무거워 탭을 열 때만 불러온다.
@@ -43,9 +57,15 @@ export default function UserApp() {
   useEffect(() => { localStorage.setItem('sb-font', String(fontScale)) }, [fontScale])
   // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
   const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>('watch')
-  // 수신 이력 — 놓친 알림을 다시 본다. 세션 내 최근 20건.
-  const [history, setHistory] = useState<{ time: string; item: FeedItem }[]>([])
+  // 수신 이력 — 놓친 알림을 다시 본다. 최근 20건, 기기에 남는다(앱을 껐다 켜도 유지).
+  const [history, setHistory] = useState<{ time: string; item: FeedItem }[]>(() => {
+    try { return JSON.parse(localStorage.getItem('sb-history') ?? '[]') } catch { return [] }
+  })
+  useEffect(() => { localStorage.setItem('sb-history', JSON.stringify(history)) }, [history])
   const [showHistory, setShowHistory] = useState(false)
+  // 지금 재생 중인 문자의 요약 배지 — 종류·심각도·지역.
+  const [notice, setNotice] = useState<{ category?: string; severity: Severity; region?: string } | null>(null)
+  const disasterRef = useRef<RuleDisasterAgent | null>(null)
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -98,6 +118,13 @@ export default function UserApp() {
     // 소리를 못 듣는 사용자에게 진동은 소리의 역할을 한다(미지원 기기는 무시).
     navigator.vibrate?.([300, 120, 300])
     window.setTimeout(() => setFlash(false), 900)
+    // 요약 배지 — 종류(피드 분류)·심각도(규칙 판정)·지역(행정단위 근사).
+    if (!disasterRef.current) disasterRef.current = new RuleDisasterAgent()
+    setNotice({
+      category: item.category,
+      severity: disasterRef.current.assess({ text: item.text }).severity,
+      region: REGION_RE.exec(item.text)?.[1],
+    })
     const composed = await compose(item.text)
     setBusy(false)
     if (!composed) return
@@ -201,6 +228,7 @@ export default function UserApp() {
     if (!composed) return
     setTab('watch')
     setAuto(false)
+    setNotice(null)
     setData({ ...composed, korean_text: gloss.replace(/[0-9#:]+$/, '') })
     frameRef.current = 0
     setFrame(0)
@@ -210,6 +238,7 @@ export default function UserApp() {
   const onAnswer = useCallback((text: string, gloss?: string[]) => {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
+    setNotice(null)
     void (async () => {
       // 글로스가 직접 지정된 문구(장소 모드)는 번역을 거치지 않고 바로 합성한다.
       let composed: Playable | null = null
@@ -444,6 +473,24 @@ export default function UserApp() {
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-space-950 via-space-950/85 to-transparent px-4 pb-4 pt-16 text-center">
             {/* 낱말 카드 — 수어로 표현하지 못한 낱말(주로 지명·기관명)을 큰 글씨로.
                 지문자 데이터가 아직 없어 동작으론 못 보여주지만, 정보가 사라지면 안 된다. */}
+            {/* 요약 배지 — 무슨 일이(종류), 얼마나(심각도), 어디서(지역). 한눈에. */}
+            {notice && (
+              <div className="mb-2 flex flex-wrap items-center justify-center gap-1.5">
+                <span className={`rounded-lg border px-2.5 py-1 text-base font-extrabold ${SEVERITY_UI[notice.severity].cls}`}>
+                  {SEVERITY_UI[notice.severity].label}
+                </span>
+                {notice.category && (
+                  <span className="rounded-lg border border-cyan-glow/40 bg-cyan-glow/10 px-2.5 py-1 text-base font-bold text-cyan-soft">
+                    {categoryKo(notice.category)}
+                  </span>
+                )}
+                {notice.region && (
+                  <span className="rounded-lg border border-white/20 bg-space-800 px-2.5 py-1 text-base font-bold text-slate-200">
+                    📍 {notice.region}
+                  </span>
+                )}
+              </div>
+            )}
             {!!data.gloss_missing?.length && (
               <div className="mb-2 flex flex-wrap items-center justify-center gap-2">
                 {data.gloss_missing.map((w, i) => (
@@ -454,6 +501,28 @@ export default function UserApp() {
                     {w.replace(/[0-9#:]+$/, '') || w}
                   </span>
                 ))}
+              </div>
+            )}
+            {/* 문장 진행 — 전체 글로스열에서 지금 어디쯤인지. 지난 단어는 밝게 남는다. */}
+            {data.gloss_sequence.length > 1 && (
+              <div className="mb-1 flex flex-wrap items-center justify-center gap-1">
+                {data.gloss_sequence.map((g, i) => {
+                  const state = time > g.end ? 'done' : time >= g.start ? 'now' : 'todo'
+                  return (
+                    <span
+                      key={`${g.gloss}-${i}`}
+                      className={`rounded-md px-1.5 py-0.5 text-sm font-bold ${
+                        state === 'now'
+                          ? 'bg-cyan-glow/30 text-cyan-soft'
+                          : state === 'done'
+                            ? 'text-slate-300'
+                            : 'text-slate-600'
+                      }`}
+                    >
+                      {g.gloss.replace(/[0-9#:]+$/, '')}
+                    </span>
+                  )
+                })}
               </div>
             )}
             <p className={`font-extrabold tracking-wide text-cyan-soft text-glow ${

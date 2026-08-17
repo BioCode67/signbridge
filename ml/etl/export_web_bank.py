@@ -33,7 +33,17 @@ CONF_THRESHOLD = 0.1
 
 
 def compact(entry: dict) -> dict:
-    """좌표 반올림 + 신뢰도 이진화. 구조는 SignData 그대로 둔다."""
+    """좌표 반올림 + 신뢰도 이진화. 구조는 SignData 그대로 둔다.
+
+    수어영상 WORD 클립은 좌표가 **미터 단위**(±3)라 그대로 정수 반올림하면
+    동작이 0/1로 뭉개진다. 좌표 크기를 보고 미터로 판단되면 mm로 환산해
+    정수 정밀도를 지킨다(어깨 정규화가 단위를 흡수하므로 재생엔 영향 없다).
+    """
+    pose_vals = [abs(v) for row in entry["keypoints"].get("pose", []) for v in row if v]
+    pose_vals.sort()
+    med = pose_vals[len(pose_vals) // 2] if pose_vals else 0.0
+    factor = 1000.0 if 0 < med < 10.0 else 1.0
+
     out = {
         "korean_text": entry.get("korean_text", ""),
         "fps": entry.get("fps", 30.0),
@@ -50,7 +60,7 @@ def compact(entry: dict) -> dict:
                 if c < CONF_THRESHOLD or (x == 0 and y == 0):
                     new.extend((0, 0, 0))
                 else:
-                    new.extend((round(x), round(y), 1))
+                    new.extend((round(x * factor), round(y * factor), 1))
             packed.append(new)
         out["keypoints"][key] = packed
     return out
@@ -59,7 +69,8 @@ def compact(entry: dict) -> dict:
 def main() -> None:
     parser = argparse.ArgumentParser(description="웹 배포용 동작 사전 추출")
     parser.add_argument("--bank", type=Path, required=True, help="build_gloss_bank 산출 디렉터리")
-    parser.add_argument("--index", type=Path, required=True, help="빈도를 셀 index.jsonl 디렉터리")
+    parser.add_argument("--index", type=Path, required=True, nargs="+",
+                        help="빈도를 셀 index.jsonl 디렉터리(복수 가능 — 재난+일상)")
     parser.add_argument("--out", type=Path, required=True, help="public/data")
     parser.add_argument("--top", type=int, default=3000)
     args = parser.parse_args()
@@ -68,11 +79,12 @@ def main() -> None:
     print(f"[web] 전체 사전 {len(bank):,}종")
 
     freq: Counter = Counter()
-    for line in open(args.index / "index.jsonl", encoding="utf-8"):
-        for g in json.loads(line)["glosses"]:
-            name = normalize_gloss(g.get("gloss", ""))
-            if name:
-                freq[name] += 1
+    for index_dir in args.index:
+        for line in open(index_dir / "index.jsonl", encoding="utf-8"):
+            for g in json.loads(line)["glosses"]:
+                name = normalize_gloss(g.get("gloss", ""))
+                if name:
+                    freq[name] += 1
     total = sum(freq.values())
 
     chosen = [g for g, _ in freq.most_common() if g in bank][: args.top]

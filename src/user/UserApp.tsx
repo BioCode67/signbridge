@@ -137,13 +137,17 @@ export default function UserApp() {
   // 멈춰 놓고 보는데 다음 문장이 덮으면 정지의 의미가 없다.
   useEffect(() => {
     const pausedMidway = !playing && frame > 0
+    // **다른 탭에 있으면 멈춘다.** 창구에서 대화하는 동안에도 재난문자를 배경에서
+    // 번역·합성하고 있었다 — 보이지도 않는 화면을 위해 조각을 내려받고 프레임을
+    // 돌리느라, 정작 사용자가 기다리는 수어가 늦어진다. 돌아오면 이어서 받는다.
+    if (tab !== 'watch') return
     if (!auto || playing || pausedMidway || busy || feed.length === 0) return
     const t = window.setTimeout(() => {
       setCursor((c) => c + 1)
       void playItem(feed[cursor % feed.length])
     }, 2200)
     return () => window.clearTimeout(t)
-  }, [auto, playing, frame, busy, feed, cursor, playItem])
+  }, [tab, auto, playing, frame, busy, feed, cursor, playItem])
 
   // 사전 탭 — bank 색인에서 찾고, 고르면 받기 화면에서 그 단어 수어를 재생한다.
   const [dictQuery, setDictQuery] = useState('')

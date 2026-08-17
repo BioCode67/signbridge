@@ -9,6 +9,7 @@ import { buildModel } from '../recognition/model'
 import { KSL_LABELS, NUM_CLASSES, CONFIDENCE_THRESHOLD } from '../recognition/labels'
 import { FEATURE_DIM, SEQ_LEN, resampleSequence, type LandmarkFrame } from '../recognition/landmarks'
 import { Orchestrator } from '../agents/orchestrator'
+import { API_URL } from '../config'
 
 /**
  * 실시간 수어 인식 데모 (Step1 랜드마크 추출 + Step2 GRU 분류 + Step4 자막).
@@ -46,6 +47,32 @@ export default function RecognitionDemo() {
   const [qaBusy, setQaBusy] = useState(false)
   const [qaAnswer, setQaAnswer] = useState('')
   const orchestratorRef = useRef<Orchestrator | null>(null)
+
+  // 인식된 글로스열 → 자연스러운 한국어 문장 복원 (서버의 KoBART g2t).
+  // 복원문은 의미 드리프트 위험이 있어 **원문 글로스를 항상 병기**한다.
+  const [sentence, setSentence] = useState('')
+  const [sentenceBusy, setSentenceBusy] = useState(false)
+  const restoreSentence = useCallback(async () => {
+    if (sentenceBusy || rec.transcript.length === 0) return
+    setSentenceBusy(true)
+    setSentence('')
+    try {
+      const res = await fetch(`${API_URL}/g2t`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gloss: rec.transcript }),
+      })
+      if (res.ok) {
+        const json = await res.json()
+        if (json.text) setSentence(json.text)
+        else setSentence('(언어 복원 서버가 준비되지 않았습니다)')
+      } else setSentence('(서버 오류)')
+    } catch {
+      setSentence('(언어 복원은 AI 서버가 필요합니다 — 로컬에서 uvicorn server.app:app)')
+    } finally {
+      setSentenceBusy(false)
+    }
+  }, [sentenceBusy, rec.transcript])
 
   const askFromSigns = useCallback(async () => {
     if (qaBusy || rec.transcript.length === 0) return
@@ -322,6 +349,28 @@ export default function RecognitionDemo() {
                   인식된 단어를 질문으로 해석해 답변을 만들고, 아바타가 수어로 답합니다
                 </span>
               </button>
+            )}
+            {rec.transcript.length > 0 && (
+              <button
+                type="button"
+                disabled={sentenceBusy}
+                onClick={() => void restoreSentence()}
+                className="rounded-xl border border-cyan-glow/40 bg-cyan-glow/5 px-4 py-3 text-left text-sm font-medium text-cyan-soft transition-colors hover:bg-cyan-glow/10 disabled:opacity-50"
+              >
+                {sentenceBusy ? '문장 복원 중…' : '📝 인식된 수어를 문장으로'}
+                <span className="mt-0.5 block text-xs font-normal text-slate-400">
+                  글로스열을 KoBART가 자연스러운 한국어 문장으로 복원합니다
+                </span>
+              </button>
+            )}
+            {sentence && (
+              <div className="rounded-lg border border-white/10 bg-space-800/60 px-3 py-2 text-xs leading-relaxed">
+                <p className="text-slate-200">{sentence}</p>
+                {/* 복원문은 의미가 뒤집힐 수 있어 원문 글로스를 반드시 병기한다 */}
+                <p className="mt-1 text-[10.5px] text-slate-500">
+                  원문 수어: {rec.transcript.map((t) => t.replace(/[0-9#:]+$/, '')).join(' · ')}
+                </p>
+              </div>
             )}
             {qaAnswer && (
               <p className="rounded-lg border border-white/10 bg-space-800/60 px-3 py-2 text-xs leading-relaxed text-slate-300">

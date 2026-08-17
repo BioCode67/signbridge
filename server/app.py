@@ -315,6 +315,54 @@ def compose(req: ComposeRequest):
     return result
 
 
+# ── 글로스열 → 자연스러운 한국어 (수어→텍스트 방향의 언어 복원) ──────────────
+#
+# 웹캠 인식(CTC/단어)이 낸 "오늘1 춥다1 조심1" 같은 글로스열을 읽을 수 있는 문장으로
+# 복원한다. 같은 KoBART 구조를 역방향 데이터로 파인튜닝한 별도 모델이다.
+#
+# ⚠️ 알려진 한계(실측): 재난문자 문체를 강하게 배워, 글로스 의미보다 템플릿에 끌리는
+# 의미 드리프트가 있다("밖 도망"→"외출 자제"로 뒤집힌 사례). 응답에 글로스 원문을
+# 함께 돌려주므로, 화면은 반드시 원문을 병기할 것 — 복원문만 보여 주면 위험하다.
+G2T_MODEL = os.environ.get("G2T_MODEL", os.path.expanduser("~/sbruns/g2t-v1/best"))
+
+
+@lru_cache(maxsize=1)
+def load_g2t():
+    import torch  # noqa: F401
+    from transformers import AutoTokenizer, BartForConditionalGeneration
+
+    tok = AutoTokenizer.from_pretrained(G2T_MODEL)
+    model = BartForConditionalGeneration.from_pretrained(G2T_MODEL)
+    model.eval()
+    return tok, model
+
+
+class G2TRequest(BaseModel):
+    gloss: list[str]
+
+
+class G2TResponse(BaseModel):
+    gloss: list[str]
+    text: str
+    backend: str = "kobart-g2t"
+
+
+@app.post("/g2t", response_model=G2TResponse)
+def gloss_to_text(req: G2TRequest):
+    import torch
+
+    if not os.path.isdir(G2T_MODEL) or not req.gloss:
+        return G2TResponse(gloss=req.gloss, text="", backend="unavailable")
+
+    tok, model = load_g2t()
+    source = " ".join(req.gloss)
+    inputs = tok(source, max_length=128, truncation=True, return_tensors="pt")
+    inputs.pop("token_type_ids", None)
+    with torch.no_grad():
+        out = model.generate(**inputs, max_length=96, num_beams=4, no_repeat_ngram_size=3)
+    return G2TResponse(gloss=req.gloss, text=tok.decode(out[0], skip_special_tokens=True))
+
+
 @app.get("/health")
 def health():
     t2g_ready = os.path.isdir(T2G_MODEL)

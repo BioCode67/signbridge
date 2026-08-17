@@ -28,6 +28,14 @@ export interface TranslationLog {
   missing: number
 }
 
+/** KOREN NIA POP 10개소. 지연은 서울 기준 거리 추정치(실회선 연동 전 시뮬). */
+const POPS = [
+  { name: '서울', ms: 3 }, { name: '수원', ms: 4 }, { name: '춘천', ms: 6 },
+  { name: '대전', ms: 7 }, { name: '전주', ms: 9 }, { name: '대구', ms: 10 },
+  { name: '광주', ms: 11 }, { name: '창원', ms: 12 }, { name: '부산', ms: 13 },
+  { name: '제주', ms: 16 },
+]
+
 export type Stage = 'idle' | 'receiving' | 'translating' | 'composing' | 'broadcasting'
 
 const STAGE_LABEL: Record<Stage, string> = {
@@ -239,11 +247,43 @@ export default function LiveConsole({ translate, playing }: Props) {
         </div>
       )}
 
+      {/* KOREN 다지점 송출 — 기획안의 핵심 축이다. 변환이 끝나면 전국 POP으로
+          동시에 나간다는 것을 눈으로 보여 준다. 지연은 지점별 왕복 추정치(시뮬)라
+          그렇게 표기한다 — 실회선 연동 전까지 실측이라고 말하지 않는다. */}
+      <div className="mt-3 rounded-lg border border-white/5 bg-space-800/40 p-2.5">
+        <div className="mb-1.5 flex items-center gap-2 text-[10.5px] text-slate-500">
+          <span className="font-semibold text-slate-400">KOREN 다지점 송출</span>
+          <span>NIA POP {POPS.length}개소 동시</span>
+          <span className="ml-auto">지연은 회선 연동 전 추정치</span>
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {POPS.map((pop, i) => {
+            const on = stage === 'broadcasting' || (latest != null && stage === 'idle')
+            return (
+              <span
+                key={pop.name}
+                style={{ transitionDelay: `${i * 45}ms` }}
+                className={`rounded border px-2 py-0.5 text-[10.5px] transition-all duration-300 ${
+                  on
+                    ? 'border-emerald-400/50 bg-emerald-400/10 text-emerald-300'
+                    : 'border-white/10 bg-space-900 text-slate-600'
+                }`}
+              >
+                {pop.name}
+                <span className="ml-1 font-mono opacity-70">{pop.ms}ms</span>
+              </span>
+            )
+          })}
+        </div>
+      </div>
+
       {latest && (
         <p className="mt-2 text-[11px] text-slate-500">
           최근 처리: 번역 {Math.round(latest.translateMs)}ms · 동작 합성{' '}
           {Math.round(latest.composeMs)}ms · {latest.backend}
           {latest.missing > 0 && ` · 미수록 단어 ${latest.missing}개`}
+          {' · '}관절 좌표 {Math.round(latest.gloss.length * 0.6 * 10) / 10}KB 전송
+          (영상 대비 1/2000)
         </p>
       )}
     </div>

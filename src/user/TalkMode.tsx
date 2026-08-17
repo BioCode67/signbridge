@@ -639,14 +639,29 @@ export default function TalkMode() {
               )}
               <div className="flex flex-wrap gap-2">
                 {answers.map((a, i) => (
-                  <button
-                    key={`${a}-${i}`}
-                    type="button"
-                    onClick={() => fromDeaf(a)}
-                    className="rounded-2xl border border-white/10 bg-space-800 px-4 py-3 text-lg font-bold text-slate-200 transition-colors hover:border-amber-400/50 hover:text-amber-200"
-                  >
-                    {a}
-                  </button>
+                  <span key={`${a}-${i}`} className="relative inline-flex">
+                    <button
+                      type="button"
+                      onClick={() => fromDeaf(a)}
+                      className={`rounded-2xl border bg-space-800 px-4 py-3 text-lg font-bold text-slate-200 transition-colors hover:border-amber-400/50 hover:text-amber-200 ${
+                        saved.includes(a) ? 'border-amber-400/40 pr-9' : 'border-white/10'
+                      }`}
+                    >
+                      {a}
+                    </button>
+                    {/* 내가 저장한 문장은 지울 수 있어야 한다 — 저장만 되고 못 지우면
+                        오래 쓸수록 화면이 내가 안 쓰는 말로 덮인다. */}
+                    {saved.includes(a) && (
+                      <button
+                        type="button"
+                        aria-label={`${a} 지우기`}
+                        onClick={() => setSaved((s2) => s2.filter((x) => x !== a))}
+                        className="absolute right-1 top-1 grid h-7 w-7 place-items-center rounded-full text-sm text-slate-500 hover:text-red-300"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
                 ))}
               </div>
             </>

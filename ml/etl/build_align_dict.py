@@ -139,16 +139,18 @@ def conjugations(stem_word: str) -> list[str]:
                   stem_word + harmony + "집니다", stem_word + harmony + "졌"]
         forms += [stem_word + "은", stem_word + "습니다", stem_word + "습니까",
                   stem_word + "으면", stem_word + "으세요", stem_word + "으니",
-                  stem_word + "을까요", stem_word + "을게요", stem_word + "으시면",
+                  stem_word + "을", stem_word + "을까요", stem_word + "을게요", stem_word + "으시면",
                   stem_word + "으셨", stem_word + "으신가요"]
     else:
         # 받침이 없으면 'ㅂ니다'가 받침으로 붙는다: 오 + ㅂ니다 → 옵니다
         head = stem_word[:-1]
         forms.append(head + _compose(cho, jung, 17) + "니다")  # 17 = 종성 ㅂ
-        forms.append(head + _compose(cho, jung, 4) + "다")  # 4 = 종성 ㄴ (온·간)
+        forms.append(head + _compose(cho, jung, 4) + "다")  # 4 = 종성 ㄴ (온다·간다)
+        forms.append(head + _compose(cho, jung, 4))  # 관형형: 나온·온·간
         # 받침 없는 어간에는 'ㄹ'이 받침으로 붙는다: 되 + ㄹ까요 → 될까요
         forms.append(head + _compose(cho, jung, 8) + "까요")
         forms.append(head + _compose(cho, jung, 8) + "게요")
+        forms.append(head + _compose(cho, jung, 8))  # 관형형: 갈·볼·나갈
         if vowel in ("ㅏ", "ㅓ", "ㅐ", "ㅔ"):
             # 같은 모음이 겹치면 하나로 줄어든다: 가 + 아 → 가 · 서 + 어 → 서
             harmonic.append(stem_word)

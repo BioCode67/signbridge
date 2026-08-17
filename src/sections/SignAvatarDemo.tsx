@@ -160,7 +160,7 @@ export default function SignAvatarDemo() {
       const interval = 1000 / data.fps / speedRef.current
       if (ts - lastRef.current >= interval) {
         lastRef.current = ts
-        let next = frameRef.current + 1
+        const next = frameRef.current + 1
         if (next >= data.num_frames) {
           frameRef.current = 0
           setFrame(0)

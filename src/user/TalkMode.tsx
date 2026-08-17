@@ -310,9 +310,19 @@ export default function TalkMode() {
     )
   }
 
+  // 내 정보에 적어 둔 것 중 **창구에서 바로 꺼내 쓰는 것**을 답 카드로 만든다.
+  // 택시에서 주소를, 응급실에서 보호자 연락처를 그 자리에서 타이핑하게 하면
+  // 그게 곧 장벽이다 — 한 번 적어 두면 한 번 눌러 보여주고 소리로 나간다.
+  const infoAnswers = [
+    myInfo.address?.trim() ? `우리 집 주소는 ${myInfo.address.trim()} 입니다` : '',
+    myInfo.guardianTel?.trim()
+      ? `보호자에게 연락해 주세요 ${myInfo.guardianTel.trim()}` : '',
+    myInfo.allergy?.trim() ? `${myInfo.allergy.trim()} 알레르기가 있어요` : '',
+  ].filter(Boolean)
+
   // 공통 답과 장소별 답에 같은 말이 겹친다("네"·"아니요"). 두 번 보이면 어느 것을
   // 눌러야 하나 망설이게 되므로 앞선 것만 남긴다.
-  const answers = [...new Set([...COMMON_ANSWERS, ...place.answer, ...saved])]
+  const answers = [...new Set([...infoAnswers, ...COMMON_ANSWERS, ...place.answer, ...saved])]
 
   if (signing) {
     return (

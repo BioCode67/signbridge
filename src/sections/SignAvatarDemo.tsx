@@ -10,6 +10,7 @@ import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
 import { AVATARS } from './sign/avatars'
 import AvatarErrorBoundary from './sign/AvatarErrorBoundary'
+import LiveConsole from './sign/LiveConsole'
 
 // 3D avatar (Three.js + VRM) is heavy — load it only when the user opens 3D mode.
 const Avatar3D = lazy(() => import('./sign/Avatar3D'))
@@ -198,6 +199,7 @@ export default function SignAvatarDemo() {
 
   // 브라우저 단독 경로 — 사전으로 번역하고 정적 동작 조각을 이어 붙인다.
   // 조각은 한 번 받으면 캐시한다(같은 단어가 문장마다 반복되므로 효과가 크다).
+  const serverDownRef = useRef(false)
   const dictAgentRef = useRef<DictSignAgent | null>(null)
   const bankRef = useRef<BankIndex | null>(null)
   const glossCacheRef = useRef(new Map<string, SignData>())
@@ -221,6 +223,68 @@ export default function SignAvatarDemo() {
       return data
     })
   }, [])
+
+  // 관제 화면용 — 번역·합성 각 단계를 **실제로 재서** 돌려준다.
+  // 지어낸 숫자를 띄우면 데모가 아니라 연출이 된다.
+  const translateMeasured = useCallback(async (text: string) => {
+    const t0 = performance.now()
+    // 서버가 없는 것으로 확인되면 다시 찔러 보지 않는다. 매 건마다 실패 왕복을
+    // 반복하면 관제 화면의 지연 수치가 실제보다 나쁘게 보인다.
+    if (serverDownRef.current) {
+      const local = await composeInBrowser(text)
+      if (!local) return null
+      setComposed({ ...local, file: '__ai__' } as never)
+      setIndex(0); setFrame(0); frameRef.current = 0; setPlaying(true)
+      return {
+        gloss: local.gloss_sequence.map((g) => g.gloss),
+        missing: local.gloss_missing,
+        backend: '브라우저 사전',
+        translateMs: 0,
+        composeMs: local.buildMs,
+      }
+    }
+    try {
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 8000)
+      const res = await fetch(`${API_URL}/compose`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: ctrl.signal,
+        body: JSON.stringify({ text }),
+      })
+      clearTimeout(timer)
+      if (res.ok) {
+        const json = await res.json()
+        if (!json.error) {
+          const t1 = performance.now()
+          setComposed({ ...json, file: '__ai__' } as never)
+          setIndex(0); setFrame(0); frameRef.current = 0; setPlaying(true)
+          return {
+            gloss: (json.gloss_sequence ?? []).map((g: { gloss: string }) => g.gloss),
+            missing: json.gloss_missing ?? [],
+            backend: 'KoBART 서버',
+            translateMs: t1 - t0,
+            composeMs: 0,
+          }
+        }
+      }
+    } catch {
+      serverDownRef.current = true // 다음 건부터는 바로 브라우저 경로로 간다
+    }
+    const t1 = performance.now()
+    const local = await composeInBrowser(text)
+    if (!local) return null
+    setComposed({ ...local, file: '__ai__' } as never)
+    setIndex(0); setFrame(0); frameRef.current = 0; setPlaying(true)
+    return {
+      gloss: local.gloss_sequence.map((g) => g.gloss),
+      missing: local.gloss_missing,
+      backend: '브라우저 사전',
+      translateMs: t1 - t0,
+      composeMs: local.buildMs,
+    }
+  }, [composeInBrowser])
+
 
   // 임의 문장 → 수어 동작 → 즉시 재생.
   //
@@ -377,6 +441,10 @@ export default function SignAvatarDemo() {
             </div>
           ) : (
             <>
+              {/* 실시간 관제 — 실제 재난문자가 들어와 번역·송출되는 과정을 보여 준다.
+                  탭을 눌러 재생하는 화면만 있으면 "미리 만든 영상"으로 보이기 때문이다. */}
+              <LiveConsole translate={translateMeasured} playing={playing} />
+
               {/* AI 번역 입력 — 임의 재난 문장을 KoBART가 글로스로 번역, 실연 동작 사전으로 합성 */}
               <div className="mb-4">
                 <div className="flex gap-2">

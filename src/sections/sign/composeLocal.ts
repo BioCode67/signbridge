@@ -82,6 +82,10 @@ function blend(a: number[], b: number[], steps: number): number[][] {
 export interface ComposeResult extends SignData {
   /** 동작 사전에 없어 건너뛴 글로스 */
   gloss_missing: string[]
+  /** 조각을 내려받는 데 쓴 시간(ms) — 캐시가 차면 0에 가까워진다 */
+  fetchMs: number
+  /** 좌표 정규화·연결에 쓴 순수 계산 시간(ms) */
+  buildMs: number
 }
 
 /**
@@ -99,19 +103,31 @@ export async function composeGlosses(
   const missing: string[] = []
   let cursor = 0
 
+  // **조각을 병렬로 먼저 받는다.** 루프 안에서 하나씩 await하면 왕복이 직렬로 쌓여
+  // 10단어 문장에 십수 초가 걸린다(실측 14.7초). 실시간이라 부를 수 없는 수치였다.
+  const tFetch0 = performance.now()
+  const unique = [...new Set(glosses)].filter((g) => bank[g])
+  const loaded = new Map<string, SignData>()
+  await Promise.all(
+    unique.map(async (g) => {
+      try {
+        loaded.set(g, await loadGloss(g, bank[g]))
+      } catch {
+        /* 이 글로스는 missing으로 떨어진다 */
+      }
+    }),
+  )
+
+  const tBuild0 = performance.now()
+
   for (const gloss of glosses) {
     const entry = bank[gloss]
-    if (!entry) {
+    const raw = entry ? loaded.get(gloss) : undefined
+    if (!entry || !raw) {
       missing.push(gloss)
       continue
     }
-    let piece: Piece
-    try {
-      piece = normalizePiece(await loadGloss(gloss, entry))
-    } catch {
-      missing.push(gloss)
-      continue
-    }
+    const piece = normalizePiece(raw)
     if (piece.pose.length === 0) {
       missing.push(gloss)
       continue
@@ -150,5 +166,7 @@ export async function composeGlosses(
     gloss_sequence: timeline,
     keypoints: merged,
     gloss_missing: missing,
+    fetchMs: tBuild0 - tFetch0,
+    buildMs: performance.now() - tBuild0,
   }
 }

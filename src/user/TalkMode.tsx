@@ -314,7 +314,34 @@ export default function TalkMode() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* 농인이 짚은 답 — **상대에게 보여주는 화면**이라 화면 전체를 덮는다.
+          하단에 띠로 붙였더니 폰에서 다른 요소와 겹쳐 글자가 포개졌다(실측).
+          보여주는 물건은 크게, 그리고 방해 없이. */}
+      {shown && (
+        <button
+          type="button"
+          onClick={() => setShown(null)}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-amber-400 p-6 text-center"
+        >
+          <span className="text-4xl font-extrabold leading-snug text-slate-900 sm:text-6xl">
+            {shown}
+          </span>
+          {/* 소리가 나갔는지는 듣지 못하는 사용자가 확인할 수 없다 — 눈으로 알려준다.
+              실패했으면 반드시 실패라고 말한다(전달된 줄 알고 기다리는 것이 더 위험하다). */}
+          <span className={`rounded-xl px-4 py-2 text-lg font-bold ${
+            tts.failed ? 'bg-red-600 text-white' : 'bg-slate-900 text-emerald-300'
+          }`}>
+            {tts.failed
+              ? '⚠️ 소리가 나가지 않았어요 — 이 화면을 보여 주세요'
+              : tts.speaking
+                ? '🔊 소리로 말하는 중…'
+                : '🔊 소리로 전달했어요'}
+          </span>
+          <span className="text-base text-slate-800">화면을 누르면 닫혀요</span>
+        </button>
+      )}
+
       {/* 상단바 */}
       <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2">
         <button
@@ -350,7 +377,7 @@ export default function TalkMode() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <div className="flex min-h-0 flex-col lg:w-1/2 lg:border-r lg:border-white/10">
       {/* 아바타 — 직원 말이 수어로 오는 곳 */}
-      <div className="flex min-h-[30vh] flex-col sm:min-h-[40vh] lg:min-h-0 lg:flex-1">
+      <div className="flex min-h-[24vh] shrink flex-col sm:min-h-[36vh] lg:min-h-0 lg:flex-1">
         <SignStage
           player={player}
           compact
@@ -374,7 +401,10 @@ export default function TalkMode() {
       )}
 
       {/* 대화 기록 */}
-      <div ref={threadRef} className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
+      {/* 대화 기록 — 폰에서는 아바타·입력에 밀려 한 줄도 안 보이곤 했다.
+          최소 높이를 확보하고 아바타 쪽이 줄어들게 한다(아바타는 크게 보이는 편이
+          좋지만, 방금 한 말이 안 보이는 것이 더 나쁘다). */}
+      <div ref={threadRef} className="min-h-[84px] flex-1 overflow-y-auto px-3 py-2">
         {turns.length === 0 ? (
           <p className="py-4 text-center text-base text-slate-500">
             주고받은 말이 여기에 남아요
@@ -403,28 +433,6 @@ export default function TalkMode() {
           ))
         )}
       </div>
-
-      {/* 농인이 짚은 답 — 화면 가득. 직원이 소리를 놓쳤을 때 읽는 쪽. */}
-      {shown && (
-        <button
-          type="button"
-          onClick={() => setShown(null)}
-          className="shrink-0 border-t border-amber-400/30 bg-amber-400/10 px-4 py-4 text-center"
-        >
-          <span className="block text-3xl font-extrabold text-amber-200 sm:text-4xl">{shown}</span>
-          {/* 소리가 나갔는지는 듣지 못하는 사용자가 확인할 수 없다 — 눈으로 알려준다.
-              실패했으면 반드시 실패라고 말한다(전달된 줄 알고 기다리는 것이 더 위험하다). */}
-          <span className={`mt-1 block text-sm font-bold ${
-            tts.failed ? 'text-red-300' : 'text-emerald-300'
-          }`}>
-            {tts.failed
-              ? '⚠️ 소리가 나가지 않았어요 — 이 화면을 보여 주세요'
-              : tts.speaking
-                ? '🔊 소리로 말하는 중…'
-                : '🔊 소리로 전달했어요'}
-          </span>
-        </button>
-      )}
 
       </div>
 

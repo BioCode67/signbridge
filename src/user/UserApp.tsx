@@ -179,29 +179,31 @@ export default function UserApp() {
           폰 폭(390px)에서는 제목·탭·버튼이 한 줄에 들어가지 않아 탭 글자가 세로로 깨지고
           '사전'이 화면 밖으로 밀렸다. 좁으면 두 줄(제목 줄 + 탭 줄)로 접는다. */}
       <header className="flex flex-col gap-2 border-b border-white/10 px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3">
-        <div className="flex items-center gap-2 sm:contents">
+        <div className="flex flex-wrap items-center gap-2 sm:contents">
         <span className="text-lg font-bold text-white">🤟 SignBridge</span>
         {item && (
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
-            className="min-h-[44px] rounded-md bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-300"
+            className="min-h-[44px] shrink-0 whitespace-nowrap rounded-md bg-amber-400/15 px-3 py-2 text-sm font-bold text-amber-300"
             title="지나간 알림 보기"
           >
-            {categoryKo(item.category)} ▾
+            {/* 좁은 화면에서는 분류 이름을 접는다 — 여기서 줄바꿈이 일어나면
+                버튼들이 세로로 눌려 글자가 한 자씩 쌓인다(실측). */}
+            <span className="hidden sm:inline">{categoryKo(item.category)} </span>▾
           </button>
         )}
         <button
           type="button"
           onClick={() => setAuto((v) => !v)}
           aria-pressed={auto}
-          className={`ml-auto rounded-xl border px-4 py-2 text-base font-bold ${
+          className={`ml-auto shrink-0 whitespace-nowrap rounded-xl border px-3 py-2 text-base font-bold sm:px-4 ${
             auto
               ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
               : 'border-white/15 bg-space-800 text-slate-300'
           }`}
         >
-          {auto ? '📡 받는 중' : '📡 받기'}
+          📡<span className="hidden sm:inline">{auto ? ' 받는 중' : ' 받기'}</span>
         </button>
         {/* 오프라인 준비 — 재난 때는 회선이 먼저 끊긴다. 미리 받아 두면 그때도 번역된다.
             필수 세트는 조용히 자동으로 받고, 전체(아바타·고빈도 1,200종)는 용량을 밝혀
@@ -211,17 +213,19 @@ export default function UserApp() {
           disabled={offline.busy || offline.level === 'full'}
           onClick={offline.prepareFull}
           title="회선이 없어도 쓸 수 있게 미리 받아 둡니다"
-          className={`min-h-[44px] rounded-xl border px-3 py-2 text-base font-bold ${
+          className={`min-h-[44px] shrink-0 whitespace-nowrap rounded-xl border px-3 py-2 text-base font-bold ${
             offline.level === 'full'
               ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
               : 'border-white/15 bg-space-800 text-slate-300'
           }`}
         >
-          {offline.busy
-            ? `📥 ${offline.percent}%`
-            : offline.level === 'full'
-              ? '📴 준비됨'
-              : `📥 오프라인${offline.fullMb ? ` ${offline.fullMb}MB` : ''}`}
+          {offline.busy ? (
+            `📥 ${offline.percent}%`
+          ) : offline.level === 'full' ? (
+            <>📴<span className="hidden sm:inline"> 준비됨</span></>
+          ) : (
+            <>📥<span className="hidden sm:inline">{` 오프라인${offline.fullMb ? ` ${offline.fullMb}MB` : ''}`}</span></>
+          )}
         </button>
         {canInstall && (
           <button
@@ -230,7 +234,7 @@ export default function UserApp() {
               void installRef.current?.prompt()
               setCanInstall(false)
             }}
-            className="rounded-xl border border-cyan-glow/50 bg-cyan-glow/10 px-3 py-2 text-base font-bold text-cyan-soft"
+            className="shrink-0 whitespace-nowrap rounded-xl border border-cyan-glow/50 bg-cyan-glow/10 px-3 py-2 text-base font-bold text-cyan-soft"
             title="홈 화면에 설치"
           >
             📲 설치
@@ -239,7 +243,7 @@ export default function UserApp() {
         <a
           href="#demo"
           onClick={() => { window.location.hash = '' }}
-          className="rounded-xl border border-white/15 px-4 py-2 text-base text-slate-300"
+          className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-base text-slate-300 sm:px-4"
         >
           ✕
         </a>

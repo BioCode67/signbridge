@@ -180,6 +180,9 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     spoken = await pg.evaluate("window.__spoken")
     rep.check("머리" in spoken, "대화: 답 카드 → 소리로 전달", str(spoken[-2:]))
     rep.check(await pg.get_by_text("소리로 전달했어요").count() > 0, "대화: 전달 확인 문구")
+    # 답은 상대에게 보여주는 전체화면으로 뜬다 — 눌러 닫고 대화로 돌아온다.
+    await pg.get_by_text("화면을 누르면 닫혀요").click()
+    await pg.wait_for_timeout(300)
 
     # ── 대화 기록이 실제로 보이는가(폰에서 0px로 눌리던 회귀)
     thread_h = await pg.evaluate(

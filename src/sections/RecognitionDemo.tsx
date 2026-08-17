@@ -215,6 +215,38 @@ export default function RecognitionDemo() {
                 <h3 className="text-sm font-semibold text-white">인식 상태</h3>
                 <ModelBadge status={rec.modelStatus} />
               </div>
+              {/* 인식 모델 선택 — 어떤 모델로 돌고 있는지 숨기지 않는다.
+                  합성 모델은 실제 수어를 인식하지 못하므로 그 사실을 명시한다. */}
+              <div className="mt-3 flex gap-1">
+                {([
+                  { id: 'aihub' as const, label: 'AI Hub 학습' },
+                  { id: 'synth' as const, label: '합성/자체수집' },
+                ]).map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => rec.setBackend(b.id)}
+                    aria-pressed={rec.backend === b.id}
+                    className={`flex-1 rounded-md border px-2 py-1.5 text-[11px] transition-colors ${
+                      rec.backend === b.id
+                        ? 'border-cyan-glow bg-cyan-glow/10 font-semibold text-cyan-soft'
+                        : 'border-white/10 bg-space-800 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[10.5px] leading-relaxed text-slate-500">
+                {rec.backend === 'aihub'
+                  ? rec.aihubInfo
+                    ? `실데이터 학습 · 어휘 ${rec.aihubInfo.num_classes.toLocaleString()}종 · 검증 top-1 ${(
+                        (rec.aihubInfo.val_top1 ?? 0) * 100
+                      ).toFixed(1)}% (수어자 분리)`
+                    : '실데이터 학습 모델을 불러오는 중… (20MB, 최초 1회)'
+                  : '합성 데이터 모델 — 실제 수어는 인식하지 못합니다. 스튜디오 녹화·학습용입니다.'}
+              </p>
+
               <dl className="mt-4 space-y-3 text-sm">
                 <StatusRow label="상반신 포즈" ok={stats.poseOk} />
                 <StatusRow label="왼손 (21관절)" ok={stats.leftOk} />

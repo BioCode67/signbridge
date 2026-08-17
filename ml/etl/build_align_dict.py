@@ -39,6 +39,9 @@ PARTICLE_RE = re.compile(
     r"(으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다"
     r"|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요"
     r"|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|드리오니|되오니|하오니|오니"
+    # 구어체 종결 — "어디예요·얼마예요·뭐예요"가 통째로 빠지고 있었다.
+    # 사람이 앱에 처음 넣는 문장이 대개 이 말투다.
+    r"|이에요|예요|에요|이야|인가요|인가|인데|이죠|죠|거예요|을게요|군요|잖아요|거든요|더라고요|던데요"
     r"|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고"
     r"|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는"
     r"|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$"
@@ -77,6 +80,12 @@ SEED_OVERRIDES = {
     "마십시오": "하지마1",
     "말고": "하지마1",
     "금지": "하지마1",
+    # 짧은 일상 회화에서 통째로 빠지던 것들(실측)
+    "아니요": "아니다0",
+    "아니오": "아니다0",
+    "안녕히": "안녕0",
+    "이거": "이것",
+    "그거": "그것0",
 }
 
 
@@ -122,7 +131,10 @@ def conjugations(stem_word: str) -> list[str]:
                   # 존대·추측·의향 — 창구에서 실제로 쓰이는 말투다(홀드아웃 실측에서
                   # "오셨나요·아프신가요·잡을까요"가 통째로 빠졌다).
                   "셨나요", "셨어요", "셨습니다", "셨는데", "신가요", "실까요", "십니다",
-                  "겠어요", "겠는데", "시죠", "시네요")
+                  "겠어요", "겠는데", "시죠", "시네요",
+                  # 1음절 어간(좋다·많다·크다)은 어미를 떼면 한 글자만 남아 버려진다.
+                  # 종결형을 통째로 키에 넣어야 "좋네요·많군요"가 잡힌다.
+                  "네요", "군요", "잖아요", "거든요", "던데요", "더라고요")
     ]
     parts = _decompose(stem_word[-1])
     if parts is None:
@@ -178,9 +190,14 @@ def conjugations(stem_word: str) -> list[str]:
                   bare[:-1] + _compose(cho, jung, 17) + "니다"]
     # ㅂ 불규칙 — 맵다 → 매운·매워, 춥다 → 추운·추워. 감각 형용사가 대부분 여기 속한다.
     if parts is not None and jong == 17:  # 17 = 종성 ㅂ
+        # **모음조화를 지켜야 한다.** 돕다는 '도워'가 아니라 **도와**다(밝은 모음 ㅗ).
+        # 이걸 틀리는 바람에 "도와주세요"가 사전에 없어, 통계 잡음인 '도'(도수)로
+        # 번역되고 있었다 — 사람이 가장 먼저 쓰는 말 중 하나다.
         bare = stem_word[:-1] + _compose(cho, jung, 0)
-        forms += [bare + "운", bare + "워", bare + "워요", bare + "우면", bare + "웠"]
-        harmonic.append(bare + "워")
+        vow = "와" if vowel in _BRIGHT else "워"
+        forms += [bare + "운", bare + vow, bare + vow + "요", bare + vow + "서",
+                  bare + "우면", bare + vow.replace("와", "왔").replace("워", "웠")]
+        harmonic.append(bare + vow)
     # 르 불규칙 — 누르다 → 눌러, 빠르다 → 빨라, 다르다 → 달라.
     if len(stem_word) >= 2 and stem_word.endswith("르"):
         prev = _decompose(stem_word[-2])
@@ -214,10 +231,15 @@ def conjugations(stem_word: str) -> list[str]:
 # 열·피·밥·길·돈. 행동요령 실측에서 "젖은 수건으로 코와 입을 가리세요"가 '수건' 하나만
 # 표현된 것이 이 때문이었다. 조사가 붙은 꼴을 미리 키로 만들어 둔다.
 # 받침 유무로 갈리는 조사는 짝지어 둔다(받침 있음, 받침 없음).
-PARTICLE_PAIRS = (("은", "는"), ("이", "가"), ("을", "를"), ("과", "와"),
-                  ("으로", "로"), ("이나", "나"), ("이랑", "랑"))
+# **격조사**(주격·목적격·주제) — 이게 붙으면 앞은 거의 확실히 명사다.
+CASE_PAIRS = (("은", "는"), ("이", "가"), ("을", "를"))
+# 접속·부사격 — 동사 활용형과 부딪히기 쉬워 명사 우선권을 주지 않는다.
+# 실측: '도'(도수) + '와' = "도와"가 돕다의 활용형을 덮어 "도와주세요"가 '도'가 됐다.
+CONJ_PAIRS = (("과", "와"), ("으로", "로"), ("이나", "나"), ("이랑", "랑"))
 # 받침과 무관한 조사
-PARTICLE_BOTH = ("의", "도", "만", "에", "에서", "에게", "부터", "까지", "보다", "처럼")
+PARTICLE_BOTH = ("의", "도", "만", "에", "에서", "에게", "부터", "까지", "보다", "처럼",
+                 # 구어체 종결 — "뭐예요·물이에요"
+                 "예요", "이에요", "인가요", "인데", "죠", "요")
 
 # 명사에서 파생되는 용언 꼴 — 침수된·대피하세요·통제한 …
 NOUN_VERB_SUFFIXES = ("하다", "한", "할", "하는", "하고", "해", "하세요", "합니다",
@@ -229,17 +251,41 @@ NOUN_VERB_SUFFIXES = ("하다", "한", "할", "하는", "하고", "해", "하세
                       "하", "되")
 
 
-def noun_forms(lemma: str) -> list[str]:
-    """명사 표제어에서 조사·파생형을 만든다."""
-    out: list[str] = []
+# 한 글자 낱말 중 **단독으로 나와도 그 뜻인 것**만 골라 둔다.
+#
+# 왜 목록으로 두나: 동작 사전에는 지문자 자모('가' 같은 음절 표기)도 1글자 표제어로
+# 들어 있어, 전부 키로 넣으면 "천천히 가 주세요"의 '가'가 지문자로 번역된다(실측).
+# 그렇다고 다 버리면 "밥 먹었어요"의 밥, "물 주세요"의 물이 통째로 사라진다 —
+# 생활에서 가장 자주 쓰는 낱말이 하필 한 글자다. 그래서 사람이 확인한 목록만 쓴다.
+ONE_CHAR_NOUNS = {
+    "밥", "물", "눈", "코", "입", "손", "발", "목", "배", "귀", "돈", "약", "열", "집",
+    "길", "차", "피", "불", "산", "강", "비", "옷", "책", "문", "벽", "밤", "낮", "봄",
+    "힘", "병", "술", "국", "땅", "별", "빵", "새", "쌀", "몸", "잠", "글", "섬", "숲",
+    "뼈", "꽃", "형", "층", "번", "명", "시", "분", "년", "월", "일", "원", "개",
+    # 대명사·의문사 — "뭐예요·왜요·너는" 같은 짧은 말이 대화의 절반이다
+    "뭐", "왜", "더", "너", "나", "저",
+}
+
+
+def noun_forms(lemma: str) -> tuple[list[str], list[str]]:
+    """명사 표제어에서 (격조사가 붙은 꼴, 그 밖의 파생형)을 만든다.
+
+    둘을 나누는 이유: **격조사가 붙은 꼴은 명사가 거의 확실하다.** "입을"은 입(신체)에
+    목적격 조사가 붙은 것으로 읽는 편이 맞다 — 입다(착용)의 관형형이기도 하지만,
+    격조사 쪽이 훨씬 흔하다. 반면 "-하다/-되다" 같은 파생형은 동사 활용형과 부딪히면
+    동사가 맞을 때가 많다(도와 = 돕다). 그래서 격조사만 동사형을 덮게 한다.
+    """
+    case: list[str] = []
+    other: list[str] = []
     # 한 글자 명사만 조사를 펼친다 — 두 글자 이상은 런타임 어간 추출기가 처리한다.
     if len(lemma) == 1:
         parts = _decompose(lemma)
         has_jong = parts is not None and parts[2] != 0
-        out += [lemma + (a if has_jong else b) for a, b in PARTICLE_PAIRS]
-        out += [lemma + p for p in PARTICLE_BOTH]
-    out += [lemma + s for s in NOUN_VERB_SUFFIXES]
-    return out
+        case += [lemma + (a if has_jong else b) for a, b in CASE_PAIRS]
+        other += [lemma + (a if has_jong else b) for a, b in CONJ_PAIRS]
+        other += [lemma + p for p in PARTICLE_BOTH]
+    other += [lemma + s for s in NOUN_VERB_SUFFIXES]
+    return case, other
 
 
 def stem(word: str) -> str:
@@ -354,9 +400,8 @@ def main() -> None:
     # 지명·희귀어 커버리지가 공짜로 늘어난다.
     added = 0
     for lemma, g in lemma_best.items():
-        # 한 글자 표제어는 직결 키로 넣지 않는다 — 런타임이 조회하지 않을뿐더러,
-        # 지문자 자모 글로스가 섞여 있어 넣으면 오역이 된다.
-        if len(lemma) < MIN_STEM:
+        # 한 글자 표제어는 **확인된 목록만** 직결 키로 넣는다(지문자 자모 혼입 방지).
+        if len(lemma) < MIN_STEM and lemma not in ONE_CHAR_NOUNS:
             continue
         if lemma not in table:
             table[lemma] = [g]
@@ -377,32 +422,40 @@ def main() -> None:
     # **빈도가 높은 표제어가 먼저 가져간다.** 같은 표면형을 두 낱말이 만들 수 있기 때문이다
     # (아프시+ㄴ지 = 아프신지, 신+지 = 신지). 흔한 쪽이 맞을 확률이 높다.
     ordered = sorted(lemma_best.items(), key=lambda kv: -gloss_count.get(kv[1], 0))
+
+    # **용언을 먼저 세운다.** 명사 + 조사가 동사 활용형과 같은 꼴이 되는 경우가 있다:
+    # '도'(도수) + '와' = "도와" = 돕다의 활용형. 명사 쪽이 나중에 덮어쓰는 바람에
+    # "도와주세요"가 '도'로 번역되고 있었다 — 사람이 가장 먼저 쓰는 말 중 하나다.
+    for lemma, g in ordered:
+        if not (lemma.endswith("다") and len(lemma) >= 2):
+            continue
+        for form in conjugations(lemma[:-1]):
+            if len(form) >= MIN_STEM and form not in table and form not in STOP_WORDS:
+                table[form] = [g]
+                derived.add(form)
+                conj += 1
+
     for lemma, g in ordered:
         if lemma.endswith("다") and len(lemma) >= 2:
-            # 어간이 한 글자여도 만든다(있다·하다·가다·오다·보다·먹다 — 가장 흔한 용언들).
-            # 예전 조건 len(lemma) < 3 이 이들을 통째로 걸러 "있나요·오세요"가 없었다.
-            for form in conjugations(lemma[:-1]):
-                if len(form) >= MIN_STEM and form not in table and form not in STOP_WORDS:
-                    table[form] = [g]
-                    derived.add(form)
-                    conj += 1
             continue
-        # 명사: 한 글자 명사의 조사형은 **Dice를 덮는다.** "물을→끓다1"처럼, 표제어가
-        # 분명한데 공기 통계가 엉뚱한 낱말을 1위에 올려놓은 경우가 실제로 있었다.
-        # 표제어+조사는 사람이 봐도 확실한 대응이라 통계보다 앞세우는 편이 옳다.
-        for form in noun_forms(lemma):
+        case_forms, other_forms = noun_forms(lemma)
+        for form in case_forms + other_forms:
             if len(form) < MIN_STEM or form in STOP_WORDS:
                 continue
             if form in table:
-                # 표제어 + 조사/파생접미사는 사람이 봐도 확실한 대응이라 통계보다 앞세운다.
-                # (실측: "안전한→편하다1", "물을→끓다1" — 둘 다 공기 통계의 잡음이었다)
+                # 표제어 + 조사는 통계보다 앞세운다("안전한→편하다1", "물을→끓다1"은
+                # 공기 통계의 잡음이었다). 다만 **용언 활용형을 덮는 것은 격조사만**
+                # 허용한다 — '도와'(돕다)는 동사가, '입을'(입+을)은 명사가 맞다.
                 if table[form][0] == g:
+                    continue
+                if form in derived and form not in case_forms:
                     continue
                 table[form] = [g] + [x for x in table[form] if x != g][: args.top - 1]
             else:
                 table[form] = [g]
             derived.add(form)
             noun += 1
+
     print(f"[align] 용언 활용형 추가 {conj:,}개 · 명사 조사/파생형 추가 {noun:,}개")
 
     # 복합어 통짜 키 제거 — "대피바랍니다"·"안전사고"처럼 두 낱말 이상으로 분해되는

@@ -69,7 +69,10 @@ function normalizePiece(entry: SignData): Piece {
 function blend(a: number[], b: number[], steps: number): number[][] {
   const out: number[][] = []
   for (let s = 1; s <= steps; s++) {
-    const t = s / (steps + 1)
+    const lin = s / (steps + 1)
+    // ease-in-out(코사인) — 등속 선형 보간은 팔이 미끄러지듯 움직여 로봇처럼 보인다.
+    // 실제 팔 동작은 가속-감속 곡선을 그린다.
+    const t = (1 - Math.cos(Math.PI * lin)) / 2
     const row = new Array(a.length)
     for (let i = 0; i < a.length; i++) {
       row[i] = a[i] === 0 || b[i] === 0 ? 0 : a[i] * (1 - t) + b[i] * t

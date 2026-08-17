@@ -250,7 +250,9 @@ def _blend(prev: "np.ndarray", nxt: "np.ndarray", frames: int) -> "np.ndarray":
     """두 조각 사이 선형 보간. 미검출(0) 좌표는 보간하지 않고 0으로 둔다."""
     import numpy as np
 
-    steps = np.linspace(0.0, 1.0, frames + 2)[1:-1, None]
+    lin = np.linspace(0.0, 1.0, frames + 2)[1:-1, None]
+    # ease-in-out(코사인) — 프런트 composeLocal.ts와 같은 곡선. 등속 보간은 로봇 같다.
+    steps = (1 - np.cos(np.pi * lin)) / 2
     a, b = prev[None, -1], nxt[None, 0]
     out = a * (1 - steps) + b * steps
     dead = (a == 0.0) | (b == 0.0)

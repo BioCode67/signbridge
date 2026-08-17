@@ -71,6 +71,8 @@ export default function TalkMode() {
   const [talks, setTalks] = useState<SavedTalk[]>(() => loadTalks())
   const [showTalks, setShowTalks] = useState(false)
   const [saved2, setSaved2] = useState(false)
+  // 답 화면 뒤집기 — 창구에 폰을 놓고 마주 앉으면 상대에게는 글씨가 거꾸로 보인다.
+  const [flipped, setFlipped] = useState(false)
   // 자막 크기·재생 속도 — 저시력·고령 사용자와 수어 학습자에게 필요하다.
   // 받기 화면과 같은 값을 쓴다(기기에 기억되므로 한 번만 맞추면 된다).
   const [fontScale, setFontScale] = useState<0 | 1 | 2>(() => {
@@ -411,7 +413,9 @@ export default function TalkMode() {
           onClick={() => setShown(null)}
           className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-amber-400 p-6 text-center"
         >
-          <span className="text-4xl font-extrabold leading-snug text-slate-900 sm:text-6xl">
+          <span className={`text-4xl font-extrabold leading-snug text-slate-900 sm:text-6xl ${
+            flipped ? 'rotate-180' : ''
+          }`}>
             {shown}
           </span>
           {/* 소리가 나갔는지는 듣지 못하는 사용자가 확인할 수 없다 — 눈으로 알려준다.
@@ -424,6 +428,15 @@ export default function TalkMode() {
               : tts.speaking
                 ? '🔊 소리로 말하는 중…'
                 : '🔊 소리로 전달했어요'}
+          </span>
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); setFlipped((v) => !v) }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setFlipped((v) => !v) } }}
+            className="rounded-xl border-2 border-slate-900/40 px-5 py-2 text-lg font-bold text-slate-900"
+          >
+            🔄 글씨 뒤집기
           </span>
           <span className="text-base text-slate-800">화면을 누르면 닫혀요</span>
         </button>

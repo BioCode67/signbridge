@@ -35,6 +35,12 @@ export default function UserApp() {
   const [speed, setSpeed] = useState(1)
   const speedRef = useRef(1)
   useEffect(() => { speedRef.current = speed }, [speed])
+  // 자막 크기 — 저시력·고령 사용자용. 기기에 기억한다.
+  const [fontScale, setFontScale] = useState<0 | 1 | 2>(() => {
+    const saved = Number(localStorage.getItem('sb-font') ?? 1)
+    return (saved === 0 || saved === 2 ? saved : 1) as 0 | 1 | 2
+  })
+  useEffect(() => { localStorage.setItem('sb-font', String(fontScale)) }, [fontScale])
   // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
   const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>('watch')
   // 수신 이력 — 놓친 알림을 다시 본다. 세션 내 최근 20건.
@@ -447,10 +453,14 @@ export default function UserApp() {
                 ))}
               </div>
             )}
-            <p className="text-3xl font-extrabold tracking-wide text-cyan-soft text-glow sm:text-4xl">
+            <p className={`font-extrabold tracking-wide text-cyan-soft text-glow ${
+              ['text-2xl sm:text-3xl', 'text-3xl sm:text-4xl', 'text-5xl sm:text-6xl'][fontScale]
+            }`}>
               {nowGloss || ' '}
             </p>
-            <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base">
+            <p className={`mx-auto mt-2 max-w-2xl leading-relaxed text-slate-300 ${
+              ['text-xs sm:text-sm', 'text-sm sm:text-base', 'text-lg sm:text-xl'][fontScale]
+            }`}>
               {data.korean_text}
             </p>
           </div>
@@ -460,7 +470,7 @@ export default function UserApp() {
 
       {/* 하단 큰 버튼들 */}
       {tab === 'watch' && (
-      <nav className="grid grid-cols-[1fr_1fr_auto] gap-2 border-t border-white/10 p-3">
+      <nav className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 border-t border-white/10 p-3">
         <button
           type="button"
           disabled={!data || busy}
@@ -491,6 +501,14 @@ export default function UserApp() {
           className="rounded-2xl border border-white/15 bg-space-800 px-5 py-4 text-xl font-bold text-slate-200"
         >
           {speed === 1 ? '1×' : speed === 0.6 ? '🐢' : '⚡'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setFontScale((v) => ((v + 1) % 3) as 0 | 1 | 2)}
+          title="자막 크기"
+          className="rounded-2xl border border-white/15 bg-space-800 px-5 py-4 font-bold text-slate-200"
+        >
+          <span className={['text-sm', 'text-xl', 'text-2xl'][fontScale]}>가</span>
         </button>
       </nav>
       )}

@@ -19,6 +19,14 @@ const PARTICLE_RE =
 const TOKEN_RE = /[가-힣]+/g
 const MIN_STEM = 2
 
+/** 미매칭 보고(낱말 카드)에서 뺄 기능어·상투구 — 정보가 없어 카드로 띄우면 소음이다.
+ *  번역 자체에는 영향이 없다(원래도 매칭 안 되던 말들). */
+const REPORT_SKIP = new Set([
+  '있어', '있다', '있는', '있으니', '없다', '없는', '위해', '통해', '따라', '대한',
+  '관련', '해당', '인한', '인해', '바랍니다', '바람', '부탁', '협조', '주시기',
+  '주세요', '합니다', '하지', '되지', '아니', '그리고', '또는', '및', '등의', '등을',
+])
+
 export function stemKorean(word: string): string {
   let out = word
   let prev = ''
@@ -106,7 +114,9 @@ export class DictSignAgent implements SignAgent {
       }
       // 여기까지 왔으면 이 낱말은 번역에서 빠진다 — 어간형으로 기록해 둔다.
       const stem = stemKorean(raw)
-      if (!unmatched.includes(stem)) unmatched.push(stem)
+      if (!REPORT_SKIP.has(raw) && !REPORT_SKIP.has(stem) && !unmatched.includes(stem)) {
+        unmatched.push(stem)
+      }
     }
 
     if (gloss.length === 0) {

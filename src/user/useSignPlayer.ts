@@ -15,6 +15,9 @@ import type { SignData } from '../sections/sign/signTypes'
 import { composeGlosses, type BankIndex, type BankEntry } from '../sections/sign/composeLocal'
 import { DictSignAgent } from '../agents/dictSignAgent'
 
+/** 메모리에 들고 있을 동작 조각 수 — 문장 하나가 보통 10~20조각이라 넉넉하다. */
+const GLOSS_CACHE_MAX = 400
+
 /** 재생 가능한 수어 데이터 + 동작으로 표현하지 못한 낱말(낱말 카드로 띄운다). */
 export type Playable = SignData & { gloss_missing?: string[] }
 
@@ -71,14 +74,25 @@ export function useSignPlayer(): SignPlayer {
     return bankRef.current
   }, [])
 
-  /** 글로스 조각 하나 — 같은 단어를 두 번 받지 않는다(캐시). */
+  /** 글로스 조각 하나 — 같은 단어를 두 번 받지 않는다(캐시).
+   *
+   *  캐시에 **상한을 둔다.** 창구·키오스크는 하루 종일 켜 둔 채 수백 문장을 처리하는데,
+   *  조각 하나가 파싱된 상태로 수십 KB라 무제한으로 쌓으면 기기가 느려진다.
+   *  넘치면 가장 오래 전에 넣은 것부터 버린다(Map은 넣은 순서를 지킨다).
+   *  버려도 브라우저·서비스워커 캐시에 남아 있어 다시 받는 비용은 거의 없다. */
   const loadGloss = useCallback(async (name: string, entry: BankEntry): Promise<SignData> => {
-    const hit = cacheRef.current.get(name)
+    const cache = cacheRef.current
+    const hit = cache.get(name)
     if (hit) return hit
     const res = await fetch(`${import.meta.env.BASE_URL}data/glosses/${entry.file}`)
     if (!res.ok) throw new Error(name)
     const json = (await res.json()) as SignData
-    cacheRef.current.set(name, json)
+    cache.set(name, json)
+    while (cache.size > GLOSS_CACHE_MAX) {
+      const oldest = cache.keys().next().value
+      if (oldest === undefined) break
+      cache.delete(oldest)
+    }
     return json
   }, [])
 

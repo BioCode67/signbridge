@@ -222,6 +222,54 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await ctx.close()
 
 
+async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
+    """회선을 끊고도 창구 대화가 되는지 — 이 앱의 핵심 약속이라 자동으로 지킨다.
+
+    서비스워커를 **살려 둬야** 성립한다(다른 검사는 이전 배포본이 캐시에서 나오지 않게
+    막아 두지만, 여기서는 캐시가 검사 대상이다).
+    """
+    ctx = await browser.new_context(viewport={"width": 390, "height": 844},
+                                    is_mobile=True, has_touch=True)
+    await ctx.add_init_script(TTS_STUB)
+    pg = await ctx.new_page()
+    rep.lines.append("  [오프라인 390×844]")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
+
+    # 필수 세트를 조용히 받아 둘 때까지 기다린다(첫 방문 뒤 자동으로 받는다).
+    level = None
+    for _ in range(60):
+        await pg.wait_for_timeout(1000)
+        level = await pg.evaluate("localStorage.getItem('sb-offline')")
+        if level:
+            break
+    rep.check(level is not None, "오프라인: 필수 세트 자동 준비", str(level))
+
+    await ctx.set_offline(True)
+    await pg.reload(wait_until="domcontentloaded")
+    await pg.wait_for_timeout(2500)
+    rep.check(await pg.get_by_text("SignBridge").count() > 0, "오프라인: 앱이 열림")
+
+    await pg.get_by_role("button", name="💬 대화").click()
+    await pg.wait_for_timeout(600)
+    await pg.get_by_role("button", name="🏥 병원").click()
+    await pg.wait_for_timeout(500)
+    await pg.get_by_text("화면을 누르면 시작합니다").click()
+    await pg.wait_for_timeout(400)
+    await pg.get_by_role("button", name="어디가 아픈가요?").click()
+    best = {"frames": 0, "glosses": 0}
+    for _ in range(8):
+        await pg.wait_for_timeout(500)
+        st = await stage_state(pg)
+        if st["frames"] > best["frames"]:
+            best = st
+    rep.check(best["frames"] > 20, "오프라인: 창구 문구가 수어로 재생",
+              f"{best['frames']}프레임 · 단어 {best['glosses']}개")
+
+    if keep or rep.fails:
+        await pg.screenshot(path=str(ROOT / "e2e_오프라인.png"))
+    await ctx.close()
+
+
 async def main(keep: bool) -> int:
     from playwright.async_api import async_playwright
 
@@ -242,6 +290,7 @@ async def main(keep: bool) -> int:
             browser = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
             for name, w, h, mobile in DEVICES:
                 await run_device(browser, name, w, h, mobile, keep, rep, port_of(httpd))
+            await run_offline(browser, keep, rep, port_of(httpd))
             await browser.close()
     finally:
         httpd.shutdown()
@@ -250,7 +299,7 @@ async def main(keep: bool) -> int:
     if rep.fails:
         print(f"\n[e2e] ✗ 실패 {len(rep.fails)}건: {rep.fails}")
         return 1
-    print("\n[e2e] ✓ 폰·태블릿·키오스크 전부 통과")
+    print("\n[e2e] ✓ 폰·태블릿·키오스크·오프라인 전부 통과")
     return 0
 
 

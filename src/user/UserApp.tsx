@@ -18,6 +18,7 @@ import { categoryKo, type FeedItem } from '../sections/sign/LiveConsole'
 const Avatar3D = lazy(() => import('../sections/sign/Avatar3D'))
 // 말하기(웹캠 인식)는 MediaPipe 번들이 무거워 탭을 열 때만 불러온다.
 const SpeakMode = lazy(() => import('./SpeakMode'))
+const PlaceMode = lazy(() => import('./PlaceMode'))
 
 type Playable = SignData & { gloss_missing?: string[] }
 
@@ -31,7 +32,7 @@ export default function UserApp() {
   const [flash, setFlash] = useState(false)
   const [auto, setAuto] = useState(true)
   // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
-  const [tab, setTab] = useState<'watch' | 'speak' | 'dict'>('watch')
+  const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>('watch')
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -169,12 +170,38 @@ export default function UserApp() {
     setPlaying(true)
   }, [])
 
-  const onAnswer = useCallback((text: string) => {
+  const onAnswer = useCallback((text: string, gloss?: string[]) => {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
     void (async () => {
-      const composed = await compose(text)
-      if (!composed) return
+      // 글로스가 직접 지정된 문구(장소 모드)는 번역을 거치지 않고 바로 합성한다.
+      let composed: Playable | null = null
+      if (gloss && gloss.length) {
+        const base = import.meta.env.BASE_URL
+        if (!bankRef.current) {
+          const res = await fetch(`${base}data/bank.json`)
+          if (res.ok) bankRef.current = (await res.json()) as BankIndex
+        }
+        if (bankRef.current) {
+          composed = await composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
+            const hit = cacheRef.current.get(name)
+            if (hit) return hit
+            const res = await fetch(`${base}data/glosses/${entry.file}`)
+            if (!res.ok) throw new Error(name)
+            const json = (await res.json()) as SignData
+            cacheRef.current.set(name, json)
+            return json
+          })
+        }
+      }
+      if (!composed) composed = await compose(text)
+      if (!composed) {
+        // 조용히 실패하면 사용자는 고장으로 느낀다 — 문장이라도 크게 띄운다.
+        setData({ korean_text: text, fps: 30, num_frames: 1,
+                  gloss_sequence: [], keypoints: { pose: [[]], hand_left: [[]], hand_right: [[]] } })
+        setFrame(0); setPlaying(false)
+        return
+      }
       setData(composed)
       frameRef.current = 0
       setFrame(0)
@@ -203,7 +230,7 @@ export default function UserApp() {
           </span>
         )}
         <div className="flex gap-1 rounded-xl border border-white/10 bg-space-900 p-1">
-          {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['dict', '📖 사전']] as const).map(([id, label]) => (
+          {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['place', '🏥 장소'], ['dict', '📖 사전']] as const).map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -265,6 +292,13 @@ export default function UserApp() {
             <p className="mt-8 text-center text-lg text-slate-500">😢 없는 단어예요</p>
           )}
         </div>
+      )}
+
+      {/* 장소 모드 — 병원·주민센터·택시에서 직원과 함께 쓰는 화면 */}
+      {tab === 'place' && (
+        <Suspense fallback={<div className="grid flex-1 place-items-center text-slate-400">여는 중…</div>}>
+          <PlaceMode onSign={onAnswer} />
+        </Suspense>
       )}
 
       {/* 말하기 — 내 수어를 카메라로 */}

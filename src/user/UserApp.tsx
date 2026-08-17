@@ -16,6 +16,7 @@ import { RuleDisasterAgent } from '../agents/disasterAgent'
 import type { Severity } from '../agents/types'
 import { AVATARS } from '../sections/sign/avatars'
 import { categoryKo, type FeedItem } from '../sections/sign/LiveConsole'
+import { guideFor } from './safetyGuides'
 
 // 심각도 → 색·라벨. 색만으로 구분하지 않도록 라벨을 함께 쓴다(색각 배려).
 const SEVERITY_UI: Record<Severity, { label: string; cls: string }> = {
@@ -66,6 +67,9 @@ export default function UserApp() {
   // 지금 재생 중인 문자의 요약 배지 — 종류·심각도·지역.
   const [notice, setNotice] = useState<{ category?: string; severity: Severity; region?: string } | null>(null)
   const disasterRef = useRef<RuleDisasterAgent | null>(null)
+  // 행동요령 패널 — 재난 종류에 맞는 요령을 문장 단위로 수어로 본다.
+  const [showGuide, setShowGuide] = useState(false)
+  const guide = guideFor(notice?.category)
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -235,10 +239,10 @@ export default function UserApp() {
     setPlaying(true)
   }, [])
 
-  const onAnswer = useCallback((text: string, gloss?: string[]) => {
+  const onAnswer = useCallback((text: string, gloss?: string[], keepNotice?: boolean) => {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
-    setNotice(null)
+    if (!keepNotice) setNotice(null) // 행동요령 재생은 배지를 유지한다(요령 버튼 재진입용)
     void (async () => {
       // 글로스가 직접 지정된 문구(장소 모드)는 번역을 거치지 않고 바로 합성한다.
       let composed: Playable | null = null
@@ -387,6 +391,39 @@ export default function UserApp() {
         </div>
       )}
 
+      {/* 행동요령 — 문장을 누르면 아바타가 수어로 보여준다 */}
+      {showGuide && guide && (
+        <div className="absolute inset-x-0 bottom-0 top-16 z-40 flex flex-col bg-space-950 p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-2xl font-extrabold text-slate-100">{guide.icon} {guide.name} 행동요령</span>
+            <button
+              type="button"
+              onClick={() => setShowGuide(false)}
+              className="rounded-xl border border-white/15 px-4 py-2 text-lg text-slate-300"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
+            {guide.steps.map((s, i) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => { setShowGuide(false); onAnswer(s, undefined, true) }}
+                className="flex w-full items-center gap-3 rounded-2xl border border-emerald-400/30 bg-space-800 px-4 py-4 text-left"
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-emerald-400/20 text-lg font-extrabold text-emerald-300">
+                  {i + 1}
+                </span>
+                <span className="text-lg font-bold leading-snug text-slate-100">{s}</span>
+                <span className="ml-auto text-xl">🤟</span>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-center text-xs text-slate-500">출처: 행정안전부 국민행동요령 요약 · 문장을 누르면 수어로 보여드려요</p>
+        </div>
+      )}
+
       {/* 수신 이력 — 놓친 알림 다시 보기 */}
       {showHistory && (
         <div className="absolute inset-x-0 top-14 z-40 max-h-[55%] overflow-y-auto border-b border-white/10 bg-space-950/98 p-3 shadow-2xl">
@@ -488,6 +525,15 @@ export default function UserApp() {
                   <span className="rounded-lg border border-white/20 bg-space-800 px-2.5 py-1 text-base font-bold text-slate-200">
                     📍 {notice.region}
                   </span>
+                )}
+                {guide && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowGuide(true); setAuto(false); setPlaying(false) }}
+                    className="rounded-lg border border-emerald-400/50 bg-emerald-400/15 px-2.5 py-1 text-base font-bold text-emerald-300"
+                  >
+                    📋 행동요령
+                  </button>
                 )}
               </div>
             )}

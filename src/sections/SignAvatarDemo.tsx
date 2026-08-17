@@ -1,8 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
-import { API_URL, API_IS_REMOTE } from '../config'
+import { API_URL } from '../config'
 import { useSpeechInput } from '../hooks/useSpeechInput'
+import { DictSignAgent } from '../agents/dictSignAgent'
+import { composeGlosses, type BankIndex } from './sign/composeLocal'
+import type { SignData } from './sign/signTypes'
 import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
 import { AVATARS } from './sign/avatars'
@@ -179,16 +182,57 @@ export default function SignAvatarDemo() {
     frameRef.current = 0
   }, [])
 
-  // 임의 문장 → 서버에서 (KoBART 번역 + 글로스 뱅크 합성) → 즉시 재생.
+  // 브라우저 단독 경로 — 사전으로 번역하고 정적 동작 조각을 이어 붙인다.
+  // 조각은 한 번 받으면 캐시한다(같은 단어가 문장마다 반복되므로 효과가 크다).
+  const dictAgentRef = useRef<DictSignAgent | null>(null)
+  const bankRef = useRef<BankIndex | null>(null)
+  const glossCacheRef = useRef(new Map<string, SignData>())
+
+  const composeInBrowser = useCallback(async (text: string) => {
+    if (!dictAgentRef.current) dictAgentRef.current = new DictSignAgent()
+    const base = import.meta.env.BASE_URL
+    if (!bankRef.current) {
+      const res = await fetch(`${base}data/bank.json`)
+      if (!res.ok) throw new Error('동작 사전을 불러오지 못했습니다')
+      bankRef.current = (await res.json()) as BankIndex
+    }
+    const { gloss } = await dictAgentRef.current.convert(text)
+    return composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
+      const hit = glossCacheRef.current.get(name)
+      if (hit) return hit
+      const res = await fetch(`${base}data/glosses/${entry.file}`)
+      if (!res.ok) throw new Error(name)
+      const data = (await res.json()) as SignData
+      glossCacheRef.current.set(name, data)
+      return data
+    })
+  }, [])
+
+  // 임의 문장 → 수어 동작 → 즉시 재생.
+  //
+  // **서버가 있으면 서버, 없으면 브라우저**로 처리한다. 서버(KoBART)가 어순까지 배워
+  // 품질이 더 좋지만, 정적 배포에서는 서버가 없다. 그래서 실패하면 조용히 브라우저
+  // 사전 경로로 내려간다 — 사이트가 어떤 상황에서도 동작해야 한다.
   // 인자로 문장을 받으면 그것을, 없으면 입력창 값을 쓴다(음성 인식이 직접 넘긴다).
   const composeText = useCallback(async (override?: string) => {
     const text = (override ?? aiText).trim()
     if (!text || aiBusy) return
     setAiBusy(true)
     setAiNote('')
+
+    const show = (data: object, missing: string[], how: string) => {
+      setComposed({ ...(data as typeof composed), file: '__ai__' } as never)
+      setIndex(0)
+      setFrame(0)
+      frameRef.current = 0
+      setPlaying(true)
+      const skipped = missing.length ? ` · 동작 없는 단어 ${missing.length}개 건너뜀` : ''
+      setAiNote(`${how}${skipped}`)
+    }
+
     try {
       const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), 20000)
+      const timer = setTimeout(() => ctrl.abort(), 15000)
       const res = await fetch(`${API_URL}/compose`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -196,31 +240,30 @@ export default function SignAvatarDemo() {
         body: JSON.stringify({ text }),
       })
       clearTimeout(timer)
-      if (!res.ok) throw new Error(`서버 오류 ${res.status}`)
+      if (!res.ok) throw new Error(String(res.status))
       const json = await res.json()
       if (json.error) throw new Error(json.error)
-      setComposed({ ...json, file: '__ai__' })
-      setIndex(0)
-      setFrame(0)
-      frameRef.current = 0
-      setPlaying(true)
-      if (json.gloss_missing?.length) {
-        setAiNote(`동작 사전에 없는 단어 ${json.gloss_missing.length}개는 건너뜀`)
+      show(json, json.gloss_missing ?? [], 'AI 번역 모델(KoBART)로 생성')
+      setAiBusy(false) // 이 경로엔 finally가 없다 — 여기서 풀지 않으면 버튼이 잠긴 채 남는다
+      return
+    } catch {
+      // 서버가 없거나 느림 — 브라우저 사전으로 간다. 사용자에게는 실패가 아니다.
+    }
+
+    try {
+      const local = await composeInBrowser(text)
+      if (!local) {
+        setAiNote('이 문장에서 표현 가능한 수어 단어를 찾지 못했습니다. 다르게 써 보세요.')
+        return
       }
+      show(local, local.gloss_missing, '브라우저 내장 사전으로 생성')
     } catch (err) {
-      // 배포본은 외부 API가 잠들어 있을 수 있다(무료 호스팅 콜드 스타트).
-      const timedOut = err instanceof Error && err.name === 'AbortError'
-      setAiNote(
-        timedOut
-          ? API_IS_REMOTE
-            ? 'AI 서버가 깨어나는 중입니다(무료 호스팅 첫 요청은 1분쯤 걸립니다). 잠시 후 다시 눌러 주세요.'
-            : 'AI 번역 서버 응답 없음 — 로컬 서버(uvicorn server.app:app)를 켜 주세요'
-          : `번역 실패: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      setAiNote(`번역 실패: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setAiBusy(false)
     }
-  }, [aiText, aiBusy])
+    setAiBusy(false)
+  }, [aiText, aiBusy, composeInBrowser])
 
   // 음성 → 텍스트 → 곧바로 수어 번역. 확정된 문장만 넘어온다.
   const speech = useSpeechInput(

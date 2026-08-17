@@ -425,9 +425,15 @@ export default function TalkMode() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <div className="flex min-h-0 flex-col lg:w-1/2 lg:border-r lg:border-white/10">
       {/* 아바타 — 직원 말이 수어로 오는 곳 */}
-      <div className="relative flex min-h-[22vh] shrink flex-col sm:min-h-[34vh] lg:min-h-0 lg:flex-1">
+      {/* 답할 차례에는 아바타를 줄이고 카드에 자리를 준다 — 그때 아바타는 멈춰 있고,
+          답 카드는 126개라 화면이 좁으면 한참 굴려야 한다(실측 3.7화면). */}
+      <div className={`relative flex shrink flex-col lg:min-h-0 lg:flex-1 ${
+        side === 'deaf' ? 'min-h-[14vh] sm:min-h-[24vh]' : 'min-h-[22vh] sm:min-h-[34vh]'
+      }`}>
         {/* 자막 크기·속도 — 아바타 위에 띄운다. 따로 한 줄을 쓰면 폰에서 대화 기록이
             마이크 버튼과 겹칠 만큼 세로가 모자란다(실측). */}
+        {/* 재생할 것이 있을 때만 — 아무것도 없을 때 안내 문구 위에 겹친다 */}
+        {player.data && (
         <div className="absolute right-2 top-2 z-10 flex gap-1.5">
           <button
             type="button"
@@ -446,6 +452,7 @@ export default function TalkMode() {
             {player.speed === 1 ? '1×' : player.speed === 0.6 ? '🐢' : '⚡'}
           </button>
         </div>
+        )}
         <SignStage
           player={player}
           compact
@@ -556,7 +563,9 @@ export default function TalkMode() {
           ))}
         </div>
 
-        <div className="max-h-[26vh] overflow-y-auto px-3 pb-3 lg:max-h-none lg:min-h-0 lg:flex-1">
+        <div className={`overflow-y-auto px-3 pb-3 lg:max-h-none lg:min-h-0 lg:flex-1 ${
+          side === 'deaf' ? 'max-h-[42vh]' : 'max-h-[26vh]'
+        }`}>
           {side === 'staff' ? (
             <>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">

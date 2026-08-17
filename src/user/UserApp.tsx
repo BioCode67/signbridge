@@ -370,6 +370,16 @@ export default function UserApp() {
           </div>
         )}
 
+        {/* 재생 진행바 — 문장이 얼마나 남았는지 한눈에 */}
+        {data && data.num_frames > 1 && (
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-white/5">
+            <div
+              className="h-full bg-cyan-glow/70 transition-[width] duration-100"
+              style={{ width: `${(frame / Math.max(1, data.num_frames - 1)) * 100}%` }}
+            />
+          </div>
+        )}
+
         {/* 큰 자막 — 지금 단어 + 원문 */}
         {data && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-space-950 via-space-950/85 to-transparent px-4 pb-4 pt-16 text-center">

@@ -70,6 +70,19 @@ export default function UserApp() {
   // 행동요령 패널 — 재난 종류에 맞는 요령을 문장 단위로 수어로 본다.
   const [showGuide, setShowGuide] = useState(false)
   const guide = guideFor(notice?.category)
+  // 홈 화면 설치 — 브라우저가 설치 가능하다고 알려올 때만 버튼을 보인다.
+  // 재난 앱은 홈 화면에 있어야 위급할 때 바로 연다.
+  const installRef = useRef<{ prompt: () => Promise<unknown> } | null>(null)
+  const [canInstall, setCanInstall] = useState(false)
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault()
+      installRef.current = e as unknown as { prompt: () => Promise<unknown> }
+      setCanInstall(true)
+    }
+    window.addEventListener('beforeinstallprompt', onPrompt)
+    return () => window.removeEventListener('beforeinstallprompt', onPrompt)
+  }, [])
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -331,6 +344,19 @@ export default function UserApp() {
         >
           {auto ? '📡 받는 중' : '📡 받기'}
         </button>
+        {canInstall && (
+          <button
+            type="button"
+            onClick={() => {
+              void installRef.current?.prompt()
+              setCanInstall(false)
+            }}
+            className="rounded-xl border border-cyan-glow/50 bg-cyan-glow/10 px-3 py-2 text-base font-bold text-cyan-soft"
+            title="홈 화면에 설치"
+          >
+            📲 설치
+          </button>
+        )}
         <a
           href="#demo"
           onClick={() => { window.location.hash = '' }}

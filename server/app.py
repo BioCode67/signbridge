@@ -118,6 +118,11 @@ class T2GResponse(BaseModel):
 def text2gloss(req: T2GRequest):
     import torch
 
+    if not os.path.isdir(T2G_MODEL):
+        # 배포본에서 모델을 아직 안 올린 경우 — 500 대신 규칙 기반으로라도 답한다.
+        # (프런트의 KoBartSignAgent는 어차피 폴백하지만, 원인을 알 수 있게 표시한다.)
+        return T2GResponse(text=req.text, gloss=[], backend="unavailable")
+
     tok, model = load_t2g()
     inputs = tok(req.text, max_length=128, truncation=True, return_tensors="pt")
     inputs.pop("token_type_ids", None)  # KoBART 토크나이저 산출물, BART는 안 받는다

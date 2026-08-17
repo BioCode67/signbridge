@@ -343,6 +343,45 @@ export default function SignAvatarDemo() {
     setAiBusy(false)
   }, [aiText, aiBusy, composeInBrowser])
 
+  // ── 수어 사전 검색 — 단어를 찾으면 아바타가 그 수어를 보여 준다 ──
+  // 동작 사전(수천 단어)을 번역의 부품으로만 쓰지 않고, 그 자체를 "수어 사전"으로
+  // 직접 찾아볼 수 있게 한다. 수어를 배우는 청인·가족에게 가장 직관적인 기능이다.
+  const [dictQuery, setDictQuery] = useState('')
+  const [dictHits, setDictHits] = useState<string[]>([])
+  const searchDict = useCallback(async (q: string) => {
+    setDictQuery(q)
+    const query = q.trim()
+    if (!query) { setDictHits([]); return }
+    const base = import.meta.env.BASE_URL
+    if (!bankRef.current) {
+      const res = await fetch(`${base}data/bank.json`)
+      if (!res.ok) return
+      bankRef.current = (await res.json()) as BankIndex
+    }
+    const keys = Object.keys(bankRef.current)
+    // 앞부분 일치를 먼저, 부분 일치를 뒤에 — "비"를 치면 "비내리다"가 위로 온다.
+    const starts = keys.filter((k) => k.startsWith(query))
+    const contains = keys.filter((k) => !k.startsWith(query) && k.includes(query))
+    setDictHits([...starts, ...contains].slice(0, 14))
+  }, [])
+
+  const playDictWord = useCallback(async (gloss: string) => {
+    const base = import.meta.env.BASE_URL
+    if (!bankRef.current) return
+    const composed = await composeGlosses(gloss, [gloss], bankRef.current, async (name, entry) => {
+      const hit = glossCacheRef.current.get(name)
+      if (hit) return hit
+      const res = await fetch(`${base}data/glosses/${entry.file}`)
+      if (!res.ok) throw new Error(name)
+      const json = (await res.json()) as SignData
+      glossCacheRef.current.set(name, json)
+      return json
+    })
+    if (!composed) return
+    setComposed({ ...composed, korean_text: `수어 사전: ${gloss.replace(/[0-9#:]+$/, '')}`, file: '__ai__' } as never)
+    setIndex(0); setFrame(0); frameRef.current = 0; setPlaying(true)
+  }, [])
+
   // 다른 섹션(웹캠 인식 Q&A 등)이 "이 문장을 수어로"라고 보낼 수 있는 통로.
   // 농인이 수어로 질문 → 시스템이 답변 → **아바타가 수어로 응답**하는 왕복 루프의 마지막 다리다.
   useEffect(() => {
@@ -540,6 +579,35 @@ export default function SignAvatarDemo() {
                 )}
                 {aiNote && <p className="mt-1.5 text-xs text-amber-300/90">{aiNote}</p>}
                 {speech.error && <p className="mt-1.5 text-xs text-red-300/90">{speech.error}</p>}
+
+                {/* 수어 사전 — 단어를 찾아 바로 수어 동작을 본다 */}
+                <div className="mt-2 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={dictQuery}
+                    onChange={(e) => void searchDict(e.target.value)}
+                    placeholder="🔍 수어 사전 — 단어 검색 (예: 지진, 대피, 병원)"
+                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-space-900 px-3 py-1.5 text-xs text-slate-300 placeholder:text-slate-600 focus:border-cyan-glow/50 focus:outline-none"
+                  />
+                  {dictHits.length > 0 && (
+                    <span className="shrink-0 text-[10.5px] text-slate-500">{dictHits.length}건</span>
+                  )}
+                </div>
+                {dictHits.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1">
+                    {dictHits.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => void playDictWord(g)}
+                        className="rounded border border-white/10 bg-space-800 px-2 py-1 text-[11px] text-slate-300 transition-colors hover:border-cyan-glow/50 hover:text-cyan-soft"
+                      >
+                        {g.replace(/[0-9#:]+$/, '') || g}
+                        <span className="ml-0.5 text-slate-600">{(g.match(/[0-9]+$/) ?? [''])[0]}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Tabs (auto-generated from manifest) */}

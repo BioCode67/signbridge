@@ -392,7 +392,9 @@ export default function TalkMode() {
     )
   }
 
-  const answers = [...COMMON_ANSWERS, ...place.answer, ...saved]
+  // 공통 답과 장소별 답에 같은 말이 겹친다("네"·"아니요"). 두 번 보이면 어느 것을
+  // 눌러야 하나 망설이게 되므로 앞선 것만 남긴다.
+  const answers = [...new Set([...COMMON_ANSWERS, ...place.answer, ...saved])]
 
   if (signing) {
     return (

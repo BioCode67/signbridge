@@ -8155,8 +8155,8 @@
   ],
   "blank_id": null,
   "conv_stride": 1,
-  "trained_epoch": 44,
-  "val_top1": 0.7865678707148986,
+  "trained_epoch": 57,
+  "val_top1": 0.7867804044040158,
   "val_wer": null,
   "opset": 18
 }

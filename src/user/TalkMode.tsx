@@ -312,53 +312,6 @@ export default function TalkMode() {
         </button>
       )}
 
-      {/* 직접 쓰기 — 카드에 없는 말. 쓰면 소리로 읽어 준다. */}
-      {writing && (
-        <div className="shrink-0 border-t border-white/10 bg-space-900 p-3">
-          <input
-            type="text"
-            value={draft}
-            autoFocus
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && draft.trim()) {
-                fromDeaf(draft.trim())
-                setDraft('')
-                setWriting(false)
-              }
-            }}
-            placeholder="하고 싶은 말을 쓰세요"
-            className="w-full rounded-2xl border border-white/15 bg-space-950 px-4 py-3 text-xl text-slate-100 placeholder:text-slate-500 focus:border-amber-400/60 focus:outline-none"
-          />
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              disabled={!draft.trim()}
-              onClick={() => { fromDeaf(draft.trim()); setDraft(''); setWriting(false) }}
-              className="flex-1 rounded-2xl border border-amber-400/50 bg-amber-400/15 py-3 text-lg font-bold text-amber-200 disabled:opacity-40"
-            >
-              🔊 소리로 말하기
-            </button>
-            <button
-              type="button"
-              disabled={!draft.trim() || saved.includes(draft.trim())}
-              onClick={() => setSaved((s) => [...s, draft.trim()].slice(-12))}
-              className="rounded-2xl border border-white/15 px-4 py-3 text-lg font-bold text-slate-300 disabled:opacity-40"
-              title="자주 쓰는 문장으로 저장"
-            >
-              ⭐ 저장
-            </button>
-            <button
-              type="button"
-              onClick={() => { setWriting(false); setDraft('') }}
-              className="rounded-2xl border border-white/15 px-4 py-3 text-lg text-slate-300"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      )}
-
       </div>
 
       {/* 아래(넓은 화면에서는 오른쪽): 지금 말할 사람의 입력만 보여준다.
@@ -442,6 +395,52 @@ export default function TalkMode() {
                   ⌨ 글로 쓰기
                 </button>
               </div>
+      {/* 직접 쓰기 — 카드에 없는 말. 쓰면 소리로 읽어 준다. */}
+              {writing && (
+                <div className="mb-2 rounded-2xl border border-white/10 bg-space-950 p-3">
+                  <input
+                    type="text"
+                    value={draft}
+                    autoFocus
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => {
+              if (e.key === 'Enter' && draft.trim()) {
+                fromDeaf(draft.trim())
+                setDraft('')
+                setWriting(false)
+              }
+                    }}
+                    placeholder="하고 싶은 말을 쓰세요"
+                    className="w-full rounded-2xl border border-white/15 bg-space-950 px-4 py-3 text-xl text-slate-100 placeholder:text-slate-500 focus:border-amber-400/60 focus:outline-none"
+                  />
+                  <div className="mt-2 flex gap-2">
+                    <button
+              type="button"
+              disabled={!draft.trim()}
+              onClick={() => { fromDeaf(draft.trim()); setDraft(''); setWriting(false) }}
+              className="flex-1 rounded-2xl border border-amber-400/50 bg-amber-400/15 py-3 text-lg font-bold text-amber-200 disabled:opacity-40"
+                    >
+              🔊 소리로 말하기
+                    </button>
+                    <button
+              type="button"
+              disabled={!draft.trim() || saved.includes(draft.trim())}
+              onClick={() => setSaved((s) => [...s, draft.trim()].slice(-12))}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-lg font-bold text-slate-300 disabled:opacity-40"
+              title="자주 쓰는 문장으로 저장"
+                    >
+              ⭐ 저장
+                    </button>
+                    <button
+              type="button"
+              onClick={() => { setWriting(false); setDraft('') }}
+              className="rounded-2xl border border-white/15 px-4 py-3 text-lg text-slate-300"
+                    >
+              ✕
+                    </button>
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap gap-2">
                 {answers.map((a, i) => (
                   <button

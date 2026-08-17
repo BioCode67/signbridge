@@ -149,6 +149,32 @@ def conjugations(stem_word: str) -> list[str]:
     return forms
 
 
+# 한 글자 명사에 붙는 조사 — 코와·입을·손과·문을·벽을·눈이 …
+# **왜 따로 다루나.** 런타임 어간 추출기는 조사를 뗀 결과가 두 글자 미만이면 원형을
+# 되돌린다(MIN_STEM). 그래서 **한 글자 명사는 조사가 붙는 순간 통째로 못 찾는다.**
+# 하필 몸 부위와 생활 명사가 대부분 한 글자다 — 코·입·손·눈·목·배·발·귀·문·벽·물·약·
+# 열·피·밥·길·돈. 행동요령 실측에서 "젖은 수건으로 코와 입을 가리세요"가 '수건' 하나만
+# 표현된 것이 이 때문이었다. 조사가 붙은 꼴을 미리 키로 만들어 둔다.
+NOUN_PARTICLES = (
+    "은", "는", "이", "가", "을", "를", "와", "과", "의", "도", "만", "로", "으로",
+    "에", "에서", "에게", "부터", "까지", "이나", "이랑", "랑", "보다", "처럼",
+)
+
+# 명사에서 파생되는 용언 꼴 — 침수된·대피하세요·통제한 …
+NOUN_VERB_SUFFIXES = ("하다", "한", "할", "하는", "하고", "해", "하세요", "합니다",
+                      "되다", "된", "될", "되는", "되고", "돼", "됐")
+
+
+def noun_forms(lemma: str) -> list[str]:
+    """명사 표제어에서 조사·파생형을 만든다."""
+    out: list[str] = []
+    # 한 글자 명사만 조사를 펼친다 — 두 글자 이상은 런타임 어간 추출기가 처리한다.
+    if len(lemma) == 1:
+        out += [lemma + p for p in NOUN_PARTICLES]
+    out += [lemma + s for s in NOUN_VERB_SUFFIXES]
+    return out
+
+
 def stem(word: str) -> str:
     """조사·어미를 떼어 어간을 근사한다. 너무 짧아지면 원형을 남긴다."""
     prev = None
@@ -262,16 +288,24 @@ def main() -> None:
     # 용언 활용형 — 창구 대화에서 빠진 낱말의 대부분이 이것이었다(기다려·찍어·뽑고…).
     # 이미 있는 키는 건드리지 않는다(Dice가 실제로 관측한 대응이 우선).
     conj = 0
+    noun = 0
     for lemma, g in list(lemma_best.items()):
-        # 어간이 한 글자여도 만든다(있다·하다·가다·오다·보다·먹다 — 가장 흔한 용언들이다).
-        # 예전 조건 len(lemma) < 3 이 이들을 통째로 걸러 "있나요·오세요"가 사전에 없었다.
-        if not lemma.endswith("다") or len(lemma) < 2:
-            continue
-        for form in conjugations(lemma[:-1]):
+        if lemma.endswith("다") and len(lemma) >= 2:
+            # 어간이 한 글자여도 만든다(있다·하다·가다·오다·보다·먹다 — 가장 흔한 용언들).
+            # 예전 조건 len(lemma) < 3 이 이들을 통째로 걸러 "있나요·오세요"가 없었다.
+            forms = conjugations(lemma[:-1])
+            kind = "conj"
+        else:
+            forms = noun_forms(lemma)
+            kind = "noun"
+        for form in forms:
             if len(form) >= MIN_STEM and form not in table and form not in STOP_WORDS:
                 table[form] = [g]
-                conj += 1
-    print(f"[align] 용언 활용형 추가 {conj:,}개")
+                if kind == "conj":
+                    conj += 1
+                else:
+                    noun += 1
+    print(f"[align] 용언 활용형 추가 {conj:,}개 · 명사 조사/파생형 추가 {noun:,}개")
 
     # 복합어 통짜 키 제거 — "대피바랍니다"·"안전사고"처럼 두 낱말 이상으로 분해되는
     # 키는 지운다. 통짜 키의 Dice 매핑은 잡음이기 쉽고(실측: 대피바랍니다→낚시1,

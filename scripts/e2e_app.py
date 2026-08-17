@@ -171,7 +171,10 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     rep.check(thread_h > 20, "대화: 기록이 화면에 보임", f"높이 {thread_h:.0f}px")
 
     # ── 자유 입력 → 소리
-    await pg.get_by_role("button", name="⌨ 카드에 없는 말 쓰기").click()
+    # 수어로 답하기 입구가 있는가 — 모어로 말하는 유일한 길이라 사라지면 안 된다
+    rep.check(await pg.get_by_role("button", name="🤟 수어로 답하기").count() > 0,
+              "대화: 수어로 답하기 입구")
+    await pg.get_by_role("button", name="⌨ 글로 쓰기").click()
     await pg.wait_for_timeout(300)
     await pg.get_by_placeholder("하고 싶은 말을 쓰세요").fill("어제부터 머리가 아파요")
     await pg.get_by_role("button", name="🔊 소리로 말하기").click()

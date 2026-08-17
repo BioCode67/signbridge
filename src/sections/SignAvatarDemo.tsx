@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
 import { API_URL, API_IS_REMOTE } from '../config'
+import { useSpeechInput } from '../hooks/useSpeechInput'
 import { drawFrame, type ViewMode } from './sign/renderSign'
 import { useSignData } from './sign/useSignData'
 import { AVATARS } from './sign/avatars'
@@ -177,8 +178,9 @@ export default function SignAvatarDemo() {
   }, [])
 
   // 임의 문장 → 서버에서 (KoBART 번역 + 글로스 뱅크 합성) → 즉시 재생.
-  const composeText = useCallback(async () => {
-    const text = aiText.trim()
+  // 인자로 문장을 받으면 그것을, 없으면 입력창 값을 쓴다(음성 인식이 직접 넘긴다).
+  const composeText = useCallback(async (override?: string) => {
+    const text = (override ?? aiText).trim()
     if (!text || aiBusy) return
     setAiBusy(true)
     setAiNote('')
@@ -217,6 +219,14 @@ export default function SignAvatarDemo() {
       setAiBusy(false)
     }
   }, [aiText, aiBusy])
+
+  // 음성 → 텍스트 → 곧바로 수어 번역. 확정된 문장만 넘어온다.
+  const speech = useSpeechInput(
+    useCallback((text: string) => {
+      setAiText(text)
+      void composeText(text)
+    }, [composeText]),
+  )
 
   const togglePlay = useCallback(() => {
     if (!data) return
@@ -298,17 +308,40 @@ export default function SignAvatarDemo() {
               {/* AI 번역 입력 — 임의 재난 문장을 KoBART가 글로스로 번역, 실연 동작 사전으로 합성 */}
               <div className="mb-4">
                 <div className="flex gap-2">
+                  {speech.supported && (
+                    <button
+                      type="button"
+                      onClick={speech.toggle}
+                      aria-pressed={speech.listening}
+                      title={speech.listening ? '음성 입력 중지' : '음성으로 재난 상황 말하기'}
+                      className={`shrink-0 rounded-lg border px-3 py-2 text-sm font-semibold transition-all ${
+                        speech.listening
+                          ? 'animate-pulse border-red-400/70 bg-red-500/20 text-red-200'
+                          : 'border-white/10 bg-space-800 text-slate-300 hover:border-cyan-glow/40 hover:text-cyan-soft'
+                      }`}
+                    >
+                      {speech.listening ? '● 듣는 중' : '🎙 음성'}
+                    </button>
+                  )}
                   <input
                     type="text"
-                    value={aiText}
+                    value={speech.interim || aiText}
                     onChange={(e) => setAiText(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && composeText()}
-                    placeholder="재난 문장을 입력하면 AI가 수어로 번역합니다 (예: 오늘 밤 한파주의보가 발효됩니다)"
-                    className="min-w-0 flex-1 rounded-lg border border-white/10 bg-space-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:border-cyan-glow/60 focus:outline-none"
+                    placeholder={
+                      speech.listening
+                        ? '말씀하세요 — 문장이 끝나면 자동으로 수어로 번역합니다'
+                        : '재난 문장을 입력하면 AI가 수어로 번역합니다 (예: 오늘 밤 한파주의보가 발효됩니다)'
+                    }
+                    className={`min-w-0 flex-1 rounded-lg border bg-space-800 px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none ${
+                      speech.interim
+                        ? 'border-cyan-glow/60 italic text-cyan-soft'
+                        : 'border-white/10 focus:border-cyan-glow/60'
+                    }`}
                   />
                   <button
                     type="button"
-                    onClick={composeText}
+                    onClick={() => composeText()}
                     disabled={aiBusy || !aiText.trim()}
                     className="shrink-0 rounded-lg border border-cyan-glow/50 bg-cyan-glow/10 px-4 py-2 text-sm font-semibold text-cyan-soft transition-all hover:bg-cyan-glow/20 disabled:cursor-not-allowed disabled:opacity-40"
                   >
@@ -316,6 +349,7 @@ export default function SignAvatarDemo() {
                   </button>
                 </div>
                 {aiNote && <p className="mt-1.5 text-xs text-amber-300/90">{aiNote}</p>}
+                {speech.error && <p className="mt-1.5 text-xs text-red-300/90">{speech.error}</p>}
               </div>
 
               {/* Tabs (auto-generated from manifest) */}

@@ -7,9 +7,14 @@
 //   - 카드에 없는 말을 해야 할 때가 있다 → 직접 쓰면 소리로 읽어 준다
 //
 // 화면 문법
-//   위: 아바타(수어) — 농인이 보는 쪽
+//   위: 아바타(수어) — 농인이 보는 쪽. 자막 크기·속도 조절이 그 위에 떠 있다
 //   중간: 대화 기록 — 누가 무슨 말을 했는지 시간순. 눌러 다시 보기/다시 듣기
-//   아래: 두 사람의 입력 — 직원은 🎙 마이크와 질문 카드, 농인은 답 카드와 ⌨ 직접 쓰기
+//   아래: 마이크(항상) + 차례 토글 + 그 차례의 카드
+//         직원 = 질문 카드 · 농인 = 답 카드 / ⌨ 글로 쓰기 / 🤟 수어로 답하기
+//   넓은 화면(태블릿 가로·키오스크)에서는 위아래가 아니라 좌우로 나뉜다
+//
+// 딸린 화면은 파일을 나눠 두었다 — SosScreen(긴급) · TalkHistoryPanel(지난 대화) ·
+// MyInfoPanel(내 정보) · SignInputPanel(수어로 답하기).
 //
 // 소리를 못 듣는 사용자에게 **소리가 나갔다는 사실**은 보이지 않는다. 그래서 말이
 // 나갈 때마다 "소리로 전달했어요"를 눈으로 확인시킨다 — 이게 없으면 전달됐는지
@@ -20,8 +25,9 @@ import { useSpeechInput } from '../hooks/useSpeechInput'
 import { useSpeechOutput } from '../hooks/useSpeechOutput'
 import SignStage from './SignStage'
 import { useSignPlayer } from './useSignPlayer'
-
-import { MY_INFO_FIELDS, loadMyInfo, hasMyInfo } from './myInfo'
+import SosScreen from './SosScreen'
+import TalkHistoryPanel from './TalkHistoryPanel'
+import { loadMyInfo, hasMyInfo } from './myInfo'
 import { loadTalks, saveTalk, deleteTalk, clearTalks, type SavedTalk } from './talkHistory'
 
 // 카메라 인식은 MediaPipe 번들이 무거워 열 때만 불러온다.
@@ -37,14 +43,6 @@ interface Turn {
   time: string
 }
 
-// SOS 전체화면 문구 — 주변인이 읽는 쪽이라 한국어를 크게.
-const SOS_MESSAGES = [
-  '도와주세요!\n저는 청각장애인입니다',
-  '119에 신고해 주세요',
-  '글로 써서 보여 주세요',
-  '가족에게 연락이 필요해요',
-]
-
 /** 어느 장소에서나 쓰는 답 — 장소별 카드 앞에 항상 붙인다. */
 const COMMON_ANSWERS = ['네', '아니요', '잘 모르겠어요', '다시 보여 주세요', '천천히 말해 주세요', '글로 써 주세요']
 
@@ -53,7 +51,7 @@ const nowTime = () => new Date().toTimeString().slice(0, 5)
 export default function TalkMode() {
   const [place, setPlace] = useState<Place | null>(null)
   const [turns, setTurns] = useState<Turn[]>([])
-  const [sos, setSos] = useState(-1)
+  const [sos, setSos] = useState(false)
   // 농인이 짚은 답을 화면 가득 — 직원이 소리를 놓쳤을 때 읽는 쪽.
   const [shown, setShown] = useState<string | null>(null)
   const [writing, setWriting] = useState(false)
@@ -191,71 +189,17 @@ export default function TalkMode() {
   }, [turns.length, micStop])
 
   // 위급 화면 — 화면 전체를 빨갛게, 문구는 방 건너에서도 읽히게.
-  if (sos >= 0) {
+  if (sos) {
     return (
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={() => setSos((v) => (v + 1) % SOS_MESSAGES.length)}
-        onKeyDown={(e) => e.key === 'Escape' && setSos(-1)}
-        className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-6 bg-red-600 p-6 text-center"
-      >
-        <span className="animate-pulse text-7xl">🆘</span>
-        <p className="whitespace-pre-line text-4xl font-extrabold leading-snug text-white sm:text-6xl">
-          {SOS_MESSAGES[sos]}
-        </p>
-        <p className="text-lg text-red-100">화면을 탭하면 다음 문구</p>
-
-        {/* 응급 정보 — 의식이 흐리거나 손을 다쳐 수어를 못 할 때, 이 카드가 떠 있기만
-            해도 의료진이 읽고 조치할 수 있다. 비어 있으면 띄우지 않는다. */}
-        {hasMyInfo(myInfo) && (
-          <div className="w-full max-w-xl rounded-2xl bg-white/95 p-4 text-left">
-            {MY_INFO_FIELDS.filter((f) => f.urgent && (myInfo[f.key] ?? '').trim()).map((f) => (
-              <p key={f.key} className="mb-1 flex gap-2 text-lg leading-snug">
-                <span className="w-28 shrink-0 font-bold text-red-700">{f.label}</span>
-                <span className="font-extrabold text-slate-900">{myInfo[f.key]}</span>
-              </p>
-            ))}
-          </div>
-        )}
-
-        {/* 위치 — 119에 전할 좌표. 주변 사람이 소리 내어 읽어 준다. */}
-        {coords && (
-          <div className="w-full max-w-xl rounded-2xl bg-white/95 p-3 text-center">
-            <p className="text-base font-bold text-red-700">📍 내 위치 (119에 알려 주세요)</p>
-            <p className="text-2xl font-extrabold tracking-wider text-slate-900">
-              {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
-            </p>
-            <p className="text-sm text-slate-600">오차 약 {Math.round(coords.acc)}m</p>
-          </div>
-        )}
-        {locError && <p className="text-base text-red-100">{locError}</p>}
-
-        <div className="mt-2 flex flex-wrap justify-center gap-3">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); findMe() }}
-            className="rounded-2xl border-2 border-white/70 px-6 py-3 text-xl font-bold text-white"
-          >
-            {locating ? '📍 찾는 중…' : '📍 내 위치'}
-          </button>
-          {/* 소리까지 함께 — 주변이 화면을 못 볼 수도 있다 */}
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); tts.speak(SOS_MESSAGES[sos].replace('\n', ' ')) }}
-            className="rounded-2xl border-2 border-white/70 px-6 py-3 text-xl font-bold text-white"
-          >
-            🔊 소리로
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setSos(-1) }}
-            className="rounded-2xl border-2 border-white/70 px-8 py-3 text-xl font-bold text-white"
-          >
-            ✕ 닫기
-          </button>
-        </div>
-      </div>
+      <SosScreen
+        myInfo={myInfo}
+        coords={coords}
+        locating={locating}
+        locError={locError}
+        onLocate={findMe}
+        onSpeak={tts.speak}
+        onClose={() => setSos(false)}
+      />
     )
   }
 
@@ -269,67 +213,14 @@ export default function TalkMode() {
 
   if (showTalks) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex shrink-0 items-center gap-2 border-b border-white/10 px-3 py-2">
-          <button
-            type="button"
-            onClick={() => setShowTalks(false)}
-            className="min-h-[44px] rounded-lg border border-white/15 px-3 py-2 text-base text-slate-300"
-          >
-            ← 뒤로
-          </button>
-          <span className="text-xl font-bold text-slate-100">📜 지난 대화</span>
-          {talks.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setTalks(clearTalks())}
-              className="ml-auto min-h-[44px] rounded-lg border border-red-400/40 px-3 py-2 text-sm font-bold text-red-300"
-            >
-              전체 지우기
-            </button>
-          )}
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-3">
-          <p className="mb-3 rounded-2xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-base leading-relaxed text-emerald-200">
-            🔒 이 기기에만 저장돼요. 누른 문장은 다시 볼 수 있어요.
-          </p>
-          {talks.map((t) => (
-            <div key={t.id} className="mb-3 rounded-2xl border border-white/10 bg-space-800 p-3">
-              <div className="mb-2 flex items-center gap-2">
-                <span className="text-lg font-bold text-slate-100">{t.placeIcon} {t.place}</span>
-                <span className="text-sm text-slate-500">{t.date}</span>
-                <button
-                  type="button"
-                  onClick={() => setTalks(deleteTalk(t.id))}
-                  className="ml-auto min-h-[40px] rounded-lg border border-white/15 px-3 py-1.5 text-sm text-slate-400"
-                >
-                  지우기
-                </button>
-              </div>
-              {t.turns.map((turn, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  onClick={() => (turn.who === 'staff'
-                    ? void player.play(turn.text)
-                    : tts.speak(turn.text))}
-                  className={`mb-1 flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left ${
-                    turn.who === 'staff' ? 'bg-cyan-glow/10' : 'bg-amber-400/10'
-                  }`}
-                >
-                  <span className="shrink-0 text-lg">{turn.who === 'staff' ? '👔' : '🤟'}</span>
-                  <span className={`flex-1 text-base font-bold leading-snug ${
-                    turn.who === 'staff' ? 'text-cyan-soft' : 'text-amber-200'
-                  }`}>
-                    {turn.text}
-                  </span>
-                  <span className="shrink-0 text-sm text-slate-500">{turn.time}</span>
-                </button>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
+      <TalkHistoryPanel
+        talks={talks}
+        onBack={() => setShowTalks(false)}
+        onDelete={(id) => setTalks(deleteTalk(id))}
+        onClearAll={() => setTalks(clearTalks())}
+        onReplaySign={(text) => void player.play(text)}
+        onReplayVoice={tts.speak}
+      />
     )
   }
 
@@ -338,7 +229,7 @@ export default function TalkMode() {
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         <button
           type="button"
-          onClick={() => { setSos(0); navigator.vibrate?.([400, 100, 400]) }}
+          onClick={() => { setSos(true); navigator.vibrate?.([400, 100, 400]) }}
           className="mb-4 w-full rounded-3xl border-2 border-red-500 bg-red-600/90 py-5 text-2xl font-extrabold text-white"
         >
           🆘 긴급 도움 요청

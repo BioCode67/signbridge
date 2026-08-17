@@ -155,7 +155,11 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     rep.check(await pg.get_by_role("button", name=re.compile("🆔 내 정보")).count() > 0,
               "대화: 내 정보 입구")
     await pg.get_by_role("button", name="🏥 병원").click()
-    await pg.wait_for_timeout(600)
+    await pg.wait_for_timeout(500)
+    # 직원 안내 — 창구에서 가장 먼저 보이는 화면이다. 사라지면 직원이 쓸 줄 모른다.
+    rep.check(await pg.get_by_text("저는 소리를 듣지 못합니다").count() > 0, "대화: 직원 안내 표시")
+    await pg.get_by_text("화면을 누르면 시작합니다").click()
+    await pg.wait_for_timeout(500)
 
     await pg.get_by_role("button", name="어디가 아픈가요?").click()
     talk = {"frames": 0, "glosses": 0}

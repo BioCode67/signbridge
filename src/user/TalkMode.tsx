@@ -63,6 +63,9 @@ export default function TalkMode() {
   const [signing, setSigning] = useState(false)
   // 내 정보 — 응급실에서 말 대신 보여주는 사실들(기기에만 저장).
   const [editingInfo, setEditingInfo] = useState(false)
+  // 직원에게 보여주는 안내 — 창구에서 가장 먼저 필요한 것은 번역이 아니라
+  // "이게 뭐고 어떻게 쓰는지"다. 장소를 고르면 한 번 자동으로 띄운다.
+  const [showGuide, setShowGuide] = useState(false)
   // 위치 — 119에 전할 좌표. 주변 사람이 읽어 주는 용도라 큰 글씨로 띄운다.
   const [coords, setCoords] = useState<{ lat: number; lon: number; acc: number } | null>(null)
   const [locating, setLocating] = useState(false)
@@ -252,7 +255,7 @@ export default function TalkMode() {
             <button
               key={p.id}
               type="button"
-              onClick={() => setPlace(p)}
+              onClick={() => { setPlace(p); setShowGuide(true) }}
               className="rounded-3xl border border-white/10 bg-space-800 py-8 text-center transition-colors hover:border-cyan-glow/50"
             >
               <span className="block text-5xl">{p.icon}</span>
@@ -266,6 +269,37 @@ export default function TalkMode() {
           </p>
         )}
       </div>
+    )
+  }
+
+  // 직원에게 건네 보여주는 안내 — 글씨를 크게, 할 일을 세 줄로.
+  if (showGuide) {
+    return (
+      <button
+        type="button"
+        onClick={() => setShowGuide(false)}
+        className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 bg-white p-6 text-center"
+      >
+        <span className="text-5xl">🤟</span>
+        <p className="text-3xl font-extrabold leading-snug text-slate-900 sm:text-4xl">
+          저는 소리를 듣지 못합니다
+        </p>
+        <div className="w-full max-w-xl space-y-3 text-left">
+          {[
+            ['🎙', '아래 파란 버튼을 누르고 평소처럼 말씀해 주세요'],
+            ['🤟', '말씀하신 내용을 수어로 바꿔 보여 드립니다'],
+            ['🔊', '제 대답은 화면과 소리로 나갑니다'],
+          ].map(([icon, line]) => (
+            <p key={line} className="flex items-start gap-3 text-xl font-bold leading-snug text-slate-800 sm:text-2xl">
+              <span className="text-3xl">{icon}</span>
+              <span>{line}</span>
+            </p>
+          ))}
+        </div>
+        <span className="mt-2 rounded-2xl bg-slate-900 px-8 py-4 text-xl font-extrabold text-white">
+          화면을 누르면 시작합니다
+        </span>
+      </button>
     )
   }
 
@@ -291,6 +325,14 @@ export default function TalkMode() {
           ← 장소
         </button>
         <span className="text-xl font-bold text-slate-100">{place.icon} {place.name}</span>
+        <button
+          type="button"
+          onClick={() => setShowGuide(true)}
+          className="min-h-[44px] rounded-lg border border-white/15 px-3 py-2 text-sm font-bold text-slate-300"
+          title="직원에게 사용법을 보여줍니다"
+        >
+          👔 안내
+        </button>
         {turns.length > 0 && (
           <button
             type="button"

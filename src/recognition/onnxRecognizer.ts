@@ -40,6 +40,7 @@ export class OnnxRecognizer {
   async load(
     modelUrl = `${BASE}models/ksl-iso/model.onnx`,
     metaUrl = `${BASE}models/ksl-iso/meta.json`,
+    onProgress?: (loadedBytes: number, totalBytes: number) => void,
   ): Promise<void> {
     const metaRes = await fetch(metaUrl)
     if (!metaRes.ok) throw new Error(`모델 정보를 불러오지 못했습니다 (${metaRes.status})`)
@@ -65,7 +66,25 @@ export class OnnxRecognizer {
     // 크로스오리진 격리(COOP/COEP)가 없는 정적 호스팅에서는 스레드를 못 쓴다.
     // GitHub Pages가 그렇다 — 1로 두면 어디서든 뜬다.
     ort.env.wasm.numThreads = 1
-    this.session = await ort.InferenceSession.create(modelUrl, {
+    // 모델(20MB)을 진행률과 함께 받는다 — 수십 초 무표시는 고장처럼 느껴진다.
+    // InferenceSession.create(url)은 진행률을 주지 않으므로 fetch로 직접 받아 넘긴다.
+    const res = await fetch(modelUrl)
+    if (!res.ok || !res.body) throw new Error(`모델 다운로드 실패 (${res.status})`)
+    const total = Number(res.headers.get('content-length') ?? 0)
+    const reader = res.body.getReader()
+    const chunks: Uint8Array[] = []
+    let loaded = 0
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      chunks.push(value)
+      loaded += value.length
+      onProgress?.(loaded, total)
+    }
+    const buf = new Uint8Array(loaded)
+    let off = 0
+    for (const c of chunks) { buf.set(c, off); off += c.length }
+    this.session = await ort.InferenceSession.create(buf, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
     })

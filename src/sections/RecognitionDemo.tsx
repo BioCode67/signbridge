@@ -303,7 +303,7 @@ export default function RecognitionDemo() {
                     ? `실데이터 학습 · 어휘 ${rec.aihubInfo.num_classes.toLocaleString()}종 · 검증 top-1 ${(
                         (rec.aihubInfo.val_top1 ?? 0) * 100
                       ).toFixed(1)}% (수어자 분리)`
-                    : '실데이터 학습 모델을 불러오는 중… (20MB, 최초 1회)'
+                    : rec.loadPct != null ? `실데이터 학습 모델 내려받는 중… ${rec.loadPct}% (20MB, 최초 1회)` : '실데이터 학습 모델을 불러오는 중…'
                   : '합성 데이터 모델 — 실제 수어는 인식하지 못합니다. 스튜디오 녹화·학습용입니다.'}
               </p>
 

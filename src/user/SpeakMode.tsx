@@ -76,7 +76,7 @@ export default function SpeakMode({ onAnswer }: Props) {
         {rec.modelStatus === 'loading' && running && (
           <div className="absolute inset-x-0 top-4 text-center">
             <span className="rounded-full bg-space-900/90 px-4 py-2 text-base text-cyan-soft">
-              인식 모델 준비 중… (최초 1회)
+              인식 모델 내려받는 중{rec.loadPct != null ? ` ${rec.loadPct}%` : '…'} (최초 1회)
             </span>
           </div>
         )}

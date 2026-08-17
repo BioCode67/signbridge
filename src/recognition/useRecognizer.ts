@@ -35,6 +35,8 @@ export interface UseRecognizerResult {
   setBackend: (b: Backend) => void
   /** 실데이터 모델 정보(클래스 수·검증 정확도) — UI에 정직하게 표시하기 위한 것 */
   aihubInfo: { num_classes: number; val_top1?: number } | null
+  /** 실데이터 모델 다운로드 진행률(0~100), 미로드 시 null */
+  loadPct: number | null
 }
 
 export function useRecognizer(enabled: boolean): UseRecognizerResult {
@@ -43,6 +45,8 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
   const bufRef = useRef<Float32Array[]>([])
   const [backend, setBackendState] = useState<Backend>('aihub')
   const [aihubInfo, setAihubInfo] = useState<{ num_classes: number; val_top1?: number } | null>(null)
+  // 실데이터 모델(20MB) 다운로드 진행률(0~100). 로드 중이 아닐 땐 null.
+  const [loadPct, setLoadPct] = useState<number | null>(null)
   // ONNX 추론은 비동기다. 이전 추론이 끝나기 전에 또 넣으면 큐가 밀려 지연이 쌓인다.
   const inFlightRef = useRef(false)
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle')
@@ -94,15 +98,18 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
       return
     }
     setModelStatus('loading')
+    setLoadPct(0)
     onnxRef.current
-      .load()
+      .load(undefined, undefined, (l, t) => { if (t) setLoadPct(Math.round((l / t) * 100)) })
       .then(() => {
+        setLoadPct(null)
         const info = onnxRef.current.info
         if (info) setAihubInfo({ num_classes: info.num_classes, val_top1: info.val_top1 })
         setModelStatus('ready')
       })
       .catch((err) => {
         console.error('[recognizer] 실데이터 모델 로드 실패', err)
+        setLoadPct(null)
         setModelStatus('error')
       })
   }, [reloadDefault])
@@ -177,5 +184,6 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
     backend,
     setBackend,
     aihubInfo,
+    loadPct,
   }
 }

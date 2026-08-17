@@ -212,8 +212,8 @@ export default function SignAvatarDemo() {
       if (!res.ok) throw new Error('동작 사전을 불러오지 못했습니다')
       bankRef.current = (await res.json()) as BankIndex
     }
-    const { gloss } = await dictAgentRef.current.convert(text)
-    return composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
+    const { gloss, unmatched } = await dictAgentRef.current.convert(text)
+    const local = await composeGlosses(text, gloss, bankRef.current, async (name, entry) => {
       const hit = glossCacheRef.current.get(name)
       if (hit) return hit
       const res = await fetch(`${base}data/glosses/${entry.file}`)
@@ -222,6 +222,11 @@ export default function SignAvatarDemo() {
       glossCacheRef.current.set(name, data)
       return data
     })
+    // 번역 단계에서 빠진 낱말도 "건너뜀" 집계에 넣는다 — 조용한 손실 금지.
+    if (local && unmatched?.length) {
+      local.gloss_missing = [...new Set([...local.gloss_missing, ...unmatched])]
+    }
+    return local
   }, [])
 
   // 관제 화면용 — 번역·합성 각 단계를 **실제로 재서** 돌려준다.

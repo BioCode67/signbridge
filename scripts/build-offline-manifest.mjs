@@ -60,12 +60,37 @@ for (const g of keys.slice(0, EXTENDED_TOP)) {
   const f = fileOf(g)
   if (f && !essential.has(f)) extended.add(f)
 }
-// 아바타 — 3D 모델과 텍스처가 없으면 오프라인에서 아바타가 아예 뜨지 않는다.
-try {
-  for (const f of readdirSync(join(DIST, 'models'))) extended.add(`./models/${f}`)
-} catch {
-  /* 모델 폴더가 없는 빌드도 있다 */
+// 아바타와 인식 모델 — 없으면 오프라인에서 아바타가 아예 뜨지 않고, 수어 입력도 못 쓴다.
+//
+// 주의할 점 둘, 둘 다 실측에서 걸렸다.
+//   1) `models/` 를 한 겹만 읽으면 **디렉터리가 파일 목록에 섞인다**(`models/ksl-iso`).
+//      그대로 받으러 가면 404가 나고 "준비됨"인데 정작 인식 모델은 없다. 재귀로 훑는다.
+//   2) 아바타는 여섯 종이 들어 있지만 앱은 **기본 하나만** 쓴다. 전부 받으면 7MB를
+//      헛되이 쓰므로, 쓰는 것만 싣는다(사용자가 바꾸면 그때 받으면 된다).
+const usedAvatar = (
+  readFileSync('src/sections/sign/avatars.ts', 'utf8').match(
+    /DEFAULT_MODEL_URL = `\$\{BASE\}models\/([^`]+)`/,
+  )?.[1] ?? 'real-avaturn.glb'
+)
+const walk = (rel) => {
+  let entries = []
+  try {
+    entries = readdirSync(join(DIST, rel), { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const e of entries) {
+    const child = `${rel}/${e.name}`
+    if (e.isDirectory()) walk(child)
+    else {
+      // 쓰지 않는 아바타(.glb/.bin)는 건너뛴다 — 텍스처는 공유라 그대로 싣는다.
+      const isAvatarBody = /\.glb(\.bin)?$/.test(e.name)
+      if (isAvatarBody && !e.name.startsWith(usedAvatar)) continue
+      extended.add(`./${child}`)
+    }
+  }
 }
+walk('models')
 
 const bytes = (list) => [...list].reduce((n, f) => n + sizeOf(f), 0)
 const manifest = {

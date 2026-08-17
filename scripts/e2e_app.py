@@ -245,6 +245,19 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await ctx.close()
 
 
+async def run_kiosk(browser, rep: Report, port: int) -> None:
+    """키오스크 모드 — 로비에 세워 두는 기기는 대화 화면으로 시작해야 한다."""
+    ctx = await browser.new_context(viewport={"width": 1080, "height": 1920},
+                                    service_workers="block")
+    pg = await ctx.new_page()
+    rep.lines.append("  [키오스크 모드 ?kiosk=1]")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="networkidle")
+    await pg.wait_for_timeout(1500)
+    rep.check(await pg.get_by_text("어디에 계신가요?").count() > 0, "키오스크: 대화 화면으로 시작")
+    rep.check(await pg.get_by_role("link", name="✕").count() == 0, "키오스크: 닫기 버튼 숨김")
+    await ctx.close()
+
+
 async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
     """회선을 끊고도 창구 대화가 되는지 — 이 앱의 핵심 약속이라 자동으로 지킨다.
 
@@ -315,6 +328,7 @@ async def main(keep: bool) -> int:
             browser = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
             for name, w, h, mobile in DEVICES:
                 await run_device(browser, name, w, h, mobile, keep, rep, port_of(httpd))
+            await run_kiosk(browser, rep, port_of(httpd))
             await run_offline(browser, keep, rep, port_of(httpd))
             await browser.close()
     finally:

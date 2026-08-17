@@ -33,6 +33,16 @@ const REGION_RE = /([가-힣]{2,6}(?:특별시|광역시|자치시|자치도|시
 const SpeakMode = lazy(() => import('./SpeakMode'))
 const TalkMode = lazy(() => import('./TalkMode'))
 
+/** 키오스크로 세워 두는 모드 — 주소에 `#/app?kiosk=1`.
+ *
+ *  관공서·병원 로비에 놓는 기기는 개인 폰과 쓰임이 다르다.
+ *   - 처음 오는 사람이 서므로 **대화 화면으로 시작**한다(재난문자 자동 재생이 아니라).
+ *   - 소개 페이지로 돌아갈 이유가 없으므로 닫기(✕)를 감춘다.
+ *   - 서서 보는 거리라 글씨를 크게 시작한다.
+ *  대화 화면은 5분 손대지 않으면 스스로 초기화되므로(앞사람 대화가 남지 않는다)
+ *  키오스크에 필요한 나머지는 이미 갖춰져 있다. */
+const KIOSK = typeof window !== 'undefined' && /[?&]kiosk=1/.test(window.location.hash)
+
 export default function UserApp() {
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [cursor, setCursor] = useState(0)
@@ -43,6 +53,7 @@ export default function UserApp() {
   const { data, frame, playing, busy, speed } = player
   // 자막 크기 — 저시력·고령 사용자용. 기기에 기억한다.
   const [fontScale, setFontScale] = useState<0 | 1 | 2>(() => {
+    if (KIOSK) return 2 // 서서 보는 거리 — 크게 시작한다
     const saved = Number(localStorage.getItem('sb-font') ?? 1)
     return (saved === 0 || saved === 2 ? saved : 1) as 0 | 1 | 2
   })
@@ -51,6 +62,7 @@ export default function UserApp() {
   // **마지막에 쓴 탭을 기억한다** — 병원에 가는 사람은 앱을 열자마자 대화 화면을
   // 원하지 재난문자를 원하지 않는다. 매번 탭을 찾아 누르게 하는 것은 그 자체로 장벽이다.
   const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>(() => {
+    if (KIOSK) return 'place'
     const saved = localStorage.getItem('sb-tab')
     return saved === 'place' || saved === 'speak' || saved === 'dict' ? saved : 'watch'
   })
@@ -268,13 +280,15 @@ export default function UserApp() {
             📲 설치
           </button>
         )}
-        <a
-          href="#demo"
-          onClick={() => { window.location.hash = '' }}
-          className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-base text-slate-300 sm:px-4"
-        >
-          ✕
-        </a>
+        {!KIOSK && (
+          <a
+            href="#demo"
+            onClick={() => { window.location.hash = '' }}
+            className="shrink-0 rounded-xl border border-white/15 px-3 py-2 text-base text-slate-300 sm:px-4"
+          >
+            ✕
+          </a>
+        )}
         </div>
         {/* 탭 — 좁은 화면에서는 두 번째 줄 전체를 차지해 네 칸이 고르게 눌린다 */}
         <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/10 bg-space-900 p-1 sm:flex sm:gap-1">

@@ -8,6 +8,7 @@ import { useHolistic } from '../recognition/useHolistic'
 import { useRecognizer } from '../recognition/useRecognizer'
 import { Orchestrator } from '../agents/orchestrator'
 import type { LandmarkFrame } from '../recognition/landmarks'
+import RecognizedWords from './RecognizedWords'
 
 interface Props {
   /** 답변 문장을 받기 화면(아바타)으로 넘긴다. */
@@ -24,7 +25,9 @@ export default function SpeakMode({ onAnswer }: Props) {
   const { videoRef, overlayRef, status, error, start, stop } = holistic
   const running = status === 'running'
   const rec = useRecognizer(running)
-  pushFrameRef.current = rec.pushFrame
+  // 렌더 중에 ref를 건드리지 않는다 — 렌더는 순수해야 하고, 리액트가 렌더를 버리거나
+  // 두 번 돌릴 때 값이 어긋난다. 효과에서 최신 콜백을 꽂아 준다(SignInputPanel과 같은 방식).
+  useEffect(() => { pushFrameRef.current = rec.pushFrame }, [rec.pushFrame])
 
   const [busy, setBusy] = useState(false)
   const orchestratorRef = useRef<Orchestrator | null>(null)
@@ -98,15 +101,12 @@ export default function SpeakMode({ onAnswer }: Props) {
                 ))}
               </p>
             )}
-            {rec.transcript.length > 0 && (
-              <p className="mt-2 flex flex-wrap justify-center gap-1.5">
-                {rec.transcript.map((t, i) => (
-                  <span key={`${t}-${i}`} className="rounded-lg bg-cyan-glow/15 px-2.5 py-1 text-lg font-bold text-cyan-soft">
-                    {t.replace(/[0-9#:]+$/, '')}
-                  </span>
-                ))}
-              </p>
-            )}
+            {/* 낱말을 누르면 후보에서 고를 수 있다 — 틀린 낱말로 질문하면 엉뚱한 답이 온다 */}
+            <RecognizedWords
+              words={rec.transcript}
+              alts={rec.transcriptAlts}
+              onReplace={rec.replaceWord}
+            />
           </div>
         )}
       </div>

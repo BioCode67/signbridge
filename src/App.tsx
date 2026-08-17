@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { MotionConfig } from 'framer-motion'
 import Navbar from './navigation/Navbar'
 import Hero from './sections/Hero'
@@ -13,7 +13,28 @@ import Footer from './sections/Footer'
 // 실시간 인식은 MediaPipe·TF.js 번들이 무거우므로 지연 로드(초기 페인트 보호).
 const RecognitionDemo = lazy(() => import('./sections/RecognitionDemo'))
 
+// 수어 이용자 전용 화면(#/app) — 소개 페이지와 완전히 분리된 풀스크린 도구.
+const UserApp = lazy(() => import('./user/UserApp'))
+
+function useHashRoute(): string {
+  const [hash, setHash] = useState(window.location.hash)
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash)
+    window.addEventListener('hashchange', onChange)
+    return () => window.removeEventListener('hashchange', onChange)
+  }, [])
+  return hash
+}
+
 export default function App() {
+  const hash = useHashRoute()
+  if (hash.startsWith('#/app')) {
+    return (
+      <Suspense fallback={<div className="grid min-h-screen place-items-center bg-space-950 text-5xl">🤟</div>}>
+        <UserApp />
+      </Suspense>
+    )
+  }
   return (
     // reducedMotion="user" makes every framer-motion animation respect the
     // visitor's OS "reduce motion" setting — important for an accessibility app.

@@ -89,6 +89,13 @@ export default function Navbar() {
           <Button href="#demo" variant="primary">
             실시간 데모
           </Button>
+          {/* 수어 이용자 전용 화면 — 설명 없이 바로 쓰는 도구 */}
+          <a
+            href="#/app"
+            className="rounded-full border border-amber-400/50 bg-amber-400/10 px-4 py-2 text-sm font-semibold text-amber-300 transition-colors hover:bg-amber-400/20"
+          >
+            🤟 수어 이용자 화면
+          </a>
         </div>
 
         {/* Mobile hamburger */}

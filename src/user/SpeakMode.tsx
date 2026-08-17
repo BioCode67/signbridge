@@ -87,6 +87,17 @@ export default function SpeakMode({ onAnswer }: Props) {
             <p className={`text-4xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-500'}`}>
               {confident && rec.current ? rec.current.label.replace(/[0-9#:]+$/, '') : '…'}
             </p>
+            {/* 후보 2~3위 — AI가 무엇과 헷갈리는지 투명하게. 인식이 애매할 때
+                사용자가 "아, 비슷한 동작이구나"를 바로 안다. */}
+            {rec.top3.length > 1 && (
+              <p className="mt-1 flex justify-center gap-2 text-sm text-slate-400">
+                {rec.top3.slice(1).map((c) => (
+                  <span key={c.label}>
+                    {c.label.replace(/[0-9#:]+$/, '')} {Math.round(c.confidence * 100)}%
+                  </span>
+                ))}
+              </p>
+            )}
             {rec.transcript.length > 0 && (
               <p className="mt-2 flex flex-wrap justify-center gap-1.5">
                 {rec.transcript.map((t, i) => (

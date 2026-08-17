@@ -11,13 +11,55 @@ interface Props {
   onSign: (text: string, gloss?: string[]) => void
 }
 
+// SOS 전체화면 문구 — 탭할 때마다 다음 문구로. 주변인이 읽는 쪽이라 한국어를 크게.
+const SOS_MESSAGES = [
+  '도와주세요!\n저는 청각장애인입니다',
+  '119에 신고해 주세요',
+  '글로 써서 보여 주세요',
+  '가족에게 연락이 필요해요',
+]
+
 export default function PlaceMode({ onSign }: Props) {
   const [place, setPlace] = useState<Place | null>(null)
   const [picked, setPicked] = useState<string | null>(null)
+  const [sos, setSos] = useState(-1) // -1=닫힘, 0~=문구 번호
+
+  // 위급 화면 — 화면 전체를 빨갛게, 문구는 방 건너에서도 읽히게.
+  if (sos >= 0) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setSos((v) => (v + 1) % SOS_MESSAGES.length)}
+        onKeyDown={(e) => e.key === 'Escape' && setSos(-1)}
+        className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-6 bg-red-600 p-6 text-center"
+      >
+        <span className="animate-pulse text-7xl">🆘</span>
+        <p className="whitespace-pre-line text-4xl font-extrabold leading-snug text-white sm:text-6xl">
+          {SOS_MESSAGES[sos]}
+        </p>
+        <p className="text-lg text-red-100">화면을 탭하면 다음 문구</p>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); setSos(-1) }}
+          className="mt-4 rounded-2xl border-2 border-white/70 px-8 py-3 text-xl font-bold text-white"
+        >
+          ✕ 닫기
+        </button>
+      </div>
+    )
+  }
 
   if (!place) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <button
+          type="button"
+          onClick={() => { setSos(0); navigator.vibrate?.([400, 100, 400]) }}
+          className="mb-4 w-full rounded-3xl border-2 border-red-500 bg-red-600/90 py-5 text-2xl font-extrabold text-white"
+        >
+          🆘 긴급 도움 요청
+        </button>
         <p className="mb-3 text-center text-lg font-bold text-slate-300">어디에 계신가요?</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           {PLACES.map((p) => (

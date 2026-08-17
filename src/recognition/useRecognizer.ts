@@ -2,8 +2,9 @@
 // - 특징 프레임을 링버퍼에 누적(pushFrame)
 // - 일정 주기로 최근 윈도우를 리샘플 → GRU 추론 → 현재 키워드/신뢰도 갱신
 // - 신뢰도·안정성 조건을 만족하면 자막 토큰으로 확정(debounce)
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Recognizer, type Prediction } from './model'
+import { KSL_LABELS } from './labels'
 import { OnnxRecognizer } from './onnxRecognizer'
 import { resampleSequence, SEQ_LEN, FEATURE_DIM } from './landmarks'
 import { CONFIDENCE_THRESHOLD } from './labels'
@@ -37,6 +38,8 @@ export interface UseRecognizerResult {
   aihubInfo: { num_classes: number; val_top1?: number } | null
   /** 실데이터 모델 다운로드 진행률(0~100), 미로드 시 null */
   loadPct: number | null
+  /** 현재 프레임의 상위 후보 3개 — "AI가 무엇과 헷갈리는지" 투명하게 보여준다. */
+  top3: { label: string; confidence: number }[]
 }
 
 export function useRecognizer(enabled: boolean): UseRecognizerResult {
@@ -171,6 +174,26 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
     return () => window.clearInterval(id)
   }, [enabled, backend])
 
+  // 상위 후보 3개 — probs 전체에서 한 번 훑어 뽑는다(8천 클래스여도 밀리초 미만).
+  const top3 = useMemo(() => {
+    if (!current?.probs) return []
+    const labels = backend === 'aihub' ? onnxRef.current.labels : KSL_LABELS
+    const picks: { label: string; confidence: number }[] = []
+    const probs = current.probs
+    const taken = new Set<number>()
+    for (let k = 0; k < 3; k++) {
+      let best = -1
+      let bestP = 0
+      for (let i = 0; i < probs.length; i++) {
+        if (!taken.has(i) && probs[i] > bestP) { bestP = probs[i]; best = i }
+      }
+      if (best < 0) break
+      taken.add(best)
+      picks.push({ label: labels[best] ?? '?', confidence: bestP })
+    }
+    return picks
+  }, [current, backend])
+
   return {
     modelStatus,
     current,
@@ -185,5 +208,6 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
     setBackend,
     aihubInfo,
     loadPct,
+    top3,
   }
 }

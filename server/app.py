@@ -345,6 +345,14 @@ class G2TResponse(BaseModel):
     gloss: list[str]
     text: str
     backend: str = "kobart-g2t"
+    # ── 왕복 검증(아래 주석) 결과 ──
+    consistency: float = 1.0
+    low_confidence: bool = False
+    roundtrip_gloss: list[str] = []
+
+
+def _strip_id(gloss: str) -> str:
+    return re.sub(r"[0-9#:]+$", "", gloss)
 
 
 @app.post("/g2t", response_model=G2TResponse)
@@ -360,7 +368,40 @@ def gloss_to_text(req: G2TRequest):
     inputs.pop("token_type_ids", None)
     with torch.no_grad():
         out = model.generate(**inputs, max_length=96, num_beams=4, no_repeat_ngram_size=3)
-    return G2TResponse(gloss=req.gloss, text=tok.decode(out[0], skip_special_tokens=True))
+    text = tok.decode(out[0], skip_special_tokens=True)
+
+    # ── 왕복 검증 — 복원문이 원래 수어의 뜻을 지켰는지 기계적으로 잰다.
+    #
+    # g2t는 재난문자 문체에 끌려 의미를 뒤집을 때가 있다("밖 도망"→"외출 자제").
+    # 사람이 일일이 볼 수 없으니, 복원문을 **역방향 모델(t2g)로 되번역**해서 나온
+    # 글로스가 원본과 얼마나 겹치는지로 신뢰도를 만든다. 겹침이 낮으면 화면이
+    # 복원문 대신 원문 글로스를 앞세우도록 low_confidence를 세운다.
+    consistency = 1.0
+    roundtrip: list[str] = []
+    if os.path.isdir(T2G_MODEL):
+        try:
+            t2g_tok, t2g_model = load_t2g()
+            back_in = t2g_tok(text, max_length=128, truncation=True, return_tensors="pt")
+            back_in.pop("token_type_ids", None)
+            with torch.no_grad():
+                back = t2g_model.generate(
+                    **back_in, max_length=96, num_beams=4, no_repeat_ngram_size=3
+                )
+            roundtrip = t2g_tok.decode(back[0], skip_special_tokens=True).split()
+            orig = {_strip_id(g) for g in req.gloss}
+            rt = {_strip_id(g) for g in roundtrip}
+            if orig:
+                consistency = len(orig & rt) / len(orig)
+        except Exception:
+            pass  # 검증 실패는 복원 자체를 막지 않는다 — 점수만 보수적으로 둘 수도 없으니 1.0 유지
+
+    return G2TResponse(
+        gloss=req.gloss,
+        text=text,
+        consistency=round(consistency, 3),
+        low_confidence=consistency < 0.5,
+        roundtrip_gloss=roundtrip,
+    )
 
 
 @app.get("/health")

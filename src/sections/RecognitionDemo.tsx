@@ -51,11 +51,13 @@ export default function RecognitionDemo() {
   // 인식된 글로스열 → 자연스러운 한국어 문장 복원 (서버의 KoBART g2t).
   // 복원문은 의미 드리프트 위험이 있어 **원문 글로스를 항상 병기**한다.
   const [sentence, setSentence] = useState('')
+  const [sentenceRisky, setSentenceRisky] = useState(false)
   const [sentenceBusy, setSentenceBusy] = useState(false)
   const restoreSentence = useCallback(async () => {
     if (sentenceBusy || rec.transcript.length === 0) return
     setSentenceBusy(true)
     setSentence('')
+    setSentenceRisky(false)
     try {
       const res = await fetch(`${API_URL}/g2t`, {
         method: 'POST',
@@ -64,8 +66,12 @@ export default function RecognitionDemo() {
       })
       if (res.ok) {
         const json = await res.json()
-        if (json.text) setSentence(json.text)
-        else setSentence('(언어 복원 서버가 준비되지 않았습니다)')
+        if (json.text) {
+          setSentence(json.text)
+          // 서버가 왕복 검증(복원문→역번역→원문 대조)으로 매긴 신뢰도.
+          // 낮으면 복원문이 뜻을 뒤집었을 수 있다 — 화면이 원문을 앞세운다.
+          setSentenceRisky(Boolean(json.low_confidence))
+        } else setSentence('(언어 복원 서버가 준비되지 않았습니다)')
       } else setSentence('(서버 오류)')
     } catch {
       setSentence('(언어 복원은 AI 서버가 필요합니다 — 로컬에서 uvicorn server.app:app)')
@@ -364,12 +370,31 @@ export default function RecognitionDemo() {
               </button>
             )}
             {sentence && (
-              <div className="rounded-lg border border-white/10 bg-space-800/60 px-3 py-2 text-xs leading-relaxed">
-                <p className="text-slate-200">{sentence}</p>
-                {/* 복원문은 의미가 뒤집힐 수 있어 원문 글로스를 반드시 병기한다 */}
-                <p className="mt-1 text-[10.5px] text-slate-500">
-                  원문 수어: {rec.transcript.map((t) => t.replace(/[0-9#:]+$/, '')).join(' · ')}
-                </p>
+              <div
+                className={`rounded-lg border px-3 py-2 text-xs leading-relaxed ${
+                  sentenceRisky
+                    ? 'border-amber-400/40 bg-amber-400/5'
+                    : 'border-white/10 bg-space-800/60'
+                }`}
+              >
+                {sentenceRisky ? (
+                  <>
+                    {/* 왕복 검증에서 뜻이 어긋났다 — 원문을 앞세우고 복원문은 참고로 */}
+                    <p className="font-semibold text-amber-300">
+                      원문 수어: {rec.transcript.map((t) => t.replace(/[0-9#:]+$/, '')).join(' · ')}
+                    </p>
+                    <p className="mt-1 text-slate-400">
+                      ⚠️ AI 복원(자체 검증 저신뢰): {sentence}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-slate-200">{sentence}</p>
+                    <p className="mt-1 text-[10.5px] text-slate-500">
+                      원문 수어: {rec.transcript.map((t) => t.replace(/[0-9#:]+$/, '')).join(' · ')}
+                    </p>
+                  </>
+                )}
               </div>
             )}
             {qaAnswer && (

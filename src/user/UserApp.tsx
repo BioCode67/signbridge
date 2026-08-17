@@ -37,6 +37,9 @@ export default function UserApp() {
   useEffect(() => { speedRef.current = speed }, [speed])
   // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
   const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>('watch')
+  // 수신 이력 — 놓친 알림을 다시 본다. 세션 내 최근 20건.
+  const [history, setHistory] = useState<{ time: string; item: FeedItem }[]>([])
+  const [showHistory, setShowHistory] = useState(false)
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -84,6 +87,7 @@ export default function UserApp() {
     const composed = await compose(item.text)
     setBusy(false)
     if (!composed) return
+    setHistory((h) => [{ time: new Date().toTimeString().slice(0, 5), item }, ...h].slice(0, 20))
     setData(composed)
     frameRef.current = 0
     setFrame(0)
@@ -232,9 +236,14 @@ export default function UserApp() {
       <header className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
         <span className="text-lg font-bold text-white">🤟 SignBridge</span>
         {item && (
-          <span className="rounded-md bg-amber-400/15 px-2 py-1 text-sm font-bold text-amber-300">
-            {categoryKo(item.category)}
-          </span>
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            className="rounded-md bg-amber-400/15 px-2 py-1 text-sm font-bold text-amber-300"
+            title="지나간 알림 보기"
+          >
+            {categoryKo(item.category)} ▾
+          </button>
         )}
         <div className="flex gap-1 rounded-xl border border-white/10 bg-space-900 p-1">
           {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['place', '🏥 장소'], ['dict', '📖 사전']] as const).map(([id, label]) => (
@@ -320,6 +329,30 @@ export default function UserApp() {
           >
             <SpeakMode onAnswer={onAnswer} />
           </Suspense>
+        </div>
+      )}
+
+      {/* 수신 이력 — 놓친 알림 다시 보기 */}
+      {showHistory && (
+        <div className="absolute inset-x-0 top-14 z-40 max-h-[55%] overflow-y-auto border-b border-white/10 bg-space-950/98 p-3 shadow-2xl">
+          {history.length === 0 ? (
+            <p className="py-6 text-center text-slate-500">아직 받은 알림이 없어요</p>
+          ) : (
+            history.map((h, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => { setShowHistory(false); setTab('watch'); setAuto(false); void playItem(h.item) }}
+                className="mb-2 w-full rounded-xl border border-white/10 bg-space-800 px-3 py-3 text-left"
+              >
+                <span className="mr-2 rounded bg-amber-400/15 px-1.5 py-0.5 text-xs font-bold text-amber-300">
+                  {categoryKo(h.item.category)}
+                </span>
+                <span className="text-xs text-slate-500">{h.time}</span>
+                <p className="mt-1 line-clamp-2 text-sm text-slate-300">{h.item.text}</p>
+              </button>
+            ))
+          )}
         </div>
       )}
 

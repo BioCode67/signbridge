@@ -71,6 +71,13 @@ export default function TalkMode() {
   const [talks, setTalks] = useState<SavedTalk[]>(() => loadTalks())
   const [showTalks, setShowTalks] = useState(false)
   const [saved2, setSaved2] = useState(false)
+  // 자막 크기·재생 속도 — 저시력·고령 사용자와 수어 학습자에게 필요하다.
+  // 받기 화면과 같은 값을 쓴다(기기에 기억되므로 한 번만 맞추면 된다).
+  const [fontScale, setFontScale] = useState<0 | 1 | 2>(() => {
+    const v = Number(localStorage.getItem('sb-font') ?? 1)
+    return (v === 0 || v === 2 ? v : 1) as 0 | 1 | 2
+  })
+  useEffect(() => { localStorage.setItem('sb-font', String(fontScale)) }, [fontScale])
   // 위치 — 119에 전할 좌표. 주변 사람이 읽어 주는 용도라 큰 글씨로 띄운다.
   const [coords, setCoords] = useState<{ lat: number; lon: number; acc: number } | null>(null)
   const [locating, setLocating] = useState(false)
@@ -475,10 +482,31 @@ export default function TalkMode() {
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
       <div className="flex min-h-0 flex-col lg:w-1/2 lg:border-r lg:border-white/10">
       {/* 아바타 — 직원 말이 수어로 오는 곳 */}
-      <div className="flex min-h-[24vh] shrink flex-col sm:min-h-[36vh] lg:min-h-0 lg:flex-1">
+      <div className="relative flex min-h-[22vh] shrink flex-col sm:min-h-[34vh] lg:min-h-0 lg:flex-1">
+        {/* 자막 크기·속도 — 아바타 위에 띄운다. 따로 한 줄을 쓰면 폰에서 대화 기록이
+            마이크 버튼과 겹칠 만큼 세로가 모자란다(실측). */}
+        <div className="absolute right-2 top-2 z-10 flex gap-1.5">
+          <button
+            type="button"
+            onClick={() => setFontScale((v) => ((v + 1) % 3) as 0 | 1 | 2)}
+            title="자막 크기"
+            className="min-h-[40px] rounded-lg border border-white/15 bg-space-900/85 px-3 py-1 font-bold text-slate-300"
+          >
+            <span className={['text-sm', 'text-lg', 'text-2xl'][fontScale]}>가</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => player.setSpeed(player.speed === 1 ? 0.6 : player.speed === 0.6 ? 1.4 : 1)}
+            title="재생 속도"
+            className="min-h-[40px] rounded-lg border border-white/15 bg-space-900/85 px-3 py-1 text-base font-bold text-slate-300"
+          >
+            {player.speed === 1 ? '1×' : player.speed === 0.6 ? '🐢' : '⚡'}
+          </button>
+        </div>
         <SignStage
           player={player}
           compact
+          fontScale={fontScale}
           idle={
             <p className="text-lg leading-relaxed text-slate-400">
               🎙 아래 <b className="text-cyan-soft">직원이 말하기</b>를 누르고 말하면<br />
@@ -502,7 +530,7 @@ export default function TalkMode() {
       {/* 대화 기록 — 폰에서는 아바타·입력에 밀려 한 줄도 안 보이곤 했다.
           최소 높이를 확보하고 아바타 쪽이 줄어들게 한다(아바타는 크게 보이는 편이
           좋지만, 방금 한 말이 안 보이는 것이 더 나쁘다). */}
-      <div ref={threadRef} className="min-h-[84px] flex-1 overflow-y-auto px-3 py-2">
+      <div ref={threadRef} className="min-h-[72px] flex-1 overflow-y-auto px-3 py-2">
         {turns.length === 0 ? (
           <p className="py-4 text-center text-base text-slate-500">
             주고받은 말이 여기에 남아요
@@ -520,9 +548,9 @@ export default function TalkMode() {
               }`}
             >
               <span className="shrink-0 text-xl">{t.who === 'staff' ? '👔' : '🤟'}</span>
-              <span className={`flex-1 text-lg font-bold leading-snug ${
-                t.who === 'staff' ? 'text-cyan-soft' : 'text-amber-200'
-              }`}>
+              <span className={`flex-1 font-bold leading-snug ${
+                ['text-base', 'text-lg', 'text-2xl'][fontScale]
+              } ${t.who === 'staff' ? 'text-cyan-soft' : 'text-amber-200'}`}>
                 {t.text}
               </span>
               <span className="shrink-0 text-xs text-slate-500">{t.time}</span>
@@ -580,7 +608,7 @@ export default function TalkMode() {
           ))}
         </div>
 
-        <div className="max-h-[30vh] overflow-y-auto px-3 pb-3 lg:max-h-none lg:min-h-0 lg:flex-1">
+        <div className="max-h-[26vh] overflow-y-auto px-3 pb-3 lg:max-h-none lg:min-h-0 lg:flex-1">
           {side === 'staff' ? (
             <>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">

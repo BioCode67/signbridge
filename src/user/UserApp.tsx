@@ -47,8 +47,14 @@ export default function UserApp() {
     return (saved === 0 || saved === 2 ? saved : 1) as 0 | 1 | 2
   })
   useEffect(() => { localStorage.setItem('sb-font', String(fontScale)) }, [fontScale])
-  // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
-  const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>('watch')
+  // 받기(재난문자→수어) · 대화(창구) · 질문(내 수어로 묻기) · 사전.
+  // **마지막에 쓴 탭을 기억한다** — 병원에 가는 사람은 앱을 열자마자 대화 화면을
+  // 원하지 재난문자를 원하지 않는다. 매번 탭을 찾아 누르게 하는 것은 그 자체로 장벽이다.
+  const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>(() => {
+    const saved = localStorage.getItem('sb-tab')
+    return saved === 'place' || saved === 'speak' || saved === 'dict' ? saved : 'watch'
+  })
+  useEffect(() => { localStorage.setItem('sb-tab', tab) }, [tab])
   // 수신 이력 — 놓친 알림을 다시 본다. 최근 20건, 기기에 남는다(앱을 껐다 켜도 유지).
   const [history, setHistory] = useState<{ time: string; item: FeedItem }[]>(() => {
     try { return JSON.parse(localStorage.getItem('sb-history') ?? '[]') } catch { return [] }
@@ -250,7 +256,7 @@ export default function UserApp() {
         </div>
         {/* 탭 — 좁은 화면에서는 두 번째 줄 전체를 차지해 네 칸이 고르게 눌린다 */}
         <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/10 bg-space-900 p-1 sm:flex sm:gap-1">
-          {([['watch', '📺 받기'], ['speak', '🤟 말하기'], ['place', '💬 대화'], ['dict', '📖 사전']] as const).map(([id, label]) => (
+          {([['watch', '📺 받기'], ['speak', '🙋 질문'], ['place', '💬 대화'], ['dict', '📖 사전']] as const).map(([id, label]) => (
             <button
               key={id}
               type="button"

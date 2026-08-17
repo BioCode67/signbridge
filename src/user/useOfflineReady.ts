@@ -114,8 +114,16 @@ export function useOfflineReady(): OfflineReady {
   }, [])
 
   // 필수 세트는 첫 방문 뒤 조용히. 화면이 한가해질 때까지 기다린다(첫 화면을 늦추지 않는다).
+  //
+  // 다만 **데이터 절약 모드나 아주 느린 회선에서는 받지 않는다.** 필수 세트가 10MB를
+  // 넘는데, 요금을 아끼려고 절약 모드를 켠 사람에게 묻지도 않고 받는 것은 무례하다.
+  // 그 경우 버튼(전체 준비)은 그대로 있으니 사용자가 원할 때 받으면 된다.
   useEffect(() => {
     if (level !== 'none') return
+    const conn = (navigator as unknown as {
+      connection?: { saveData?: boolean; effectiveType?: string }
+    }).connection
+    if (conn?.saveData || conn?.effectiveType === '2g' || conn?.effectiveType === 'slow-2g') return
     let cancelled = false
     const start = () => {
       void (async () => {

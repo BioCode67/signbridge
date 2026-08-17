@@ -21,8 +21,11 @@ import { useSpeechOutput } from '../hooks/useSpeechOutput'
 import SignStage from './SignStage'
 import { useSignPlayer } from './useSignPlayer'
 
+import { MY_INFO_FIELDS, loadMyInfo, hasMyInfo } from './myInfo'
+
 // 카메라 인식은 MediaPipe 번들이 무거워 열 때만 불러온다.
 const SignInputPanel = lazy(() => import('./SignInputPanel'))
+const MyInfoPanel = lazy(() => import('./MyInfoPanel'))
 
 /** 대화 한 줄. 누가 말했나로 표현 방식이 갈린다(직원=소리로 들어옴, 농인=소리로 나감). */
 interface Turn {
@@ -58,6 +61,25 @@ export default function TalkMode() {
   const [side, setSide] = useState<'staff' | 'deaf'>('staff')
   // 수어로 답하기 — 카메라를 열어 내 수어를 읽고 소리로 내보낸다.
   const [signing, setSigning] = useState(false)
+  // 내 정보 — 응급실에서 말 대신 보여주는 사실들(기기에만 저장).
+  const [editingInfo, setEditingInfo] = useState(false)
+  // 위치 — 119에 전할 좌표. 주변 사람이 읽어 주는 용도라 큰 글씨로 띄운다.
+  const [coords, setCoords] = useState<{ lat: number; lon: number; acc: number } | null>(null)
+  const [locating, setLocating] = useState(false)
+  const [locError, setLocError] = useState('')
+  const findMe = useCallback(() => {
+    if (!navigator.geolocation) { setLocError('이 기기는 위치를 알려줄 수 없어요'); return }
+    setLocating(true)
+    setLocError('')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lon: pos.coords.longitude, acc: pos.coords.accuracy })
+        setLocating(false)
+      },
+      () => { setLocError('위치를 가져오지 못했어요. 위치 권한을 허용해 주세요.'); setLocating(false) },
+      { enableHighAccuracy: true, timeout: 10000 },
+    )
+  }, [])
   // 자주 쓰는 문장 — 사람마다 다르다(지병·주소·복용약). 기기에 남는다.
   const [saved, setSaved] = useState<string[]>(() => {
     try { return JSON.parse(localStorage.getItem('sb-phrases') ?? '[]') } catch { return [] }
@@ -66,6 +88,8 @@ export default function TalkMode() {
 
   const player = useSignPlayer()
   const tts = useSpeechOutput()
+  // 응급 화면에서 쓸 내 정보 — 편집 화면을 닫고 돌아올 때 다시 읽는다.
+  const [myInfo, setMyInfo] = useState(() => loadMyInfo())
   const threadRef = useRef<HTMLDivElement>(null)
 
   /** 직원 말 → 대화에 쌓고 수어로 보여준다. */
@@ -143,7 +167,40 @@ export default function TalkMode() {
           {SOS_MESSAGES[sos]}
         </p>
         <p className="text-lg text-red-100">화면을 탭하면 다음 문구</p>
-        <div className="mt-4 flex gap-3">
+
+        {/* 응급 정보 — 의식이 흐리거나 손을 다쳐 수어를 못 할 때, 이 카드가 떠 있기만
+            해도 의료진이 읽고 조치할 수 있다. 비어 있으면 띄우지 않는다. */}
+        {hasMyInfo(myInfo) && (
+          <div className="w-full max-w-xl rounded-2xl bg-white/95 p-4 text-left">
+            {MY_INFO_FIELDS.filter((f) => f.urgent && (myInfo[f.key] ?? '').trim()).map((f) => (
+              <p key={f.key} className="mb-1 flex gap-2 text-lg leading-snug">
+                <span className="w-28 shrink-0 font-bold text-red-700">{f.label}</span>
+                <span className="font-extrabold text-slate-900">{myInfo[f.key]}</span>
+              </p>
+            ))}
+          </div>
+        )}
+
+        {/* 위치 — 119에 전할 좌표. 주변 사람이 소리 내어 읽어 준다. */}
+        {coords && (
+          <div className="w-full max-w-xl rounded-2xl bg-white/95 p-3 text-center">
+            <p className="text-base font-bold text-red-700">📍 내 위치 (119에 알려 주세요)</p>
+            <p className="text-2xl font-extrabold tracking-wider text-slate-900">
+              {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
+            </p>
+            <p className="text-sm text-slate-600">오차 약 {Math.round(coords.acc)}m</p>
+          </div>
+        )}
+        {locError && <p className="text-base text-red-100">{locError}</p>}
+
+        <div className="mt-2 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); findMe() }}
+            className="rounded-2xl border-2 border-white/70 px-6 py-3 text-xl font-bold text-white"
+          >
+            {locating ? '📍 찾는 중…' : '📍 내 위치'}
+          </button>
           {/* 소리까지 함께 — 주변이 화면을 못 볼 수도 있다 */}
           <button
             type="button"
@@ -164,6 +221,14 @@ export default function TalkMode() {
     )
   }
 
+  if (editingInfo) {
+    return (
+      <Suspense fallback={<div className="grid flex-1 place-items-center text-slate-400">여는 중…</div>}>
+        <MyInfoPanel onClose={() => { setMyInfo(loadMyInfo()); setEditingInfo(false) }} />
+      </Suspense>
+    )
+  }
+
   if (!place) {
     return (
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -173,6 +238,13 @@ export default function TalkMode() {
           className="mb-4 w-full rounded-3xl border-2 border-red-500 bg-red-600/90 py-5 text-2xl font-extrabold text-white"
         >
           🆘 긴급 도움 요청
+        </button>
+        <button
+          type="button"
+          onClick={() => setEditingInfo(true)}
+          className="mb-4 w-full rounded-3xl border border-white/15 bg-space-800 py-4 text-xl font-bold text-slate-200"
+        >
+          🆔 내 정보 {hasMyInfo(myInfo) ? '(적어 둠)' : '— 응급 때 보여줄 정보를 적어 두세요'}
         </button>
         <p className="mb-3 text-center text-lg font-bold text-slate-300">어디에 계신가요?</p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">

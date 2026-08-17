@@ -148,6 +148,8 @@ const UNIT_GLOSS: Record<string, string> = {
 
 export class DictSignAgent implements SignAgent {
   private table: AlignTable | null = null
+  /** 글로스별 문장 내 평균 위치(0=앞, 1=끝). 없으면 어순을 건드리지 않는다. */
+  private order: Record<string, number> | null = null
   private loading: Promise<void> | null = null
   private fallback = new RuleSignAgent()
   /** 직전 변환이 사전으로 됐는지 — UI 표시용. */
@@ -172,6 +174,15 @@ export class DictSignAgent implements SignAgent {
         .catch(() => {
           this.table = null
         })
+        .then(async () => {
+          // 어순표는 있으면 좋고 없어도 되는 것 — 실패해도 번역은 계속된다.
+          try {
+            const res = await fetch(this.url.replace(/align\.json$/, 'order.json'))
+            if (res.ok) this.order = (await res.json()) as Record<string, number>
+          } catch {
+            this.order = null
+          }
+        })
     }
     return this.loading
   }
@@ -186,9 +197,21 @@ export class DictSignAgent implements SignAgent {
 
     const gloss: string[] = []
     const unmatched: string[] = []
-    const push = (g: string) => {
+    // 어순을 바꿀 때 **숫자와 단위가 갈라지면 안 된다**("삼 십 분"이 "분 … 삼 십"이 되면
+    // 뜻이 사라진다). 그래서 낱말마다 덩어리 번호를 매겨 두고, 덩어리 단위로만 옮긴다.
+    const chunkIds: number[] = []
+    let nextChunk = 0
+    const pushAs = (g: string, chunk: number) => {
       // 같은 글로스가 연달아 나오면 한 번만 — 수어에서 반복은 다른 의미가 된다.
-      if (gloss[gloss.length - 1] !== g) gloss.push(g)
+      if (gloss[gloss.length - 1] === g) return
+      gloss.push(g)
+      chunkIds.push(chunk)
+    }
+    const push = (g: string) => pushAs(g, nextChunk++)
+    /** 숫자 읽기처럼 반드시 붙어 다녀야 하는 글로스들 */
+    const pushGroup = (gs: string[]) => {
+      const chunk = nextChunk++
+      for (const g of gs) pushAs(g, chunk)
     }
     const lookup = (w: string): string[] | undefined => table[w] ?? table[stemKorean(w)]
 
@@ -202,7 +225,7 @@ export class DictSignAgent implements SignAgent {
     let pending: number | null = null
     const flushNumber = () => {
       if (pending === null) return
-      for (const g of numberGlosses(String(pending))) push(g)
+      pushGroup(numberGlosses(String(pending)))
       pending = null
       afterNumber = true
     }
@@ -216,7 +239,9 @@ export class DictSignAgent implements SignAgent {
           // — "만 오천 원"은 수, "만 나이"의 '만'은 수가 아니다.
           const next = matches[mi + 1]?.[3]
           const unitNext = next !== undefined && UNIT_GLOSS[next[0]] !== undefined
-          if (word.length >= 2 || unitNext || pending !== null) {
+          // 뒤에 수사가 또 오면 이어지는 수다("만" + "오천" = 15000).
+          const numberNext = next !== undefined && readKoreanNumber(next) !== null
+          if (word.length >= 2 || unitNext || numberNext || pending !== null) {
             // 큰 자리 뒤에 작은 자리가 이어지면 더한다(만 → 오천 → 15000)
             pending = pending === null ? value
               : pending > value ? pending + value : pending * value
@@ -227,12 +252,12 @@ export class DictSignAgent implements SignAgent {
       flushNumber()
       if (m[1]) {
         // 전화번호: 자릿수 읽기 (032 → 공 삼 이)
-        for (const g of numberGlosses(m[1].replace(/-/g, ''))) push(g)
+        pushGroup(numberGlosses(m[1].replace(/-/g, '')))
         afterNumber = false
         continue
       }
       if (m[2]) {
-        for (const g of numberGlosses(m[2])) push(g)
+        pushGroup(numberGlosses(m[2]))
         afterNumber = true
         continue
       }
@@ -242,13 +267,16 @@ export class DictSignAgent implements SignAgent {
       if (afterNumber && UNIT_GLOSS[raw[0]]) {
         const rest = raw.slice(1)
         if (rest === '' || rest.replace(PARTICLE_RE, '') === '') {
-          push(UNIT_GLOSS[raw[0]])
+          // 단위는 앞의 숫자와 같은 덩어리로 — 어순을 바꿔도 떨어지지 않게.
+          pushAs(UNIT_GLOSS[raw[0]], chunkIds[chunkIds.length - 1] ?? nextChunk++)
           afterNumber = false
           continue
         }
       }
       if (raw.length === 1) {
         afterNumber = false
+        // 한 글자 낱말은 건너뛴다. 사전 키로 넣어 봤더니 지문자 글로스('가' 같은
+        // 자모 표기)가 끌려 나와 "천천히 가 주세요"가 엉뚱하게 번역됐다.
         continue
       }
       afterNumber = false
@@ -264,29 +292,43 @@ export class DictSignAgent implements SignAgent {
       if (raw.length >= 4) {
         // 조각은 두 종류: 사전에 있는 낱말(글로스로 번역)과 번역 제외어(소비만 하고
         // 글로스 없음). "대피바랍니다" = 대피(번역) + 바랍니다(제외) → 도망1.
-        const parts: { piece: string; stop: boolean }[] = []
-        let i = 0
-        while (i < raw.length) {
-          let matched = ''
-          let isStop = false
+        //
+        // **앞에서부터 가장 길게 자르면 안 된다.** "한파주의보가"에서 '한파주의'가
+        // 사전에 있으면 그걸 먹고 남은 '보가'를 못 붙여 조각이 하나뿐이 되고, 결국
+        // 문장 전체가 번역에서 빠졌다(실측). 그래서 **낱말 전체를 덮는 분해**를 찾는다 —
+        // 뒤에서부터 채워 오는 동적 계획법이라 되돌아갈 필요가 없다.
+        //
+        // 조각을 **점수**로 고른다. 길이의 제곱을 더해 긴 조각을 선호한다 —
+        // 사전에는 통계 잡음으로 생긴 짧은 키가 섞여 있어("한파주", "의보가"),
+        // 아무 분해나 받으면 "한파주 + 의보가"처럼 갈려 뜻이 사라진다.
+        // 제곱합을 쓰면 같은 조각 수라도 [한파(4)+주의보가(16)=20]이
+        // [한파주(9)+의보가(9)=18]을 이긴다.
+        type Part = { piece: string; stop: boolean }
+        type Seg = { parts: Part[]; score: number }
+        const best: (Seg | null)[] = new Array(raw.length + 1).fill(null)
+        best[raw.length] = { parts: [], score: 0 }
+        for (let i = raw.length - 1; i >= 0; i--) {
           for (let len = Math.min(raw.length - i, 6); len >= MIN_STEM; len--) {
+            const rest = best[i + len]
+            if (!rest) continue
             const piece = raw.slice(i, i + len)
-            if (STOP_WORDS.has(piece)) { matched = piece; isStop = true; break }
-            if (lookup(piece)?.length) { matched = piece; break }
+            const stop = STOP_WORDS.has(piece)
+            if (!stop && !lookup(piece)?.length) continue
+            const score = rest.score + len * len
+            if (!best[i] || score > best[i]!.score) {
+              best[i] = { parts: [{ piece, stop }, ...rest.parts], score }
+            }
           }
-          if (!matched) { i += 1; continue }
-          parts.push({ piece: matched, stop: isStop })
-          i += matched.length
         }
-        const glossed = parts.filter((p) => !p.stop)
-        if (parts.length >= 2 && glossed.length >= 1) {
-          for (const part of glossed) push(lookup(part.piece)![0])
-          continue
-        }
-        // "주시기바랍니다"처럼 전부 제외어 조각이면 조용히 소비한다(카드 소음 방지).
-        if (parts.length >= 1 && glossed.length === 0
-            && parts.reduce((n, p) => n + p.piece.length, 0) === raw.length) {
-          continue
+        const parts = best[0]?.parts ?? null
+        if (parts) {
+          const glossed = parts.filter((p) => !p.stop)
+          if (parts.length >= 2 && glossed.length >= 1) {
+            for (const part of glossed) push(lookup(part.piece)![0])
+            continue
+          }
+          // "주시기바랍니다"처럼 전부 제외어 조각이면 조용히 소비한다(카드 소음 방지).
+          if (glossed.length === 0) continue
         }
       }
       // 여기까지 왔으면 이 낱말은 번역에서 빠진다 — 어간형으로 기록해 둔다.
@@ -297,6 +339,36 @@ export class DictSignAgent implements SignAgent {
     }
 
     flushNumber()
+
+    // ── 수어 어순으로 다시 늘어놓는다 ──────────────────────────────
+    // 사전 번역은 한국어 어순 그대로 글로스를 늘어놓는다. 그런데 이 말뭉치에서 잰
+    // 실제 어순은 **[언제·어디] → [무슨 일] → [무엇을 하라]** 다(조심 0.84, 부탁 0.87,
+    // 대비 0.94 · 지역명 0.15~0.20). 그래서 편향이 뚜렷한 낱말만 제자리로 옮긴다.
+    // **안정 정렬**이라 편향이 없는 낱말은 원래 순서를 그대로 지킨다.
+    const order = this.order
+    if (order && gloss.length >= 3) {
+      // 덩어리 단위로 모은다(숫자+단위가 갈라지지 않게).
+      const chunks: { glosses: string[]; bias: number; at: number }[] = []
+      for (let i = 0; i < gloss.length; i++) {
+        const id = chunkIds[i]
+        const last = chunks[chunks.length - 1]
+        if (last && chunkIds[i - 1] === id) last.glosses.push(gloss[i])
+        else chunks.push({ glosses: [gloss[i]], bias: 0.5, at: chunks.length })
+      }
+      for (const c of chunks) {
+        // 덩어리 안에서 편향이 알려진 첫 낱말을 대표값으로 쓴다.
+        // 어순표는 **표제어**(번호를 뗀 형태) 기준이다 — 번역기가 '조심'을 내놓는데
+        // 표가 '조심1'로 돼 있어 한 번도 맞지 않던 적이 있다.
+        const known = c.glosses
+          .map((g) => order[g.replace(/[0-9#:]+$/, '')])
+          .find((v) => v !== undefined)
+        if (known !== undefined) c.bias = known
+      }
+      chunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
+      const reordered = chunks.flatMap((c) => c.glosses)
+      gloss.length = 0
+      for (const g of reordered) if (gloss[gloss.length - 1] !== g) gloss.push(g)
+    }
 
     if (gloss.length === 0) {
       // 사전은 멀쩡한데 아는 낱말이 하나도 없는 문장이다. 규칙 폴백은 한국어 낱말을

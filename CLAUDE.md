@@ -42,8 +42,20 @@ python3 ml/tools/check_app_glosses.py   # 동작 사전을 다시 만들면 반�
 이 앱의 실패는 대부분 "화면은 정상인데 알맹이가 없는" 모양이다. 눈으로는 못 잡는다.
 
 ```bash
-npm run build && python3 scripts/e2e_app.py    # 폰·태블릿·키오스크 3종 실조작
+npm run build && python3 scripts/e2e_app.py    # 폰·태블릿·키오스크 실조작
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_translation_cases.mjs        # 번역 오역 회귀 검사
 ```
+
+### 커버리지는 정확도가 아니다
+
+낱말 표현률은 "몇 %가 수어로 나갔나"만 잰다. **맞게 나갔는지는 재지 않는다.**
+실제로 복합어 프루닝 버그로 "어디가 아프신지"가 "어디 아프다 **신다(신발)**"로
+번역되던 동안에도 표현률은 그대로였다. 잘못된 수어는 표현되지 않은 것보다 나쁘다 —
+농인은 그것을 믿기 때문이다. `scripts/translation_cases.json`에 실측에서 한 번이라도
+틀렸던 사례를 박아 두었다(must / never). **사전·활용형 규칙을 건드리면 반드시 실행.**
+
+도메인별 실측(2026-08-17): 재난문자 95.5% · 행동요령 88.6% · 창구 대화 84.5%
 
 재생 프레임 수·소리로 나간 문장·요소 크기를 수치로 확인한다(`data-sign-*` 계측점).
 **dev 서버(5173)로 검증하지 말 것** — Vite dev는 실행 중 새로 생긴
@@ -70,6 +82,7 @@ ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   data/daily_vocab.txt  창구 생활 어휘 — 빈도로 잘리면 안 되는 낱말 목록
 scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
 scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠진 낱말)
+scripts/check_translation_cases.mjs  오역 회귀 검사(사례 25건)
   jobs/              check_workspace · train_* · pbs_extract
   README.md          전략·데이터셋·실행 절차     ← 먼저 읽을 것
   KOREN_SETUP.md     이 워크스페이스 운영

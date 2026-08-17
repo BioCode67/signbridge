@@ -92,7 +92,11 @@ def main() -> None:
                     freq[name] += 1
     total = sum(freq.values())
 
-    chosen = [g for g, _ in freq.most_common() if g in bank][: args.top]
+    # "날짜:9월16일"·"시:15"·"시간:2시간" 같은 **주석 클립은 싣지 않는다.** 낱말이 아니라
+    # 그 문장에만 해당하는 숫자 주석이라, 번역 후보로 쓰면 "주택→날짜:9월16일" 같은
+    # 엉뚱한 동작이 나온다(실측에서 낱말 2만 개가 이런 상태였다). 숫자·시각은 앱이
+    # 직접 읽어 표현한다(numberGlosses). 싣지 않으면 용량도 20MB쯤 준다.
+    chosen = [g for g, _ in freq.most_common() if g in bank and ":" not in g][: args.top]
     covered = sum(freq[g] for g in chosen)
     print(
         f"[web] 상위 {len(chosen):,}종 선택 → 출현 커버리지 {100 * covered / total:.1f}%"

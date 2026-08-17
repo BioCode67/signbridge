@@ -1,0 +1,42 @@
+// 번역 회귀 검사 — 실측에서 한 번이라도 틀렸던 문장을 다시 틀리지 않는지 본다.
+//
+//     node --experimental-strip-types --import ./scripts/ts-register.mjs \
+//          scripts/check_translation_cases.mjs
+//
+// **왜 커버리지만으로는 부족한가.** 낱말 표현률은 "몇 %가 수어로 나갔나"만 잰다.
+// 맞게 나갔는지는 재지 않는다. 실제로 복합어 프루닝 버그로 "어디가 아프신지"가
+// **"어디 아프다 신다(신발을 신다)"** 로 번역되던 동안에도 표현률은 그대로 83.3%였다.
+// 잘못된 수어는 표현되지 않은 것보다 나쁘다 — 농인은 그것을 믿기 때문이다.
+//
+// 그래서 사례를 박아 둔다. must는 반드시 나와야 하는 표제어, never는 과거에 실제로
+// 나왔던 오역이다. 사전·활용형 규칙을 건드리면 이 검사를 돌린다.
+import { readFileSync } from 'node:fs'
+import { DictSignAgent } from '../src/agents/dictSignAgent.ts'
+
+const align = JSON.parse(readFileSync('public/data/align.json', 'utf8'))
+globalThis.fetch = async () => ({ ok: true, json: async () => align })
+
+const { cases } = JSON.parse(readFileSync('scripts/translation_cases.json', 'utf8'))
+const agent = new DictSignAgent('align.json')
+const lemma = (g) => g.replace(/[0-9#:]+$/, '')
+
+let failed = 0
+for (const c of cases) {
+  const { gloss } = await agent.convert(c.text)
+  const lemmas = gloss.map(lemma)
+  const missing = (c.must ?? []).filter((w) => !lemmas.includes(w))
+  const wrong = (c.never ?? []).filter((w) => lemmas.includes(w))
+  if (missing.length === 0 && wrong.length === 0) continue
+  failed++
+  console.log(`  ✗ ${c.text}`)
+  console.log(`     번역: ${lemmas.join(' ') || '(없음)'}`)
+  if (missing.length) console.log(`     빠짐: ${missing.join(', ')}`)
+  if (wrong.length) console.log(`     오역: ${wrong.join(', ')}  ← 과거에 났던 오역이 되살아났다`)
+}
+
+console.log(`\n[cases] ${cases.length}개 중 ${cases.length - failed}개 통과`)
+if (failed) {
+  console.log('[cases] ✗ 번역 회귀가 있습니다 — 사전 규칙을 되짚어 보세요')
+  process.exit(1)
+}
+console.log('[cases] ✓ 회귀 없음')

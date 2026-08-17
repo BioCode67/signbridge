@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import re
 import http.server
 import socketserver
 import subprocess
@@ -36,7 +37,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "dist"
-PORT = 8123
+# 0이면 빈 포트를 운영체제가 골라 준다 — 앞선 실행이 남아 있어도 충돌하지 않는다.
+PORT = 0
 
 # 실제 기기 — 요구사항이 "폰 하나로, 키오스크·태블릿에서도"이므로 셋 다 본다.
 DEVICES = [
@@ -59,6 +61,13 @@ Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
 """
 
 
+class ReusableServer(socketserver.TCPServer):
+    """TIME_WAIT 소켓을 재사용한다 — 연달아 돌릴 때 '주소가 이미 사용 중'으로 죽지 않게.
+    (allow_reuse_address는 bind **전에** 정해져야 해서 클래스 속성으로 둔다.)"""
+
+    allow_reuse_address = True
+
+
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     """요청 로그를 삼킨다 — 9,500개 조각 요청이 검증 결과를 덮는다."""
 
@@ -68,10 +77,13 @@ class QuietHandler(http.server.SimpleHTTPRequestHandler):
 
 def serve() -> socketserver.TCPServer:
     handler = partial(QuietHandler, directory=str(DIST))
-    httpd = socketserver.TCPServer(("127.0.0.1", PORT), handler)
-    httpd.allow_reuse_address = True
+    httpd = ReusableServer(("127.0.0.1", PORT), handler)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
     return httpd
+
+
+def port_of(httpd: socketserver.TCPServer) -> int:
+    return httpd.socket.getsockname()[1]
 
 
 class Report:
@@ -95,7 +107,7 @@ async def stage_state(pg) -> dict:
     )
 
 
-async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: bool, rep: Report) -> None:
+async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: bool, rep: Report, port: int) -> None:
     ctx = await browser.new_context(
         viewport={"width": w, "height": h},
         is_mobile=mobile, has_touch=mobile,
@@ -109,7 +121,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     pg.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}") if r.status >= 400 else None)
 
     rep.lines.append(f"  [{name} {w}×{h}]")
-    await pg.goto(f"http://127.0.0.1:{PORT}/#/app", wait_until="networkidle")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
     await pg.wait_for_timeout(1200)
 
     # ── 받기: 재난문자가 실제로 수어로 합성되는가(프레임 수로 확인)
@@ -139,6 +151,9 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # ── 대화 모드: 직원 카드 → 수어, 답 카드 → 소리
     await pg.get_by_role("button", name="💬 대화").click()
     await pg.wait_for_timeout(500)
+    # 응급 정보 카드 — 응급실에서 말 대신 보여주는 정보. 입구가 사라지면 안 된다.
+    rep.check(await pg.get_by_role("button", name=re.compile("🆔 내 정보")).count() > 0,
+              "대화: 내 정보 입구")
     await pg.get_by_role("button", name="🏥 병원").click()
     await pg.wait_for_timeout(600)
 
@@ -219,7 +234,7 @@ async def main(keep: bool) -> int:
                     break
             browser = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
             for name, w, h, mobile in DEVICES:
-                await run_device(browser, name, w, h, mobile, keep, rep)
+                await run_device(browser, name, w, h, mobile, keep, rep, port_of(httpd))
             await browser.close()
     finally:
         httpd.shutdown()

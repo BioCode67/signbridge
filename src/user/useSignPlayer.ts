@@ -188,14 +188,26 @@ export function useSignPlayer(): SignPlayer {
   }, [])
 
   // 재생 루프 — fps와 속도 배율에 맞춰 프레임을 넘긴다.
+  //
+  // **지난 시간만큼 건너뛴다.** 한 틱에 한 프레임씩만 넘기면, 화면이 느린 기기에서
+  // 수어가 슬로모션이 된다. 실측에서 소프트웨어 렌더링 환경이 초당 4틱밖에 못 돌아
+  // 20초짜리 문장이 5분이 됐다. 수어는 **속도가 뜻의 일부**라(빠르게=급하게,
+  // 느리게=천천히) 느려지는 것은 단순한 성능 문제가 아니라 정확성 문제다.
+  // 저사양 폰·키오스크에서도 실제 속도를 지키도록 프레임을 건너뛴다.
   useEffect(() => {
     if (!playing || !data) return
     lastRef.current = 0
+    const interval = 1000 / data.fps / speedRef.current
     const step = (ts: number) => {
       if (!playingRef.current) return
-      if (ts - lastRef.current >= 1000 / data.fps / speedRef.current) {
-        lastRef.current = ts
-        const next = frameRef.current + 1
+      if (lastRef.current === 0) lastRef.current = ts
+      const elapsed = ts - lastRef.current
+      if (elapsed >= interval) {
+        // 한 번에 너무 많이 건너뛰면 동작이 튄다 — 탭 전환 등으로 길게 멈췄다 돌아온
+        // 경우를 대비해 상한을 둔다(그때는 조금 느려도 이어지는 편이 낫다).
+        const advance = Math.min(Math.floor(elapsed / interval), 6)
+        lastRef.current += advance * interval
+        const next = frameRef.current + advance
         if (next >= data.num_frames) {
           frameRef.current = 0
           setFrame(0)

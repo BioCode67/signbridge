@@ -16,6 +16,8 @@ import { AVATARS } from '../sections/sign/avatars'
 import { categoryKo, type FeedItem } from '../sections/sign/LiveConsole'
 
 const Avatar3D = lazy(() => import('../sections/sign/Avatar3D'))
+// 말하기(웹캠 인식)는 MediaPipe 번들이 무거워 탭을 열 때만 불러온다.
+const SpeakMode = lazy(() => import('./SpeakMode'))
 
 type Playable = SignData & { gloss_missing?: string[] }
 
@@ -28,6 +30,8 @@ export default function UserApp() {
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState(false)
   const [auto, setAuto] = useState(true)
+  // 받기(재난문자→수어) / 말하기(내 수어→질문) 두 모드.
+  const [tab, setTab] = useState<'watch' | 'speak'>('watch')
 
   const frameRef = useRef(0)
   const playingRef = useRef(false)
@@ -125,6 +129,19 @@ export default function UserApp() {
       .join(' ')
   }, [data, time])
 
+  const onAnswer = useCallback((text: string) => {
+    setTab('watch')
+    setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
+    void (async () => {
+      const composed = await compose(text)
+      if (!composed) return
+      setData(composed)
+      frameRef.current = 0
+      setFrame(0)
+      setPlaying(true)
+    })()
+  }, [compose])
+
   const item = feed.length ? feed[(cursor - 1 + feed.length) % feed.length] : null
 
   return (
@@ -145,6 +162,21 @@ export default function UserApp() {
             {categoryKo(item.category)}
           </span>
         )}
+        <div className="flex gap-1 rounded-xl border border-white/10 bg-space-900 p-1">
+          {([['watch', '📺 받기'], ['speak', '🤟 말하기']] as const).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
+              aria-pressed={tab === id}
+              className={`rounded-lg px-3 py-1.5 text-base font-bold ${
+                tab === id ? 'bg-cyan-glow/20 text-cyan-soft' : 'text-slate-400'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => setAuto((v) => !v)}
@@ -166,7 +198,23 @@ export default function UserApp() {
         </a>
       </header>
 
+      {/* 말하기 — 내 수어를 카메라로 */}
+      {tab === 'speak' && (
+        <div className="min-h-0 flex-1">
+          <Suspense
+            fallback={
+              <div className="grid h-full place-items-center text-slate-400">
+                <span className="animate-pulse text-2xl">카메라 모듈 여는 중…</span>
+              </div>
+            }
+          >
+            <SpeakMode onAnswer={onAnswer} />
+          </Suspense>
+        </div>
+      )}
+
       {/* 아바타 — 화면의 주인공 */}
+      {tab === 'watch' && (
       <div className="relative min-h-0 flex-1">
         <Suspense
           fallback={
@@ -210,8 +258,10 @@ export default function UserApp() {
           </div>
         )}
       </div>
+      )}
 
       {/* 하단 큰 버튼들 */}
+      {tab === 'watch' && (
       <nav className="grid grid-cols-2 gap-2 border-t border-white/10 p-3">
         <button
           type="button"
@@ -237,6 +287,7 @@ export default function UserApp() {
           ⏭ 다음
         </button>
       </nav>
+      )}
     </div>
   )
 }

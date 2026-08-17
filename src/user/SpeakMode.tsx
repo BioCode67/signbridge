@@ -1,0 +1,123 @@
+// 수어 이용자 화면의 "말하기" 모드 — 웹캠에 수어 → 인식 → 답을 수어로 돌려받는다.
+//
+// 소개 페이지의 인식 데모와 같은 훅(useHolistic·useRecognizer)을 쓰되, 화면 문법이
+// 다르다: 설명 없이 카메라가 주인공, 인식된 단어는 크게, 버튼은 둘뿐(지우기·질문).
+// MediaPipe 번들이 무거워 이 컴포넌트는 lazy로만 불러온다.
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useHolistic } from '../recognition/useHolistic'
+import { useRecognizer } from '../recognition/useRecognizer'
+import { Orchestrator } from '../agents/orchestrator'
+import type { LandmarkFrame } from '../recognition/landmarks'
+
+interface Props {
+  /** 답변 문장을 받기 화면(아바타)으로 넘긴다. */
+  onAnswer: (text: string) => void
+}
+
+export default function SpeakMode({ onAnswer }: Props) {
+  const pushFrameRef = useRef<(f: Float32Array | null) => void>(() => {})
+  const onFrame = useCallback((_f: LandmarkFrame, features: Float32Array | null) => {
+    pushFrameRef.current(features)
+  }, [])
+
+  const holistic = useHolistic({ onFrame })
+  const { videoRef, overlayRef, status, error, start, stop } = holistic
+  const running = status === 'running'
+  const rec = useRecognizer(running)
+  pushFrameRef.current = rec.pushFrame
+
+  const [busy, setBusy] = useState(false)
+  const orchestratorRef = useRef<Orchestrator | null>(null)
+
+  // 화면에 들어오면 카메라를 바로 켠다 — 이 모드에 온 이유가 그것뿐이다.
+  useEffect(() => {
+    void start()
+    return () => stop()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const ask = useCallback(async () => {
+    if (busy || rec.transcript.length === 0) return
+    setBusy(true)
+    try {
+      if (!orchestratorRef.current) orchestratorRef.current = new Orchestrator()
+      const tokens = rec.transcript.map((t) => t.replace(/[0-9#:]+$/, ''))
+      const result = await orchestratorRef.current.run({ tokens, question: tokens.join(' ') })
+      onAnswer(result.qa?.answer ?? result.assessment.summary)
+      rec.clearTranscript()
+    } finally {
+      setBusy(false)
+    }
+  }, [busy, rec, onAnswer])
+
+  const confident = rec.current !== null && rec.current.confidence >= 0.5
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-black">
+        <video
+          ref={videoRef}
+          playsInline
+          muted
+          className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90"
+        />
+        <canvas ref={overlayRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+
+        {status === 'loading' && (
+          <div className="absolute inset-0 grid place-items-center bg-space-950/80">
+            <span className="animate-pulse text-2xl text-slate-300">카메라 준비 중…</span>
+          </div>
+        )}
+        {error && (
+          <div className="absolute inset-0 grid place-items-center bg-space-950/90 p-6 text-center">
+            <p className="text-lg text-red-300">{error}</p>
+          </div>
+        )}
+        {rec.modelStatus === 'loading' && running && (
+          <div className="absolute inset-x-0 top-4 text-center">
+            <span className="rounded-full bg-space-900/90 px-4 py-2 text-base text-cyan-soft">
+              인식 모델 준비 중… (최초 1회)
+            </span>
+          </div>
+        )}
+
+        {/* 지금 인식 중인 단어 — 크게 */}
+        {running && (
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-4 pb-4 pt-14 text-center">
+            <p className={`text-4xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-500'}`}>
+              {confident && rec.current ? rec.current.label.replace(/[0-9#:]+$/, '') : '…'}
+            </p>
+            {rec.transcript.length > 0 && (
+              <p className="mt-2 flex flex-wrap justify-center gap-1.5">
+                {rec.transcript.map((t, i) => (
+                  <span key={`${t}-${i}`} className="rounded-lg bg-cyan-glow/15 px-2.5 py-1 text-lg font-bold text-cyan-soft">
+                    {t.replace(/[0-9#:]+$/, '')}
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <nav className="grid grid-cols-2 gap-2 border-t border-white/10 p-3">
+        <button
+          type="button"
+          disabled={rec.transcript.length === 0}
+          onClick={rec.clearTranscript}
+          className="rounded-2xl border border-white/15 bg-space-800 py-4 text-xl font-bold text-slate-200 disabled:opacity-40"
+        >
+          🗑 지우기
+        </button>
+        <button
+          type="button"
+          disabled={busy || rec.transcript.length === 0}
+          onClick={() => void ask()}
+          className="rounded-2xl border border-emerald-400/50 bg-emerald-400/10 py-4 text-xl font-bold text-emerald-300 disabled:opacity-40"
+        >
+          {busy ? '…' : '💬 질문'}
+        </button>
+      </nav>
+    </div>
+  )
+}

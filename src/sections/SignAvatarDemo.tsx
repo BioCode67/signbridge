@@ -265,9 +265,11 @@ export default function SignAvatarDemo() {
           }
           description={
             <>
-              AI Hub「재난 안전 정보 전달을 위한 수어영상」데이터의 실제 손·팔 관절 좌표를 3D 아바타로
-              리타게팅해 재현했습니다. 농인이 직접 수어한 동작이며, 무거운 영상이 아니라 관절 좌표만
-              전송해 렌더링합니다. 지진·태풍·호우·대설·산불·미세먼지 등 다양한 재난 유형을 수록했습니다.
+              <strong className="text-slate-200">어떤 재난 문장이든</strong> 말하거나 입력하면 AI가
+              한국수어로 번역해 아바타가 표현합니다. 학습 모델이 문장을 수어 어순의 글로스로 옮기고,
+              AI Hub「재난 안전 정보 전달을 위한 수어영상」의 <strong className="text-slate-200">실제
+              농인 수어자 53명</strong> 동작에서 각 단어를 찾아 이어 붙입니다. 무거운 영상이 아니라
+              관절 좌표만 전송해 렌더링합니다. 아래 탭은 원본 데이터를 그대로 재생하는 예시입니다.
             </>
           }
         />
@@ -280,11 +282,13 @@ export default function SignAvatarDemo() {
             transition={{ duration: 0.5 }}
             className="mx-auto mt-5 flex max-w-3xl flex-wrap items-center justify-center gap-2 text-xs text-slate-400"
           >
-            <span className="rounded-full border border-cyan-glow/30 bg-cyan-glow/10 px-3 py-1 font-semibold text-cyan-soft">
-              재난 문장 {sentences.length}종
+            {/* 수록본과 AI 생성을 나눠 표시한다. 합계만 보이면 "이 개수만 된다"로
+                오해를 준다 — AI 번역은 입력하는 만큼 무제한이다. */}
+            <span className="rounded-full border border-cyan-glow/40 bg-cyan-glow/10 px-3 py-1 font-semibold text-cyan-soft">
+              AI 번역 · 문장 수 제한 없음
             </span>
             <span className="rounded-full border border-white/10 bg-space-800 px-3 py-1">
-              AI Hub 실데이터
+              사전 수록 {load.sentences.length}문장 (AI Hub 원본 재생)
             </span>
             <span className="rounded-full border border-white/10 bg-space-800 px-3 py-1">
               3D 아바타 · 스켈레톤(키포인트)

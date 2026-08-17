@@ -8,6 +8,7 @@ import { useRecognizer, type ModelStatus } from '../recognition/useRecognizer'
 import { buildModel } from '../recognition/model'
 import { KSL_LABELS, NUM_CLASSES, CONFIDENCE_THRESHOLD } from '../recognition/labels'
 import { FEATURE_DIM, SEQ_LEN, resampleSequence, type LandmarkFrame } from '../recognition/landmarks'
+import { Orchestrator } from '../agents/orchestrator'
 
 /**
  * 실시간 수어 인식 데모 (Step1 랜드마크 추출 + Step2 GRU 분류 + Step4 자막).
@@ -40,6 +41,32 @@ export default function RecognitionDemo() {
   const loading = status === 'loading'
   const rec = useRecognizer(running)
   pushFrameRef.current = rec.pushFrame
+
+  // ── 수어 질문 → 답변 → 아바타 수어 응답 (양방향 왕복) ──
+  const [qaBusy, setQaBusy] = useState(false)
+  const [qaAnswer, setQaAnswer] = useState('')
+  const orchestratorRef = useRef<Orchestrator | null>(null)
+
+  const askFromSigns = useCallback(async () => {
+    if (qaBusy || rec.transcript.length === 0) return
+    setQaBusy(true)
+    setQaAnswer('')
+    try {
+      if (!orchestratorRef.current) orchestratorRef.current = new Orchestrator()
+      // 인식 라벨은 "대피1" 꼴이라 뒤의 구분 숫자를 떼고 질문 문장으로 잇는다.
+      const tokens = rec.transcript.map((t) => t.replace(/[0-9#:]+$/, ''))
+      const question = tokens.join(' ')
+      const result = await orchestratorRef.current.run({ tokens, question })
+      const answer = result.qa?.answer ?? result.assessment.summary
+      setQaAnswer(answer)
+      // 아바타 섹션으로 넘겨 수어로 응답하게 한다.
+      window.dispatchEvent(
+        new CustomEvent('signbridge:sign-text', { detail: { text: answer } }),
+      )
+    } finally {
+      setQaBusy(false)
+    }
+  }, [qaBusy, rec.transcript])
 
   // ── 자체수집 학습 스튜디오 상태 ──
   const samplesRef = useRef<{ label: string; seq: Float32Array }[]>([])
@@ -280,6 +307,28 @@ export default function RecognitionDemo() {
                 </button>
               )}
             </div>
+
+            {/* 양방향 왕복 — 인식된 수어를 질문으로 삼아 답을 만들고,
+                그 답을 아바타가 다시 수어로 표현한다. 농인↔시스템 대화의 완결이다. */}
+            {rec.transcript.length > 0 && (
+              <button
+                type="button"
+                disabled={qaBusy}
+                onClick={() => void askFromSigns()}
+                className="rounded-xl border border-emerald-400/40 bg-emerald-400/5 px-4 py-3 text-left text-sm font-medium text-emerald-300 transition-colors hover:bg-emerald-400/10 disabled:opacity-50"
+              >
+                {qaBusy ? '답변 생성 중…' : '🤟 이 수어로 질문 → 아바타가 수어로 응답'}
+                <span className="mt-0.5 block text-xs font-normal text-slate-400">
+                  인식된 단어를 질문으로 해석해 답변을 만들고, 아바타가 수어로 답합니다
+                </span>
+              </button>
+            )}
+            {qaAnswer && (
+              <p className="rounded-lg border border-white/10 bg-space-800/60 px-3 py-2 text-xs leading-relaxed text-slate-300">
+                <span className="mr-1 font-semibold text-emerald-300">응답</span>
+                {qaAnswer}
+              </p>
+            )}
 
             <button
               type="button"

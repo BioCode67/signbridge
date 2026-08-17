@@ -343,6 +343,20 @@ export default function SignAvatarDemo() {
     setAiBusy(false)
   }, [aiText, aiBusy, composeInBrowser])
 
+  // 다른 섹션(웹캠 인식 Q&A 등)이 "이 문장을 수어로"라고 보낼 수 있는 통로.
+  // 농인이 수어로 질문 → 시스템이 답변 → **아바타가 수어로 응답**하는 왕복 루프의 마지막 다리다.
+  useEffect(() => {
+    const onSpeak = (e: Event) => {
+      const text = (e as CustomEvent<{ text?: string }>).detail?.text
+      if (!text) return
+      setAiText(text)
+      void composeText(text)
+      document.getElementById('demo')?.scrollIntoView({ behavior: 'smooth' })
+    }
+    window.addEventListener('signbridge:sign-text', onSpeak)
+    return () => window.removeEventListener('signbridge:sign-text', onSpeak)
+  }, [composeText])
+
   // 음성 → 텍스트 → 곧바로 수어 번역. 확정된 문장만 넘어온다.
   const speech = useSpeechInput(
     useCallback((text: string) => {

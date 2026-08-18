@@ -15,12 +15,21 @@ import { glossLabel } from '../agents/glossLabel'
 import type { SignData } from '../sections/sign/signTypes'
 import { composeGlosses, type BankIndex, type BankEntry } from '../sections/sign/composeLocal'
 import { NnSignAgent } from '../agents/nnSignAgent'
+import { DictSignAgent } from '../agents/dictSignAgent'
 
 /** 메모리에 들고 있을 동작 조각 수 — 문장 하나가 보통 10~20조각이라 넉넉하다. */
 const GLOSS_CACHE_MAX = 400
 
 /** 재생 가능한 수어 데이터 + 동작으로 표현하지 못한 낱말(낱말 카드로 띄운다). */
 export type Playable = SignData & { gloss_missing?: string[] }
+
+/** 어느 자리의 문장인가 — 번역기를 고르는 데 쓴다.
+ *
+ *  `disaster`  재난문자·행동요령. 학습 모델이 사전을 크게 앞선다(글로스 F1 18.7 → 55.8).
+ *  `everyday`  창구 대화·자유 입력. 모델이 배운 적 없는 말투라 **사전이 낫다.**
+ *
+ *  기본값을 `everyday`로 둔 것은 안전 때문이다 — 모르는 자리에서는 덜 틀리는 쪽을 쓴다. */
+export type Domain = 'disaster' | 'everyday' 
 
 export interface SignPlayer {
   data: Playable | null
@@ -35,8 +44,9 @@ export interface SignPlayer {
   speed: number
   setSpeed(v: number): void
   setPlaying(v: boolean | ((p: boolean) => boolean)): void
-  /** 문장을 수어로 재생한다. gloss를 주면 번역을 건너뛰고 그대로 합성한다. */
-  play(text: string, gloss?: string[]): Promise<Playable | null>
+  /** 문장을 수어로 재생한다. gloss를 주면 번역을 건너뛰고 그대로 합성한다.
+   *  domain은 번역기 선택에 쓴다(재난문자만 학습 모델). */
+  play(text: string, gloss?: string[], domain?: Domain): Promise<Playable | null>
   /** 이미 만들어 둔 데이터를 재생한다(캐시된 문장 되풀기). */
   playData(d: Playable): void
   /** 처음부터 다시 */
@@ -44,7 +54,7 @@ export interface SignPlayer {
   /** 동작 사전 색인 — 단어 검색 화면이 쓴다. */
   bank(): Promise<BankIndex | null>
   /** 문장을 만들되 재생하지는 않는다(미리 만들어 두기). */
-  compose(text: string, gloss?: string[]): Promise<Playable | null>
+  compose(text: string, gloss?: string[], domain?: Domain): Promise<Playable | null>
   /** 곧 쓸 글로스 조각을 미리 받아 둔다(창구에 들어설 때 그 장소의 문구들). */
   prewarm(glosses: string[]): void
   /** 직전 번역을 무엇이 했는가 — 계측용.
@@ -73,6 +83,7 @@ export function useSignPlayer(): SignPlayer {
   // 통계 사전으로 되돌아간다(NnSignAgent가 스스로 폴백한다) — 배포본에 모델을
   // 안 실어도 앱은 그대로 동작한다.
   const agentRef = useRef<NnSignAgent | null>(null)
+  const dictRef = useRef<DictSignAgent | null>(null)
   const bankRef = useRef<BankIndex | null>(null)
   const cacheRef = useRef(new Map<string, SignData>())
 
@@ -108,40 +119,64 @@ export function useSignPlayer(): SignPlayer {
   }, [])
 
   const compose = useCallback(
-    async (text: string, gloss?: string[]): Promise<Playable | null> => {
+    async (text: string, gloss?: string[], domain: Domain = 'everyday'): Promise<Playable | null> => {
       const index = await bank()
       if (!index) return null
       // 글로스를 직접 준 문구(장소 상용구)는 번역을 거치지 않는다 — 사람이 확정한 매핑이다.
       if (gloss?.length) return composeGlosses(text, gloss, index, loadGloss)
+
+      /** 번역 결과를 동작으로 — 어느 번역기를 썼든 마무리는 같다. */
+      const finish = async (r: { gloss: string[]; unmatched?: string[] }) => {
+        const composed = r.gloss.length
+          ? await composeGlosses(text, r.gloss, index, loadGloss)
+          : null
+        // 번역에서 빠진 낱말(지명 등)도 낱말 카드로 — 정보가 조용히 사라지면 안 된다.
+        if (composed && r.unmatched?.length) {
+          composed.gloss_missing = [
+            ...new Set([...(composed.gloss_missing ?? []), ...r.unmatched]),
+          ]
+        }
+        // 한 낱말도 표현 못 하는 문장 — 동작은 없지만 **낱말은 남긴다.** 빈 화면보다
+        // "이 말들은 수어로 못 보여드려요"가 정확하고, 상대에게 보여줄 것도 남는다.
+        if (!composed && r.unmatched?.length) {
+          return {
+            korean_text: text, fps: 30, num_frames: 1, gloss_sequence: [],
+            keypoints: { pose: [[]], hand_left: [[]], hand_right: [[]] },
+            gloss_missing: [...new Set(r.unmatched)],
+          } as Playable
+        }
+        return composed
+      }
+      // **학습 모델은 재난문자에서만 쓴다.**
+      //
+      // 모델은 재난안전 말뭉치 200,874쌍으로만 배웠다. 그 안에서는 사전을 크게
+      // 앞서지만(글로스 F1 18.7 → 55.8), **밖에서는 자신 있게 틀린다**(실측):
+      //
+      //     화장실이 어디예요 → 꽃 꽃 지도 지시# 물 준비 가능 높다
+      //     도와주세요       → 지역 금요일 금요일 경기 지역 …
+      //
+      // 무너진 모양이 아니라 그냥 틀린 것이라 출력만 보고는 거를 수 없다.
+      // 창구·일상에서는 사전이 훨씬 낫다(낱말 표현률 92.3% · 96.9%).
+      // 그래서 **부르는 쪽이 어느 자리인지 알려 준다.** 모르면 사전이 기본이다.
+      if (domain !== 'disaster') {
+        if (!dictRef.current) dictRef.current = new DictSignAgent()
+        const r = await dictRef.current.convert(text)
+        setBackend(dictRef.current.lastBackend)
+        return finish(r)
+      }
       if (!agentRef.current) {
         agentRef.current = new NnSignAgent()
         // 모델이 **재생할 수 있는 낱말만** 고르게 한다. 못 보여줄 낱말을 고르면
         // 아바타가 그 자리를 조용히 건너뛴다 — 화면상 정상처럼 보이는 실패다.
         agentRef.current.setPlayable(Object.keys(index))
       }
-      const { gloss: translated, unmatched } = await agentRef.current.convert(text)
+      const r = await agentRef.current.convert(text)
       // **무엇이 번역했는지 밖으로 내보낸다.** 모델이 안 뜨면 사전이 대신 답하는데,
       // 화면상으로는 아무 차이가 없다(실측: ORT 진입점이 달라 wasm을 404로 못 찾아
       // 30MB짜리 모델이 한 번도 안 쓰이고 있었다). 오류도 안 나므로 재지 않으면
       // 영영 모른다.
       setBackend(agentRef.current.lastBackend)
-      const composed = translated.length
-        ? await composeGlosses(text, translated, index, loadGloss)
-        : null
-      // 번역에서 빠진 낱말(지명 등)도 낱말 카드로 — 정보가 조용히 사라지면 안 된다.
-      if (composed && unmatched?.length) {
-        composed.gloss_missing = [...new Set([...(composed.gloss_missing ?? []), ...unmatched])]
-      }
-      // 한 낱말도 표현 못 하는 문장 — 동작은 없지만 **낱말은 남긴다.** 빈 화면보다
-      // "이 말들은 수어로 못 보여드려요"가 정확하고, 상대에게 보여줄 것도 남는다.
-      if (!composed && unmatched?.length) {
-        return {
-          korean_text: text, fps: 30, num_frames: 1, gloss_sequence: [],
-          keypoints: { pose: [[]], hand_left: [[]], hand_right: [[]] },
-          gloss_missing: [...new Set(unmatched)],
-        }
-      }
-      return composed
+      return finish(r)
     },
     [bank, loadGloss],
   )
@@ -175,10 +210,10 @@ export function useSignPlayer(): SignPlayer {
   }, [])
 
   const play = useCallback(
-    async (text: string, gloss?: string[]): Promise<Playable | null> => {
+    async (text: string, gloss?: string[], domain: Domain = 'everyday'): Promise<Playable | null> => {
       setBusy(true)
       try {
-        const composed = await compose(text, gloss)
+        const composed = await compose(text, gloss, domain)
         if (composed) {
           playData(composed)
           return composed

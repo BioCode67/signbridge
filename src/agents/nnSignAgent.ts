@@ -45,6 +45,37 @@ function syllables(text: string): string[] {
 /** 규약 대조 검사용(scripts/check_syllable_parity.mjs). 앱은 쓰지 않는다. */
 export const syllablesForTest = syllables
 
+/** 출력이 무너졌는가 — 무너졌으면 사전으로 되돌린다.
+ *
+ * **왜 필요한가.** 이 모델은 재난문자 200,874쌍으로만 배웠다. 창구·일상 문장은
+ * 분포 밖이라 같은 낱말을 끝없이 반복하는 상태에 빠진다(실측):
+ *
+ *     화장실이 어디예요  →  꽃 꽃 꽃 꽃 … (47개)
+ *     도와주세요        →  지역 금요일 금요일 … (47개)
+ *     어디가 아프신가요  →  <unk> <unk> … (17개)
+ *
+ * 이런 것이 아바타로 나가면 **뜻이 없는 동작을 47번 반복**한다. 사전이 훨씬 낫다.
+ * 무너짐은 모양으로 알아볼 수 있다 — 같은 낱말 연속, <unk>, 비정상적 길이.
+ * 판단이 애매하면 사전을 쓴다(사전은 최소한 낱말은 맞다).
+ */
+export function degenerate(gloss: string[]): boolean {
+  if (gloss.some((g) => g === '<unk>' || g === '<pad>')) return true
+  // 같은 낱말이 세 번 이상 잇따르면 반복 붕괴다. 수어에서 두 번 반복은
+  // 강조로 쓰이지만 세 번부터는 뜻이 아니다.
+  let run = 1
+  for (let i = 1; i < gloss.length; i += 1) {
+    run = gloss[i] === gloss[i - 1] ? run + 1 : 1
+    if (run >= 3) return true
+  }
+  // 한 낱말이 전체의 절반을 넘으면(길이 6 이상에서) 역시 무너진 것이다.
+  if (gloss.length >= 6) {
+    const count = new Map<string, number>()
+    for (const g of gloss) count.set(g, (count.get(g) ?? 0) + 1)
+    if (Math.max(...count.values()) > gloss.length / 2) return true
+  }
+  return false
+}
+
 export class NnSignAgent implements SignAgent {
   private meta: Meta | null = null
   private enc: unknown = null
@@ -132,6 +163,7 @@ export class NnSignAgent implements SignAgent {
       if (!this.meta || !this.enc || !this.dec || !this.ort) throw new Error('모델 없음')
       const gloss = await this.translate(text)
       if (gloss.length === 0) throw new Error('빈 결과')
+      if (degenerate(gloss)) throw new Error('무너진 출력')
       this.lastBackend = 'nn'
       return { text, gloss, unmatched: [] }
     } catch {
@@ -182,10 +214,27 @@ export class NnSignAgent implements SignAgent {
       const res = await dec.run({ memory, mem_pad: pad, tgt })
       const data = res[dec.outputNames[0]].data as Float32Array
       const base = step * vocab                  // 지금 자리의 로짓
+      // **반복 고리를 막는다.**
+      //
+      // 그리디 디코딩은 같은 낱말을 끝없이 내는 상태에 빠진다(실측:
+      // "민방위훈련" 문장이 `경보 ×8 … 훈련 ×6 … 시간 ×4`로 47낱말).
+      // 그러면 아바타가 뜻 없는 동작을 수십 번 반복한다.
+      //
+      // 다만 **반복을 다 막으면 안 된다.** 사람 정답에도 2연속은 흔하다
+      // (40,002문장에서 2연속 36.2% · 3연속 이상은 1.3%). 그래서 데이터가
+      // 말하는 대로 **3연속만** 막고, 같은 3낱말 묶음이 되풀이되는 것도 막는다.
+      const n = out.length
+      const banRun = n >= 2 && out[n - 1] === out[n - 2] ? out[n - 1] : -1
+      const seenTrigram = new Set<string>()
+      for (let i = 2; i < n; i += 1) seenTrigram.add(`${out[i - 2]},${out[i - 1]},${out[i]}`)
+      const prefix = n >= 2 ? `${out[n - 2]},${out[n - 1]},` : null
+
       let best = -1
       let bestVal = -Infinity
       for (let v = 4; v < vocab; v += 1) {       // 특수 토큰(0~3)은 후보에서 뺀다
         if (this.playable && !this.playable.has(v)) continue
+        if (v === banRun) continue
+        if (prefix && seenTrigram.has(prefix + v)) continue
         const val = data[base + v]
         if (val > bestVal) {
           bestVal = val

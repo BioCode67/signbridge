@@ -48,12 +48,23 @@ def greedy(meta, enc, dec, text: str) -> list[str]:
     tgt = np.full((1, T), PAD, dtype=np.int64)
     tgt[0, 0] = BOS
     out: list[int] = []
+    seen_tri: set[tuple[int, int, int]] = set()
     for step in range(T - 1):
         logits = dec.run(None, {"memory": memory, "mem_pad": pad, "tgt": tgt})[0][0, step]
         logits[PAD] = logits[BOS] = -1e9
+        # 반복 고리 차단 — 브라우저(nnSignAgent)와 **같은 규칙**이어야 비교가 성립한다.
+        # 3연속만 막는다(사람 정답에도 2연속은 36% 있다).
+        if len(out) >= 2 and out[-1] == out[-2]:
+            logits[out[-1]] = -1e9
+        if len(out) >= 2:
+            for a, b, c in list(seen_tri):
+                if (a, b) == (out[-2], out[-1]):
+                    logits[c] = -1e9
         nxt = int(logits.argmax())
         if nxt == EOS:
             break
+        if len(out) >= 2:
+            seen_tri.add((out[-2], out[-1], nxt))
         out.append(nxt)
         tgt[0, step + 1] = nxt
     return [meta["tgt"][i] for i in out]

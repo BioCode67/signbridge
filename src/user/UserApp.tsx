@@ -131,7 +131,9 @@ export default function UserApp() {
       severity: disasterRef.current.assess({ text: item.text }).severity,
       region: REGION_RE.exec(item.text)?.[1],
     })
-    const composed = await player.play(item.text)
+    // **재난문자만 학습 모델로.** 모델이 배운 자리가 여기다(글로스 F1 18.7 → 55.8).
+    // 창구·자유 입력은 사전이 낫다 — 모델이 못 배운 말투에서 자신 있게 틀린다.
+    const composed = await player.play(item.text, undefined, 'disaster')
     if (!composed) return
     setHistory((h) => [{ time: new Date().toTimeString().slice(0, 5), item }, ...h].slice(0, 20))
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -205,7 +207,8 @@ export default function UserApp() {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
     if (!keepNotice) setNotice(null) // 행동요령 재생은 배지를 유지한다(요령 버튼 재진입용)
-    void player.play(text, gloss)
+    // 행동요령은 재난 말뭉치와 같은 말투다 — 학습 모델이 배운 자리다.
+    void player.play(text, gloss, 'disaster')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.play])
 

@@ -100,5 +100,21 @@ ok(data.places.every((p) => p.lat > 32 && p.lat < 40 && p.lon > 124 && p.lon < 1
   '좌표가 한반도 안에 있음')
 ok(data.places.every((p) => p.name && p.name.length > 0), '이름 없는 장소가 없음')
 
+// ── 실제 좌표로 한 번 — 서울시청 앞에 서 있다고 치고 답이 말이 되는가
+const HERE = { lat: 37.5665, lon: 126.9780 }   // 서울시청
+for (const kind of ['shelter', 'hospital', 'pharmacy', 'subway']) {
+  const top = nearest(data.places, HERE.lat, HERE.lon, kind, 3)
+  ok(top.length > 0, `서울시청에서 ${kind} 후보가 있음`)
+  if (top.length === 0) continue
+  const t = top[0]
+  // 도심 한복판에서 가장 가까운 곳이 5km를 넘으면 데이터나 계산이 잘못된 것이다
+  ok(t.distance < 5000, `서울시청 ↔ 가장 가까운 ${kind}가 5km 이내`,
+    `${t.name} ${Math.round(t.distance)}m`)
+  const { gloss } = await agent.convert(answerSentence(t))
+  ok(gloss.length >= 3, `${kind}: 실제 답이 수어 3낱말 이상`,
+    `${answerHeadline(t)} → ${gloss.join(' ')}`)
+  console.log(`    ${kind.padEnd(9)} ${answerHeadline(t)}  →  ${gloss.join(' ')}`)
+}
+
 console.log(failed ? `\n길찾기 검사 실패 ${failed}건` : '\n길찾기 검사 ✓ 전부 통과')
 process.exit(failed ? 1 : 0)

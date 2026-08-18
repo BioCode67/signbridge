@@ -459,6 +459,13 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     if await hospital.count():
         await hospital.first.click()
         await pg.wait_for_timeout(800)
+        # 장소를 고르면 **직원에게 보여주는 안내 화면**이 먼저 뜬다. 한 번 눌러
+        # 지나야 대화 화면이다(처음에 이걸 빼먹어 "대화가 시작됐다"고 착각했다 —
+        # 실제로는 기록이 하나도 없어 초기화 타이머가 아예 걸리지 않았다).
+        start = pg.get_by_text("화면을 누르면 시작합니다")
+        if await start.count():
+            await start.first.click()
+            await pg.wait_for_timeout(800)
         answer = pg.get_by_role("button", name="🤟 내 답 카드")
         if await answer.count():
             await answer.first.click()
@@ -467,8 +474,12 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
         if await card.count():
             await card.first.click()
             await pg.wait_for_timeout(800)
-        started = await pg.get_by_text("어디에 계신가요?").count() == 0
-        rep.check(started, "키오스크: 대화가 시작됨(초기화 시험 준비)")
+        # **기록이 실제로 생겼는지**로 확인한다. 장소 화면을 벗어난 것만으로는
+        # 부족하다 — 기록이 없으면 초기화 타이머가 걸리지 않아 검사가 헛돈다.
+        logged = await pg.evaluate(
+            "() => document.body.innerText.includes('머리')"
+        )
+        rep.check(logged, "키오스크: 대화 기록이 생김(초기화 시험 준비)")
 
         await pg.clock.fast_forward("05:30")
         await pg.wait_for_timeout(1200)

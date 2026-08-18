@@ -73,6 +73,20 @@ async def shoot(browser, port: int, label: str, w: int, h: int) -> None:
     await pg.get_by_role("button", name="🤟 내 답 카드").click()
     await pg.wait_for_timeout(600)
     await snap("08_대화_답카드")
+
+    # 사전 — 낱말을 찾아 동작을 확인하는 화면. 여기도 눈으로 봐야 한다.
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
+    await pg.wait_for_timeout(1500)
+    dict_tab = pg.get_by_role("button", name="📖 사전")
+    if await dict_tab.count():
+        await dict_tab.first.click()
+        await pg.wait_for_timeout(900)
+        await snap("09_사전")
+        box = pg.get_by_placeholder("🔍 단어 찾기")
+        if await box.count():
+            await box.first.fill("병원")
+            await pg.wait_for_timeout(1200)
+            await snap("10_사전_검색")
     await ctx.close()
 
 
@@ -102,8 +116,46 @@ async def main() -> int:
             await browser.close()
     finally:
         httpd.shutdown()
+    write_contact_sheet()
     print(f"\n사진 {len(list(OUT.glob('*.png')))}장 → {OUT}")
+    print(f"한눈에 보기: {OUT / 'index.html'}")
     return 0
+
+
+def write_contact_sheet() -> None:
+    """찍은 사진을 한 장짜리 HTML로 묶는다.
+
+    화면을 하나씩 열어 보는 것보다 **나란히 놓고 보는 편**이 문제를 훨씬 잘 잡는다
+    (아바타가 작다·글씨가 밀렸다·빈 자리가 크다는 비교로만 보인다).
+    폰에서도 열리도록 한 파일 안에 다 넣는다.
+    """
+    shots = sorted(OUT.glob("*.png"))
+    cards = []
+    for p in shots:
+        label = p.stem.replace("_", " ")
+        cards.append(
+            f'<figure><img src="{p.name}" alt="{label}" loading="lazy">'
+            f"<figcaption>{label}</figcaption></figure>"
+        )
+    html = f"""<!doctype html><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SignBridge 화면 {len(shots)}장</title>
+<style>
+  body {{ margin:0; padding:16px; background:#0b1220; color:#e2e8f0;
+         font-family:system-ui,-apple-system,'Apple SD Gothic Neo','Noto Sans KR',sans-serif; }}
+  h1 {{ font-size:20px; margin:0 0 4px; }}
+  p.hint {{ color:#64748b; font-size:14px; margin:0 0 16px; }}
+  .grid {{ display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); }}
+  figure {{ margin:0; background:#111827; border:1px solid #1e293b; border-radius:12px;
+            overflow:hidden; }}
+  img {{ display:block; width:100%; height:auto; }}
+  figcaption {{ padding:8px 10px; font-size:13px; color:#94a3b8; }}
+</style>
+<h1>SignBridge 화면 {len(shots)}장</h1>
+<p class="hint">고칠 곳이 보이면 사진 이름으로 짚어 주세요.</p>
+<div class="grid">{''.join(cards)}</div>
+"""
+    (OUT / "index.html").write_text(html, encoding="utf-8")
 
 
 if __name__ == "__main__":

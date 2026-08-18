@@ -27,4 +27,11 @@ print(f"[deploy] 클래스 {meta.get('num_classes'):,}종 · 검증 top1 {meta.g
 print("[deploy] 이 수치를 보고서·발표 자료의 정확도와 맞추세요.")
 PY
 
+# ── 클래스 목록이 통째로 바뀌면, 의도 판정에 쓰던 낱말이 조용히 죽는다.
+# 모델이 낼 수 없는 낱말은 **영영 맞지 않는데 오류도 안 난다** — 화면에는
+# "인식이 잘 안 되네" 정도로 보인다. 실측에서 54개 중 10개가 그런 상태였다.
+echo "[deploy] 의도 낱말이 새 클래스에 있는지 확인"
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_intent_words.mjs
+
 echo "[deploy] 다음: npm run build && python3 scripts/e2e_app.py"

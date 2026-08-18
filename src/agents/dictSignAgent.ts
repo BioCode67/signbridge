@@ -460,7 +460,11 @@ export class DictSignAgent implements SignAgent {
         continue
       }
       afterNumber = false
-      if (raw.length < MIN_STEM) continue
+      // 한 글자 낱말은 원칙적으로 건너뛴다(조사·어미와 구별이 안 된다).
+      // 다만 **사전에 그 글자 그대로 있는 것**은 살린다 — `몇`·`뭐`·`왜`처럼
+      // 실제로 쓰이는 낱말이 있고, 없으면 "몇 살이에요?"가 통째로 비어 나간다.
+      // 사전에 넣을 한 글자는 파이썬 쪽 ONE_CHAR_NOUNS에서 사람이 골라 둔다.
+      if (raw.length < MIN_STEM && !table[raw]?.length) continue
       // 문법·공손 표현은 번역하지 않는다(수어에 대응 표현이 없다). 카드에도 안 띄운다.
       if (STOP_WORDS.has(raw) || STOP_WORDS.has(stemKorean(raw))) continue
       const hit = lookup(raw)

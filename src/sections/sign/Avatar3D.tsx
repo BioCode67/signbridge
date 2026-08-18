@@ -50,11 +50,14 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
   const gltf = useGLTF(url, true, true, extendWithVRM)
   const vrm = (gltf.userData as { vrm?: VRM }).vrm
   const rigRef = useRef<GLBRig | null>(null)
+  /** 고개의 원래 자세 — 고개 동작을 절대값으로 주기 위해 한 번만 기억한다. */
+  const headRestRef = useRef<THREE.Euler | null>(null)
 
   // One-time setup: VRM vs plain-GLB (Ready Player Me / Mixamo) humanoid.
   useMemo(() => {
     if (vrm) {
       rigRef.current = null
+      headRestRef.current = null
       VRMUtils.removeUnnecessaryVertices(vrm.scene)
       VRMUtils.combineSkeletons(vrm.scene)
       vrm.scene.traverse((o) => { o.frustumCulled = false })
@@ -71,6 +74,7 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
     scene.traverse((o) => { o.frustumCulled = false })
     const rig = prepareGLBRig(scene)
     rigRef.current = rig
+    headRestRef.current = null
     if (rig.head && rig.hips) frameScene(scene, rig.head, rig.hips)
   }, [vrm, gltf])
 
@@ -93,10 +97,44 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
       const phase = t % 4.2
       const blink = phase > 4.05 ? Math.sin(((phase - 4.05) / 0.15) * Math.PI) : 0
       setBlinkGLB(rig, blink)
+      // 고개 동작 — **절대값으로 준다.** 매 프레임 더하면 흔들림이 쌓여 고개가
+      // 돌아가 버린다. 처음 자세를 한 번 기억해 두고 거기서 얼마나 돌릴지 정한다.
+      if (rig.head) {
+        if (!headRestRef.current) {
+          headRestRef.current = rig.head.rotation.clone()
+        }
+        const rest = headRestRef.current
+        const off = animate ? headOffset(data, frame) : { x: 0, y: 0 }
+        rig.head.rotation.set(rest.x + off.x, rest.y + off.y, rest.z)
+      }
     }
   })
 
   return <primitive object={vrm ? vrm.scene : gltf.scene} />
+}
+
+/** 지금 프레임에서 고개를 얼마나 움직일지 — 부정은 젓고, 당부는 끄덕인다.
+ *
+ * **왜 손만으로는 모자란가.** 수어에서 부정은 손 모양이 아니라 **고개 젓기**로
+ * 나른다. 그게 없으면 "안 됩니다"가 "됩니다"와 같은 모양으로 보인다 —
+ * 밋밋한 정도가 아니라 뜻이 반대로 읽힐 수 있다.
+ *
+ * 어느 낱말에 붙일지는 원본 비수지 주석에서 쟀다(문장 200,873건). 방향이 데이터에
+ * 있는 것(고개)만 쓰고, 눈썹은 올림/찌푸림이 주석에 없어 건드리지 않는다.
+ *
+ * 움직임은 낱말 구간 안에서 시작·끝이 0이 되게(사인 포락선) 부드럽게 넣는다 —
+ * 갑자기 튀면 그것대로 어색하다. */
+function headOffset(data: SignData | undefined, frame: number): { x: number; y: number } {
+  if (!data?.gloss_sequence?.length) return { x: 0, y: 0 }
+  const t = frame / (data.fps || 30)
+  const g = data.gloss_sequence.find((x) => x.head && t >= x.start && t <= x.end)
+  if (!g?.head) return { x: 0, y: 0 }
+  const span = Math.max(0.25, g.end - g.start)
+  const u = Math.min(1, Math.max(0, (t - g.start) / span))
+  const wave = Math.sin(u * Math.PI * 2 * 1.5)   // 구간 안에서 1.5번 왕복
+  const ease = Math.sin(u * Math.PI)             // 시작·끝에서 0
+  const a = wave * ease
+  return g.head === 'nod' ? { x: a * 0.13, y: 0 } : { x: 0, y: a * 0.17 }
 }
 
 /** Frames the upper body and gives a gentle cyan-lit studio look. */

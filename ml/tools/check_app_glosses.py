@@ -128,6 +128,19 @@ def main() -> None:
     if gone:
         broken.append(("숫자·단위 글로스(코드 상수)", sorted(hard), gone))
 
+    # 고개 동작 표(nonmanual.json)가 가리키는 낱말이 동작 사전에 있는가.
+    # 없으면 그 낱말이 재생되지 않으니 고개도 붙을 자리가 없다.
+    nonmanual = ROOT / "public/data/nonmanual.json"
+    if nonmanual.exists():
+        nm = json.loads(nonmanual.read_text(encoding="utf-8"))
+        want = set(nm.get("nod", {})) | set(nm.get("shake", {}))
+        gone_nm = sorted(w for w in want if w not in lemma_bank)
+        print(f"[glosses] 고개 동작 낱말 {len(want)}종 중 "
+              f"재생 가능 {len(want) - len(gone_nm)}종 "
+              f"(끄덕임 {len(nm.get('nod', {}))} · 흔들기 {len(nm.get('shake', {}))})")
+        if gone_nm:
+            broken.append(("고개 동작 낱말(nonmanual.json)", sorted(want)[:5], gone_nm))
+
     # 시각·날짜 표가 가리키는 조각이 실제로 실려 있는가.
     timegloss = ROOT / "public/data/timegloss.json"
     if timegloss.exists():

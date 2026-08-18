@@ -14,7 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { glossLabel } from '../agents/glossLabel'
 import type { SignData } from '../sections/sign/signTypes'
 import { composeGlosses, type BankIndex, type BankEntry } from '../sections/sign/composeLocal'
-import { DictSignAgent } from '../agents/dictSignAgent'
+import { NnSignAgent } from '../agents/nnSignAgent'
 
 /** 메모리에 들고 있을 동작 조각 수 — 문장 하나가 보통 10~20조각이라 넉넉하다. */
 const GLOSS_CACHE_MAX = 400
@@ -64,7 +64,10 @@ export function useSignPlayer(): SignPlayer {
   useEffect(() => { playingRef.current = playing }, [playing])
   useEffect(() => { speedRef.current = speed }, [speed])
 
-  const dictRef = useRef<DictSignAgent | null>(null)
+  // **번역기는 학습 모델을 먼저 쓴다.** 모델 파일이 없거나 실패하면 그 안에서
+  // 통계 사전으로 되돌아간다(NnSignAgent가 스스로 폴백한다) — 배포본에 모델을
+  // 안 실어도 앱은 그대로 동작한다.
+  const agentRef = useRef<NnSignAgent | null>(null)
   const bankRef = useRef<BankIndex | null>(null)
   const cacheRef = useRef(new Map<string, SignData>())
 
@@ -105,8 +108,13 @@ export function useSignPlayer(): SignPlayer {
       if (!index) return null
       // 글로스를 직접 준 문구(장소 상용구)는 번역을 거치지 않는다 — 사람이 확정한 매핑이다.
       if (gloss?.length) return composeGlosses(text, gloss, index, loadGloss)
-      if (!dictRef.current) dictRef.current = new DictSignAgent()
-      const { gloss: translated, unmatched } = await dictRef.current.convert(text)
+      if (!agentRef.current) {
+        agentRef.current = new NnSignAgent()
+        // 모델이 **재생할 수 있는 낱말만** 고르게 한다. 못 보여줄 낱말을 고르면
+        // 아바타가 그 자리를 조용히 건너뛴다 — 화면상 정상처럼 보이는 실패다.
+        agentRef.current.setPlayable(Object.keys(index))
+      }
+      const { gloss: translated, unmatched } = await agentRef.current.convert(text)
       const composed = translated.length
         ? await composeGlosses(text, translated, index, loadGloss)
         : null

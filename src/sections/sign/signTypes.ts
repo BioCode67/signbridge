@@ -3,6 +3,9 @@ export interface Gloss {
   gloss: string
   start: number
   end: number
+  /** 이 낱말에 함께 나오는 고개 동작 — 부정은 젓고, 당부는 끄덕인다.
+   *  원본 비수지 주석에서 재고(`ml/etl/aihub_nms.py`) 사람이 확정한 낱말에만 붙는다. */
+  head?: 'nod' | 'shake'
 }
 
 /** Per-frame non-manual expression: mouth opening (mo), brow height (br). */

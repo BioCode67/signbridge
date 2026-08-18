@@ -39,6 +39,20 @@ from pathlib import Path
 
 NS = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 NMS_CHANNELS = {"Ci", "Hs", "EBf", "Hno", "Mmo", "Mo1", "Tbt", "Mctr"}
+
+# **통계로 후보를 좁히고 사람이 확정한다** — 이 프로젝트에서 여러 번 쓴 방식이다.
+#
+# 배수(lift)만으로 고르면 뜻이 안 맞는 것이 섞인다(실측: 고개 흔들기에 '지진'·'사다',
+# 끄덕임에 'cm'). **잘못된 수어는 표현되지 않은 것보다 나쁘므로** 뜻이 분명한 것만
+# 남긴다. 여기 있는데 측정에서 떨어진 낱말은 실행할 때 알려 준다.
+ALLOW_SHAKE = {          # 부정 — 고개를 젓는다
+    "하지마", "아니다", "안되다", "불가능", "상관없다", "거절", "못하다",
+    "금지", "모르다", "없다", "싫다", "반대",
+}
+ALLOW_NOD = {            # 당부·확인·공감 — 고개를 끄덕인다
+    "조심", "부탁", "알아두다", "괜찮다", "미안하다", "안내", "허락",
+    "대비", "중요", "이해", "확인", "맞다",
+}
 GESTURE_ROWS = {"sign_gestures_both", "sign_gestures_strong", "sign_gestures_weak"}
 LEMMA_RE = re.compile(r"[0-9#:@]+$")
 
@@ -133,10 +147,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--src", type=Path, required=True, help="추출한 수어스크립트 폴더")
     ap.add_argument("--out", type=Path, default=Path("public/data/nonmanual.json"))
-    ap.add_argument("--min-count", type=int, default=20,
+    ap.add_argument("--min-count", type=int, default=60,
                     help="이보다 드문 글로스는 붙이지 않는다(우연을 성질로 오해하지 않게)")
-    ap.add_argument("--min-rate", type=float, default=0.5,
-                    help="이 비율 이상에서 함께 나와야 그 낱말의 성질로 본다")
+    ap.add_argument("--min-lift", type=float, default=3.5,
+                    help="평균 대비 이 배수 이상 함께 나와야 그 낱말의 성질로 본다")
+    ap.add_argument("--min-rate", type=float, default=0.02,
+                    help="배수가 커도 절대 빈도가 너무 낮으면 버린다")
     a = ap.parse_args()
 
     files = sorted(a.src.rglob("*.xlsx"))
@@ -203,15 +219,41 @@ def main() -> None:
         "note": "Hno=고개 끄덕임 · Hs=고개 흔들기 · Mmo=마우징(입으로 말하는 낱말). "
                 "눈썹(EBf)은 방향 정보가 없어 붙이지 않는다.",
     }}
-    for key, ch in (("nod", "Hno"), ("shake", "Hs")):
+    # **절대 비율이 아니라 배수(lift)로 고른다.**
+    #
+    # 주석이 고르다. 글로스 301만 회 출현 중 비수지가 겹친 것은 **15.3%**뿐인데,
+    # 실제 수어는 얼굴이 그보다 훨씬 자주 움직인다. 즉 이 주석은 "매번"이 아니라
+    # **주석자가 의미 있다고 본 순간**을 표시한 것이다. 그래서 "이 낱말의 몇 %에
+    # 붙었나"가 아니라 "평균보다 몇 배 자주 붙었나"를 봐야 한다.
+    #
+    # 그렇게 보면 방향이 분명하다(실측):
+    #   고개 흔들기 — 거절 ×45 · 불가능 ×31 · 안되다 ×31 · 아니다 ×23 · 하지마 ×16
+    #   고개 끄덕임 — 조심 ×6.5(66,748회) · 알아두다 ×4.5 · 부탁 ×4.0(39,445회)
+    # 부정에는 흔들기, 당부에는 끄덕임 — 수어 문법과 그대로 맞는다.
+    for key, ch, allow in (("nod", "Hno", ALLOW_NOD), ("shake", "Hs", ALLOW_SHAKE)):
+        base = sum(with_ch[ch].values()) / max(1, sum(total.values()))
+        kept, dropped = [], []
         for lemma, c in with_ch[ch].items():
             t = total[lemma]
-            if t >= a.min_count and c / t >= a.min_rate:
-                out[key][lemma] = round(c / t, 3)
+            rate = c / t
+            strong = t >= a.min_count and rate >= a.min_rate and base and rate / base >= a.min_lift
+            if strong and lemma in allow:
+                out[key][lemma] = round(rate, 3)
+                kept.append(lemma)
+            elif strong:
+                dropped.append(f"{lemma}(×{rate / base:.0f})")
+        missing = sorted(allow - set(kept))
+        print(f"\n  [{key}] 확정 {len(kept)}종: {sorted(kept)}")
+        if dropped:
+            print(f"    통계는 셌지만 목록에 없어 뺀 것: {dropped[:12]}")
+        if missing:
+            print(f"    목록에 있으나 근거가 약해 못 넣은 것: {missing}")
     for lemma, words in mouthing.items():
         if total[lemma] >= a.min_count:
             word, c = words.most_common(1)[0]
-            if c / total[lemma] >= a.min_rate:
+            # 마우징은 **입으로 말하는 낱말이 그 글로스와 같을 때만** 쓴다.
+            # 다른 낱말을 말하는 경우는 문장마다 달라서 낱말의 성질이 아니다.
+            if word == lemma and c >= 3:
                 out["mouth"][lemma] = word
 
     a.out.parent.mkdir(parents=True, exist_ok=True)

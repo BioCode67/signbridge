@@ -11,6 +11,41 @@
 import type { SignData } from './signTypes'
 
 const BANK_FPS = 30
+
+/** 고개 동작 표 — `public/data/nonmanual.json`. 없으면 그냥 안 붙는다.
+ *
+ *  원본 비수지 주석에서 **어느 낱말에 고개 끄덕임·흔들기가 함께 나오는지** 재고
+ *  (문장 200,873건), 뜻이 분명한 것만 사람이 확정했다. 부정에는 젓기, 당부에는
+ *  끄덕임 — 수어 문법과 그대로 맞는다(거절 ×45 · 불가능 ×31 · 하지마 ×16 ·
+ *  조심 ×6.5 · 부탁 ×4.0).
+ *
+ *  **눈썹은 넣지 않는다.** 주석에 올림/찌푸림 방향이 없고, 판정 의문문과 설명
+ *  의문문은 방향이 반대다 — 지어내면 틀린 문법을 가르치는 셈이다. */
+let headTable: { nod: Record<string, number>; shake: Record<string, number> } | null = null
+let headLoading: Promise<void> | null = null
+function loadHeadTable(base: string): Promise<void> {
+  if (headLoading) return headLoading
+  headLoading = fetch(`${base}data/nonmanual.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((t) => {
+      headTable = t?.nod && t?.shake ? t : null
+    })
+    .catch(() => {
+      headTable = null
+    })
+  return headLoading
+}
+
+/** 글로스 이름에서 이형태 번호를 뗀 표제어 — 표는 표제어로 되어 있다. */
+const headLemma = (g: string) => g.replace(/[0-9#:@]+$/, '')
+
+function headMotion(gloss: string): 'nod' | 'shake' | undefined {
+  if (!headTable) return undefined
+  const l = headLemma(gloss)
+  if (headTable.shake[l]) return 'shake'
+  if (headTable.nod[l]) return 'nod'
+  return undefined
+}
 const BLEND_FRAMES = 6
 /** 표준 화면 좌표 — 기존 sign_N.json과 같은 픽셀계로 맞춘다. */
 const CANVAS_CENTER: [number, number] = [960, 540]
@@ -102,13 +137,15 @@ export async function composeGlosses(
   loadGloss: (name: string, entry: BankEntry) => Promise<SignData>,
 ): Promise<ComposeResult | null> {
   const pieces: Piece[] = []
-  const timeline: { gloss: string; start: number; end: number }[] = []
+  const timeline: { gloss: string; start: number; end: number; head?: 'nod' | 'shake' }[] = []
   const missing: string[] = []
   let cursor = 0
 
   // **조각을 병렬로 먼저 받는다.** 루프 안에서 하나씩 await하면 왕복이 직렬로 쌓여
   // 10단어 문장에 십수 초가 걸린다(실측 14.7초). 실시간이라 부를 수 없는 수치였다.
   const tFetch0 = performance.now()
+  // 고개 동작 표는 한 번만 받아 둔다(작다). 실패해도 합성은 그대로 진행된다.
+  void loadHeadTable(import.meta.env.BASE_URL)
   const unique = [...new Set(glosses)].filter((g) => bank[g])
   const loaded = new Map<string, SignData>()
   await Promise.all(
@@ -150,7 +187,7 @@ export async function composeGlosses(
     const start = cursor / BANK_FPS
     pieces.push(piece)
     cursor += piece.pose.length
-    timeline.push({ gloss, start, end: cursor / BANK_FPS })
+    timeline.push({ gloss, start, end: cursor / BANK_FPS, head: headMotion(gloss) })
   }
 
   if (pieces.length === 0) return null

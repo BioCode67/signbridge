@@ -223,6 +223,7 @@ python3 ml/tools/schema_report.py <경로 또는 zip> --limit 3
 | 재난 갈래 한국어 이름 | **41/41** (`scripts/check_categories.mjs`) — 행동요령은 21/41에만 있다 |
 | CTC 디코딩 파이썬↔브라우저 일치 | **3,000판 전부** (`python -m ml.tools.ctc_parity`) |
 | 오역 회귀 사례 | **124건** (`scripts/translation_cases.json`) |
+| 번역이 낸 글로스가 재생되는가 | 371문장 **2,388개 전부** (`scripts/check_silent_skip.mjs`) |
 | 수어 의도 판정 | **27/27** (오검출 0, `scripts/intent_cases.json`) |
 | 웹 동작 사전 | 11,448종(일상어 클립 2,963종 포함) |
 | 번역 사전 | 155,185낱말(활용형·조사형 포함, gzip 643KB) |
@@ -247,6 +248,11 @@ python3 ml/tools/schema_report.py <경로 또는 zip> --limit 3
 - ~~`t2gs-v2`~~ — **끝났다.** v1과 같은 검증 800문장으로 견줘 v2가 나아 배포했다
   (BLEU 21.9→27.1 · F1 55.5→61.3). 배포한 int8도 따로 재서 무너지지 않았음을 확인.
 - 진행은 `~/sbruns/ctc-v1.log`
+
+CTC가 끝나면 큐가 **글로스→한국어**(`g2ts-v1`)를 이어서 시작한다
+(`ml/jobs/queue_g2ts.sh`). 지금은 농인이 수어로 답하면 규칙으로 한국어를 지어 내는데
+(`glossToKorean.ts`), 같은 20만 쌍을 뒤집어 배우면 직원이 듣는 말이 자연스러워진다.
+길이는 재고 정했다 — `--max-tgt 96`(기본 48이면 한국어 문장의 69%가 잘린다).
 
 CTC가 끝나면 **브라우저 쪽은 이미 준비되어 있다** —
 `src/recognition/ctcRecognizer.ts`(그리디 디코딩) · `ml/jobs/deploy_ctc.sh`(배포).

@@ -541,6 +541,24 @@ def conjugations(stem_word: str) -> list[str]:
                   lifted + "으세요", lifted + "으실", lifted + "은"]
         harmonic.append(lifted + harmony_d)
 
+    # ㅅ 불규칙 — 붓다 → 부어, 낫다 → 나아, 짓다 → 지어, 잇다 → 이어.
+    #
+    # **병원 창구에서 바로 걸린다**(실측):
+    #     다리가 부었어요 → **다리**   ← 붓다1이 사전에 있는데도 부기가 사라졌다
+    #     다 나았어요     → **(없음)** ← 낫다1이 있는데 한 낱말도 안 나왔다
+    # 낫다·붓다는 몸 상태를 말하는 낱말이라 빠지면 진료 내용이 통째로 바뀐다.
+    #
+    # ㄷ 불규칙과 같은 이유로 규칙형도 남겨 둔다 — 모든 ㅅ 받침이 불규칙은
+    # 아니다(웃다·씻다·벗다는 규칙). 둘 다 있으면 실제 쓰이는 쪽이 걸린다.
+    if parts is not None and jong == 19:  # 19 = 종성 ㅅ
+        dropped = stem_word[:-1] + _compose(cho, jung, 0)   # 받침 ㅅ 탈락
+        harmony_s = "아" if vowel in _BRIGHT else "어"
+        forms += [dropped + harmony_s, dropped + harmony_s + "요",
+                  dropped + harmony_s + "서", dropped + harmony_s + "야",
+                  dropped + "으면", dropped + "으니", dropped + "으세요",
+                  dropped + "으실", dropped + "은"]
+        harmonic.append(dropped + harmony_s)
+
     # 르 불규칙 — 누르다 → 눌러, 빠르다 → 빨라, 다르다 → 달라.
     if len(stem_word) >= 2 and stem_word.endswith("르"):
         prev = _decompose(stem_word[-2])

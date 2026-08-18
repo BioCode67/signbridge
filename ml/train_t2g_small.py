@@ -80,18 +80,34 @@ class Vocab:
 
 
 class PairSet(Dataset):
+    """말뭉치 쌍 → 모델 입력.
+
+    **방향을 바꿔도 같은 구조를 쓴다.** 한국어→글로스는 음절을 넣고 글로스를 받고,
+    글로스→한국어는 글로스를 넣고 음절을 받는다. 모델·배치·학습 루프는 그대로다.
+
+    글로스→한국어가 왜 필요한가: 지금 앱은 농인이 수어로 답하면 규칙으로 한국어를
+    지어 낸다(`src/agents/glossToKorean.ts` — 용언에 어미를 붙이는 정도). 직원이
+    듣는 말이 그 규칙의 한계까지밖에 자연스럽지 않다. 같은 20만 쌍을 뒤집어 배우면
+    사람이 쓴 문장에 가까워진다.
+    """
+
     def __init__(self, pairs, src_vocab: Vocab, tgt_vocab: Vocab,
-                 max_src: int, max_tgt: int) -> None:
+                 max_src: int, max_tgt: int, direction: str = "text2gloss") -> None:
         self.pairs, self.sv, self.tv = pairs, src_vocab, tgt_vocab
         self.max_src, self.max_tgt = max_src, max_tgt
+        self.direction = direction
 
     def __len__(self) -> int:
         return len(self.pairs)
 
     def __getitem__(self, i: int):
         text, glosses = self.pairs[i]
-        src = self.sv.encode(syllables(text))[: self.max_src]
-        tgt = self.tv.encode(glosses)[: self.max_tgt - 2]
+        if self.direction == "gloss2text":
+            src_units, tgt_units = glosses, syllables(text)
+        else:
+            src_units, tgt_units = syllables(text), glosses
+        src = self.sv.encode(src_units)[: self.max_src]
+        tgt = self.tv.encode(tgt_units)[: self.max_tgt - 2]
         return torch.tensor(src), torch.tensor([BOS] + tgt + [EOS])
 
 
@@ -171,6 +187,10 @@ def main() -> int:
     ap.add_argument("--d-model", type=int, default=384)
     ap.add_argument("--enc", type=int, default=4)
     ap.add_argument("--dec", type=int, default=4)
+    ap.add_argument(
+        "--direction", choices=["text2gloss", "gloss2text"], default="text2gloss",
+        help="text2gloss=한국어→글로스(아바타) · gloss2text=글로스→한국어(직원이 듣는 말)",
+    )
     ap.add_argument("--max-src", type=int, default=160)
     ap.add_argument("--max-tgt", type=int, default=48)
     ap.add_argument("--min-gloss", type=int, default=2, help="이보다 드문 글로스는 <unk>")
@@ -184,16 +204,20 @@ def main() -> int:
     pairs = load_pairs(a.data)
     print(f"[t2gs] 총 {len(pairs):,}쌍")
 
-    # 어휘 — 입력은 음절, 출력은 글로스 그대로.
-    src_c: Counter = Counter()
-    tgt_c: Counter = Counter()
+    # 어휘 — 방향에 따라 넣는 것과 받는 것이 뒤바뀐다.
+    syl_c: Counter = Counter()
+    glo_c: Counter = Counter()
     for text, glosses in pairs:
-        src_c.update(syllables(text))
-        tgt_c.update(glosses)
-    src_items = [s for s, c in src_c.most_common() if c >= 2]
-    tgt_items = [g for g, c in tgt_c.most_common() if c >= a.min_gloss]
-    sv, tv = Vocab(src_items), Vocab(tgt_items)
-    print(f"[t2gs] 어휘 — 음절 {len(sv):,} · 글로스 {len(tv):,}")
+        syl_c.update(syllables(text))
+        glo_c.update(glosses)
+    syl_items = [s for s, c in syl_c.most_common() if c >= 2]
+    glo_items = [g for g, c in glo_c.most_common() if c >= a.min_gloss]
+    if a.direction == "gloss2text":
+        sv, tv = Vocab(glo_items), Vocab(syl_items)
+        print(f"[t2gs] 방향 글로스→한국어 · 어휘 — 글로스 {len(sv):,} · 음절 {len(tv):,}")
+    else:
+        sv, tv = Vocab(syl_items), Vocab(glo_items)
+        print(f"[t2gs] 방향 한국어→글로스 · 어휘 — 음절 {len(sv):,} · 글로스 {len(tv):,}")
 
     rng = random.Random(1234)
     rng.shuffle(pairs)
@@ -201,8 +225,8 @@ def main() -> int:
     val_pairs, train_pairs = pairs[:n_val], pairs[n_val:]
     print(f"[t2gs] 학습 {len(train_pairs):,} · 검증 {len(val_pairs):,}")
 
-    tr_ds = PairSet(train_pairs, sv, tv, a.max_src, a.max_tgt)
-    va_ds = PairSet(val_pairs, sv, tv, a.max_src, a.max_tgt)
+    tr_ds = PairSet(train_pairs, sv, tv, a.max_src, a.max_tgt, a.direction)
+    va_ds = PairSet(val_pairs, sv, tv, a.max_src, a.max_tgt, a.direction)
     tr = DataLoader(tr_ds, batch_size=a.batch, shuffle=True, collate_fn=collate,
                     num_workers=a.workers, pin_memory=True, drop_last=True,
                     persistent_workers=a.workers > 0)
@@ -270,6 +294,10 @@ def main() -> int:
             torch.save({"model": model.state_dict(), "cfg": {
                 "n_src": len(sv), "n_tgt": len(tv), "d": a.d_model,
                 "enc": a.enc, "dec": a.dec, "max_src": a.max_src, "max_tgt": a.max_tgt,
+                # **방향을 체크포인트에 적어 둔다.** 두 방향의 파일이 똑같이 생겨서,
+                # 섞이면 글로스를 넣어야 할 자리에 음절을 넣고도 오류 없이 돈다 —
+                # 결과만 엉뚱하다. 내보내기가 이 값을 meta.json으로 옮긴다.
+                "direction": a.direction,
             }}, a.out / "best.pt")
     print(f"[t2gs] 최저 검증 손실 {best:.4f} → {a.out / 'best.pt'}")
     return 0

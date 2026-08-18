@@ -122,7 +122,9 @@ def main() -> int:
 
     vocab = json.loads((a.checkpoint / "vocab.json").read_text(encoding="utf-8"))
     (a.out / "meta.json").write_text(json.dumps({
-        "task": "text2gloss",
+        # 방향은 체크포인트에 적힌 것을 따른다(없으면 예전 파일이라 text2gloss).
+        # 브라우저가 이 값을 보고 넣을 것과 받을 것을 정한다.
+        "task": cfg.get("direction", "text2gloss"),
         "src": vocab["src"], "tgt": vocab["tgt"],
         "pad": PAD, "bos": BOS, "eos": EOS,
         "max_src": S_FIX, "max_tgt": T_FIX, "fixed_shapes": True,

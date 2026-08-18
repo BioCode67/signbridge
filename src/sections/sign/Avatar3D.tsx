@@ -168,8 +168,16 @@ function Rig() {
     const half = Math.tan((fov * Math.PI) / 360)
     const need = WIDE / (2 * Math.max(0.2, aspect) * half)
     const z = Math.max(2.0, Math.min(3.2, need))
-    camera.position.set(0, 1.28, z)
-    camera.lookAt(0, 1.24, 0)
+
+    // 카메라를 물리면 **세로도 함께 넓어진다.** 그대로 두면 머리 위가 텅 빈다
+    // (실측: 무대 세로의 40%가 빈 공간이었다). 위쪽 경계를 예전에 맞춰 둔 값
+    // (y 1.91 — 손을 머리 위로 올리는 동작이 들어가는 높이)에 고정하고, 늘어난
+    // 만큼은 아래(다리 쪽)로 보낸다. 빈 하늘보다 몸이 보이는 편이 낫다.
+    const TOP_Y = 1.91
+    const halfH = z * half                 // 이 거리에서 보이는 세로 절반(m)
+    const centerY = TOP_Y - halfH
+    camera.position.set(0, centerY + 0.04, z)
+    camera.lookAt(0, centerY, 0)
   }, [camera, size.width, size.height])
   return null
 }

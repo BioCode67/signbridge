@@ -74,6 +74,9 @@ export default function UserApp() {
   })
   useEffect(() => { localStorage.setItem('sb-history', JSON.stringify(history)) }, [history])
   const [showHistory, setShowHistory] = useState(false)
+  // 창구 대화 중에는 앱 헤더·탭을 접는다(TalkMode가 알려 준다) — 아바타에 자리를 준다.
+  const [immersive, setImmersive] = useState(false)
+  const onImmersive = useCallback((on: boolean) => setImmersive(on), [])
   // 지금 재생 중인 문자의 요약 배지 — 종류·심각도·지역.
   const [notice, setNotice] = useState<{ category?: string; severity: Severity; region?: string } | null>(null)
   const disasterRef = useRef<RuleDisasterAgent | null>(null)
@@ -218,7 +221,7 @@ export default function UserApp() {
       />
 
       {/* 아이폰 설치 안내 — 한 번 닫으면 다시 띄우지 않는다 */}
-      {iosHint && (
+      {iosHint && !immersive && (
         <button
           type="button"
           onClick={() => { localStorage.setItem('sb-ios-hint', 'off'); setIosHint(false) }}
@@ -232,7 +235,9 @@ export default function UserApp() {
       {/* 상단바 — 최소한만.
           폰 폭(390px)에서는 제목·탭·버튼이 한 줄에 들어가지 않아 탭 글자가 세로로 깨지고
           '사전'이 화면 밖으로 밀렸다. 좁으면 두 줄(제목 줄 + 탭 줄)로 접는다. */}
-      <header className="flex flex-col gap-2 border-b border-white/10 px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3">
+      <header className={`flex-col gap-2 border-b border-white/10 px-3 py-2 sm:flex-row sm:items-center sm:gap-3 sm:px-4 sm:py-3 ${
+        immersive ? 'hidden lg:flex' : 'flex'
+      }`}>
         <div className="flex flex-wrap items-center gap-2 sm:contents">
         <span className="text-lg font-bold text-white">🤟 SignBridge</span>
         {item && (
@@ -354,7 +359,7 @@ export default function UserApp() {
       {/* 대화 모드 — 병원·택시·관공서에서 직원과 말을 주고받는 화면(마이크·소리 포함) */}
       {tab === 'place' && (
         <Suspense fallback={<div className="grid flex-1 place-items-center text-slate-400">여는 중…</div>}>
-          <TalkMode />
+          <TalkMode onImmersive={onImmersive} />
         </Suspense>
       )}
 

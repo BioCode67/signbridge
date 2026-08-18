@@ -48,7 +48,12 @@ const COMMON_ANSWERS = ['네', '아니요', '잘 모르겠어요', '다시 보�
 
 const nowTime = () => new Date().toTimeString().slice(0, 5)
 
-export default function TalkMode() {
+interface TalkProps {
+  /** 창구 대화에 들어갔는지 — 상위 화면이 탭·헤더를 접어 아바타에 자리를 준다. */
+  onImmersive?: (on: boolean) => void
+}
+
+export default function TalkMode({ onImmersive }: TalkProps) {
   const [place, setPlace] = useState<Place | null>(null)
   const [turns, setTurns] = useState<Turn[]>([])
   const [sos, setSos] = useState(false)
@@ -148,6 +153,13 @@ export default function TalkMode() {
   }, [tts.speak])
 
   const mic = useSpeechInput(fromMic)
+
+  // 창구에 들어서면 앱 헤더·탭을 접는다. 폰에서 그 두 줄이 130px을 먹는데,
+  // 그만큼이 그대로 아바타에서 깎여 나간다 — 정작 수어를 읽는 곳이 화면의 15%였다.
+  // 대화 중에는 받기·질문·사전 탭을 쓸 일이 없다(장소로 나가면 다시 나타난다).
+  const immersive = place !== null && !showTalks && !editingInfo && !sos
+  useEffect(() => { onImmersive?.(immersive) }, [immersive, onImmersive])
+  useEffect(() => () => onImmersive?.(false), [onImmersive])
 
   // 대화가 길어지면 아래로 — 방금 한 말이 보여야 한다.
   useEffect(() => {
@@ -428,7 +440,7 @@ export default function TalkMode() {
       {/* 답할 차례에는 아바타를 줄이고 카드에 자리를 준다 — 그때 아바타는 멈춰 있고,
           답 카드는 126개라 화면이 좁으면 한참 굴려야 한다(실측 3.7화면). */}
       <div className={`relative flex shrink flex-col lg:min-h-0 lg:flex-1 ${
-        side === 'deaf' ? 'min-h-[14vh] sm:min-h-[24vh]' : 'min-h-[22vh] sm:min-h-[34vh]'
+        side === 'deaf' ? 'min-h-[26vh] sm:min-h-[30vh]' : 'min-h-[36vh] sm:min-h-[40vh]'
       }`}>
         {/* 자막 크기·속도 — 아바타 위에 띄운다. 따로 한 줄을 쓰면 폰에서 대화 기록이
             마이크 버튼과 겹칠 만큼 세로가 모자란다(실측). */}

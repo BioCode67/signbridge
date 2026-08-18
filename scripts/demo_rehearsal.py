@@ -179,6 +179,9 @@ async def main() -> int:
         await r.step("장면2", "[🤟 수어로 답하기] 입구가 있다(카메라는 사람이)",
                      lambda: pg.get_by_role("button", name="🤟 수어로 답하기").wait_for(timeout=5000))
 
+        # 창구 대화 중에는 탭이 접혀 있다 — 장소로 나오면 다시 나타난다.
+        await tap(pg.get_by_role("button", name="← 장소"))
+        await pg.wait_for_timeout(400)
         await r.step("장면3", "[🙋 질문] 탭(카메라 인식)",
                      lambda: pg.get_by_role("button", name="🙋 질문").click(timeout=8000))
         await pg.wait_for_timeout(1500)
@@ -188,11 +191,6 @@ async def main() -> int:
         await r.step("장면4", "[💬 대화]로 돌아가 🆘 긴급",
                      lambda: pg.get_by_role("button", name="💬 대화").click(timeout=5000))
         await pg.wait_for_timeout(600)
-        # 장소 화면으로 나가야 긴급 버튼이 보인다
-        back = pg.get_by_role("button", name="← 장소")
-        if await back.count():
-            await back.click()
-            await pg.wait_for_timeout(400)
         await r.step("장면4", "🆘 긴급 화면",
                      lambda: pg.get_by_role("button", name="🆘 긴급 도움 요청").click(timeout=5000))
         await pg.wait_for_timeout(500)

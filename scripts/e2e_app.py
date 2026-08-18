@@ -223,6 +223,8 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.wait_for_timeout(400)
     await pg.get_by_role("button", name="← 장소").click()
     await pg.wait_for_timeout(400)
+    # 장소 화면으로 나오면 접혔던 탭·헤더가 다시 나타난다
+    rep.check(await pg.get_by_role("button", name="💬 대화").count() > 0, "대화: 나오면 탭이 돌아옴")
     await pg.get_by_role("button", name=re.compile("📜 지난 대화")).click()
     await pg.wait_for_timeout(400)
     rep.check(await pg.locator("text=어디가 아픕니까?").count() > 0, "대화: 저장한 대화 다시 보기")

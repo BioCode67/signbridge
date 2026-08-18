@@ -25,6 +25,8 @@ import { DictSignAgent } from './dictSignAgent'
 const base = () => (import.meta.env?.BASE_URL ?? './')
 
 interface Meta {
+  /** 내보내기가 적어 준 방향 — text2gloss가 아니면 쓰지 않는다. */
+  task?: string
   src: string[]
   tgt: string[]
   pad: number
@@ -117,7 +119,15 @@ export class NnSignAgent implements SignAgent {
       this.loading = (async () => {
         const res = await fetch(`${base()}models/t2g/meta.json`)
         if (!res.ok) throw new Error('t2g meta 없음')
-        this.meta = (await res.json()) as Meta
+        const meta = (await res.json()) as Meta
+        // **방향을 확인한다.** 한국어→글로스와 글로스→한국어는 파일 이름도 구조도
+        // 똑같아서, 반대 모델을 이 자리에 두면 오류 없이 돈다 — 음절을 글로스
+        // 어휘에 넣게 되어 전부 <unk>가 되고 **조용히 헛소리가 나간다.**
+        // 없는 필드(예전 배포본)는 text2gloss로 본다.
+        if (meta.task && meta.task !== 'text2gloss') {
+          throw new Error(`t2g 모델 방향이 다릅니다: ${meta.task}`)
+        }
+        this.meta = meta
         // **인식기와 같은 진입점(`/wasm`)을 쓴다.** 기본 진입점을 쓰면 WebGPU용
         // jsep 빌드를 찾아 `ort/ort-wasm-simd-threaded.jsep.mjs`를 요청하는데,
         // public/ort에는 wasm 빌드만 두었다 — 404가 나고 세션이 안 뜬다(실측).

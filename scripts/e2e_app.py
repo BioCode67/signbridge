@@ -287,6 +287,11 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         await pg.wait_for_timeout(2500)
         rep.check(await pg.get_by_role("button", name="💬 답 받기").count() > 0,
                   "묻기: 촬영 화면 진입")
+        # **카메라를 꼭 꺼야 한다.** 켜 둔 채로 두면 MediaPipe가 매 프레임 추론을
+        # 계속하고, 소프트웨어 렌더링 환경에서는 CPU를 다 먹어 뒤 검사가 몇 배로
+        # 느려진다(실측: 검사 한 판이 13분 → 40분 넘게). 화면을 떠나면 멈춘다.
+        await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
+        await pg.wait_for_timeout(800)
 
     # ── 손가락으로 누를 수 있는 크기인가(모바일 접근성 최소 44px)
     small = await pg.evaluate(

@@ -10,6 +10,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { glossLabel } from '../../agents/glossLabel'
 
+import { categoryKo } from './categories'
+
+// 갈래 이름표는 categories.ts로 옮겼다 — 검사 스크립트가 .tsx를 못 읽는다.
+// 여기서 다시 내보내 기존 import 경로를 그대로 둔다.
+export { categoryKo }
+
 export interface FeedItem {
   category: string
   text: string
@@ -49,19 +55,6 @@ const STAGE_LABEL: Record<Stage, string> = {
 const STAGES: Stage[] = ['receiving', 'translating', 'composing', 'broadcasting']
 
 /** 재난 유형 영문 코드 → 한국어. 화면에 코드가 그대로 뜨면 읽기 어렵다. */
-const CATEGORY_KO: Record<string, string> = {
-  COLDWAVE: '한파', HEAVYSNOW: '대설', HEAVYRAIN: '호우', TYPHOON: '태풍',
-  STRONGWIND: '강풍', WINDWAVES: '풍랑', DELUGEFLOOD: '홍수', FLOODING: '침수',
-  LANDSLIDE: '산사태', EARTHQUAKE: '지진', FORESTFIRE: '산불', FIRE: '화재',
-  EXPLOSION: '폭발', CHEMICALACCIDENT: '화학사고', TRAFFICACCIDENT: '교통사고',
-  WEATHER: '기상', FINEDUST: '미세먼지', ANIMALDISEASE: '가축질병',
-  PREVENTIONOFINFECTIOUSDISEASES: '감염병', CIVILAIRDEFENSEALERT: '민방위',
-  ELECTRICGASACCIDENT: '전기가스', POWEROUTAGESANDPOWERSHORTAGES: '정전',
-  RAILWAYSUBWAYTAXIACCIDENT: '교통', BANKINGINFORMATION: '금융',
-}
-export function categoryKo(code: string): string {
-  return CATEGORY_KO[code] ?? code.slice(0, 10)
-}
 
 interface Props {
   /** 문장을 번역·합성한다. 걸린 시간과 결과를 돌려줘야 한다. */

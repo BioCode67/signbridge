@@ -48,7 +48,16 @@ async def shoot(browser, port: int, label: str, w: int, h: int) -> None:
                                     service_workers="block")
     pg = await ctx.new_page()
     await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
-    await pg.wait_for_timeout(2500)
+    # **첫 화면은 넉넉히 기다린다.** 재난문자 한 건을 번역·합성해 아바타가 움직이기까지
+    # 시간이 걸리는데, 짧게 찍으면 "빈 화면 + 시작 버튼"만 남아 실제와 다른 인상을 준다.
+    # 사진은 사용자가 보게 될 상태를 찍어야 한다.
+    for _ in range(20):
+        await pg.wait_for_timeout(1000)
+        frames = await pg.locator("[data-sign-frames]").first.evaluate(
+            "e => +e.dataset.signFrames"
+        )
+        if frames > 20:
+            break
 
     async def snap(name: str) -> None:
         await pg.screenshot(path=str(OUT / f"{label}_{name}.png"))

@@ -46,3 +46,4 @@ ml/**/packs/
 리허설_마지막화면.png
 e2e_*.png
 shots/
+.ctc_parity_run.mjs

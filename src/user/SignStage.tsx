@@ -96,25 +96,38 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
               ))}
             </div>
           )}
-          {/* 문장 진행 — 지난 단어는 밝게 남는다(어디쯤인지 보인다) */}
-          {!compact && data.gloss_sequence.length > 1 && (
-            <div className="mb-1 flex flex-wrap items-center justify-center gap-1">
-              {data.gloss_sequence.map((g, i) => {
-                const state = time > g.end ? 'done' : time >= g.start ? 'now' : 'todo'
-                return (
-                  <span
-                    key={`${g.gloss}-${i}`}
-                    className={`rounded-md px-1.5 py-0.5 text-sm font-bold ${
-                      state === 'now' ? 'bg-cyan-glow/30 text-cyan-soft'
-                        : state === 'done' ? 'text-slate-300' : 'text-slate-600'
-                    }`}
-                  >
-                    {glossLabel(g.gloss)}
-                  </span>
-                )
-              })}
-            </div>
-          )}
+          {/* 문장 진행 — 지금 어느 낱말인지, 앞뒤가 무엇인지.
+              **낱말을 다 늘어놓지 않는다.** 재난문자는 18낱말이 예사라 전부 깔면
+              작은 글씨 세 줄이 되고, 그만큼 아바타가 밀린다(실측 사진에서 확인).
+              읽는 사람에게 필요한 건 "지금 어디쯤"이지 목록 전체가 아니고,
+              전체 진행은 위쪽 진행바가 이미 보여 준다. 앞뒤 다섯 낱말만 남긴다. */}
+          {!compact && data.gloss_sequence.length > 1 && (() => {
+            const seq = data.gloss_sequence
+            let cur = seq.findIndex((g) => time >= g.start && time <= g.end)
+            if (cur < 0) cur = time > (seq[seq.length - 1]?.end ?? 0) ? seq.length - 1 : 0
+            const from = Math.max(0, cur - 5)
+            const to = Math.min(seq.length, cur + 6)
+            return (
+              <div className="mb-1 flex flex-nowrap items-center justify-center gap-1 overflow-hidden">
+                {from > 0 && <span className="text-sm text-slate-600">…</span>}
+                {seq.slice(from, to).map((g, i) => {
+                  const state = time > g.end ? 'done' : time >= g.start ? 'now' : 'todo'
+                  return (
+                    <span
+                      key={`${g.gloss}-${from + i}`}
+                      className={`shrink-0 rounded-md px-1.5 py-0.5 text-sm font-bold ${
+                        state === 'now' ? 'bg-cyan-glow/30 text-cyan-soft'
+                          : state === 'done' ? 'text-slate-300' : 'text-slate-600'
+                      }`}
+                    >
+                      {glossLabel(g.gloss)}
+                    </span>
+                  )
+                })}
+                {to < seq.length && <span className="text-sm text-slate-600">…</span>}
+              </div>
+            )
+          })()}
           <p className={`font-extrabold tracking-wide text-cyan-soft text-glow ${
             compact
               ? ['text-xl', 'text-2xl', 'text-4xl'][fontScale]

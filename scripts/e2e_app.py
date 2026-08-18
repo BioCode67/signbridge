@@ -193,7 +193,16 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     if not await guide.count():
         rep.note("    · 이 재난 갈래에는 행동요령이 없어 관련 검사 2건을 건너뜀")
     if await guide.count():
-        await guide.first.click()
+        # 재생 중에는 자막 줄이 프레임마다 다시 그려져 배지가 흔들린다 —
+        # 클릭이 "element is not stable"로 실패할 수 있다(실측에서 한 번 났고,
+        # **그 예외 하나가 검사 전체를 중단시켰다**). 흔들림은 재생을 멈추면
+        # 사라지므로 무대를 한 번 눌러 세운 뒤 클릭한다.
+        try:
+            await pg.locator("[data-sign-frames]").first.click(timeout=3000)
+            await pg.wait_for_timeout(300)
+        except Exception:
+            pass
+        await guide.first.click(timeout=15000)
         await pg.wait_for_timeout(500)
         steps = pg.locator("button", has_text="세요")
         rep.check(await steps.count() > 0, "받기: 행동요령 문장 목록")
@@ -603,9 +612,23 @@ async def main(keep: bool) -> int:
                       "--use-fake-ui-for-media-stream",
                       "--use-fake-device-for-media-stream"])
             for name, w, h, mobile in DEVICES:
-                await run_device(browser, name, w, h, mobile, keep, rep, port_of(httpd))
-            await run_kiosk(browser, rep, port_of(httpd))
-            await run_offline(browser, keep, rep, port_of(httpd))
+                # **한 기기에서 예외가 나도 나머지를 계속 돈다.** 예전에는 클릭
+                # 하나가 흔들려 실패하자 그 뒤 검사 200여 건이 통째로 사라졌다 —
+                # 실패보다 나쁜 것은 재지 못한 채 끝나는 것이다.
+                try:
+                    await run_device(browser, name, w, h, mobile, keep, rep, port_of(httpd))
+                except Exception as error:
+                    rep.check(False, f"{name}: 검사 도중 예외",
+                              f"{type(error).__name__}: {str(error)[:120]}")
+            for label, fn in (("키오스크", run_kiosk), ("오프라인", run_offline)):
+                try:
+                    if fn is run_kiosk:
+                        await fn(browser, rep, port_of(httpd))
+                    else:
+                        await fn(browser, keep, rep, port_of(httpd))
+                except Exception as error:
+                    rep.check(False, f"{label}: 검사 도중 예외",
+                              f"{type(error).__name__}: {str(error)[:120]}")
             await browser.close()
     finally:
         httpd.shutdown()

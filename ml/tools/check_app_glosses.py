@@ -128,6 +128,21 @@ def main() -> None:
     if gone:
         broken.append(("숫자·단위 글로스(코드 상수)", sorted(hard), gone))
 
+    # 사전 첫 화면의 시작 낱말(DICT_STARTERS)이 실존하는가.
+    # 없으면 눌렀을 때 "없는 단어예요"가 뜬다 — 첫 화면에서 그러면 앱이 고장 난 것처럼 보인다.
+    app_src = (ROOT / "src/user/UserApp.tsx").read_text(encoding="utf-8")
+    m = re.search(r"const DICT_STARTERS[^=]*= \[(.*?)\n\]", app_src, re.S)
+    if m:
+        # `words: [...]` 안의 낱말만 — 갈래 이름(name)까지 세면 엉뚱한 것이 잡힌다.
+        starters: set[str] = set()
+        for words in re.findall(r"words: \[([^\]]*)\]", m.group(1)):
+            starters |= set(re.findall(r"'([가-힣]+)'", words))
+        gone_s = sorted(w for w in starters if w not in lemma_bank)
+        print(f"[glosses] 사전 시작 낱말 {len(starters)}종 중 "
+              f"재생 가능 {len(starters) - len(gone_s)}종")
+        if gone_s:
+            broken.append(("사전 시작 낱말(UserApp.tsx DICT_STARTERS)", sorted(starters)[:5], gone_s))
+
     # 고개 동작 표(nonmanual.json)가 가리키는 낱말이 동작 사전에 있는가.
     # 없으면 그 낱말이 재생되지 않으니 고개도 붙을 자리가 없다.
     nonmanual = ROOT / "public/data/nonmanual.json"

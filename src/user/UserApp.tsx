@@ -45,6 +45,18 @@ const TalkMode = lazy(() => import('./TalkMode'))
  *  키오스크에 필요한 나머지는 이미 갖춰져 있다. */
 const KIOSK = typeof window !== 'undefined' && /[?&]kiosk=1/.test(window.location.hash)
 
+/** 사전 첫 화면에 놓는 낱말 — **한 글자도 안 치고 시작할 수 있게.**
+ *
+ *  고른 기준은 "창구·병원·길에서 실제로 필요한 순서"다. 사전에 11,000개가 넘게
+ *  있어도 처음 여는 사람에게는 빈 검색창일 뿐이라, 자주 쓰는 것부터 손에 닿게 둔다.
+ *  모두 동작 사전에 실존하는 낱말이다(check_app_glosses가 검사한다). */
+const DICT_STARTERS: { name: string; words: string[] }[] = [
+  { name: '몸이 아플 때', words: ['아프다', '머리', '배', '열', '기침', '약', '병원', '주사'] },
+  { name: '길 찾을 때', words: ['어디', '화장실', '지하철', '버스', '약국', '경찰서', '가깝다'] },
+  { name: '창구에서', words: ['신청', '서류', '번호', '얼마', '기다리다', '도장', '전화번호'] },
+  { name: '자주 쓰는 말', words: ['안녕', '고맙다', '미안하다', '부탁', '괜찮다', '모르다', '다시'] },
+]
+
 export default function UserApp() {
   const [feed, setFeed] = useState<FeedItem[]>([])
   const [cursor, setCursor] = useState(0)
@@ -110,6 +122,12 @@ export default function UserApp() {
     return () => window.removeEventListener('beforeinstallprompt', onPrompt)
   }, [])
 
+  // 사전 크기는 한 번만 읽는다(색인은 어차피 재생에 쓰인다).
+  useEffect(() => {
+    void player.bank().then((i) => setDictCount(i ? Object.keys(i).length : 0))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/feed.json`)
       .then((r) => (r.ok ? r.json() : []))
@@ -159,6 +177,8 @@ export default function UserApp() {
   // 사전 탭 — bank 색인에서 찾고, 고르면 받기 화면에서 그 단어 수어를 재생한다.
   const [dictQuery, setDictQuery] = useState('')
   const [dictHits, setDictHits] = useState<string[]>([])
+  /** 동작 사전 크기 — "여기에 무엇이 있는지"를 숫자로 보여준다. */
+  const [dictCount, setDictCount] = useState(0)
   const searchDict = useCallback(async (q: string) => {
     setDictQuery(q)
     const query = q.trim()
@@ -356,6 +376,37 @@ export default function UserApp() {
           </div>
           {dictQuery && dictHits.length === 0 && (
             <p className="mt-8 text-center text-lg text-slate-500">😢 없는 단어예요</p>
+          )}
+
+          {/* 아무것도 안 쳤을 때 — **빈 화면으로 두지 않는다.**
+              수어가 모어인 사람에게는 한국어를 타이핑해 찾는 것 자체가 장벽이다.
+              눌러서 바로 볼 수 있는 낱말을 갈래별로 놓아 두면, 한 글자도 안 치고도
+              쓸 수 있고 "여기에 무엇이 있는지"도 알게 된다.
+              (실측 사진에서 이 화면은 검색창 하나에 나머지가 통째로 검었다.) */}
+          {!dictQuery && (
+            <div className="mt-5">
+              <p className="mb-4 text-center text-base text-slate-500">
+                {dictCount ? `${dictCount.toLocaleString()}개 낱말이 들어 있어요` : ''}
+                <br />낱말을 누르면 수어로 보여드려요
+              </p>
+              {DICT_STARTERS.map((group) => (
+                <div key={group.name} className="mb-4">
+                  <p className="mb-2 text-lg font-bold text-slate-300">{group.name}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {group.words.map((w) => (
+                      <button
+                        key={w}
+                        type="button"
+                        onClick={() => void searchDict(w)}
+                        className="min-h-[48px] rounded-2xl border border-white/10 bg-space-800 px-4 py-2 text-lg font-bold text-slate-200"
+                      >
+                        {w}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

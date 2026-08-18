@@ -84,7 +84,12 @@ export default function AskMode({ notice, onImmersive }: Props) {
   const [sos, setSos] = useState(false)
   const tts = useSpeechOutput()
 
-  useEffect(() => { onImmersive?.(true); return () => onImmersive?.(false) }, [onImmersive])
+  // **시작 화면에서는 탭을 접지 않는다.** 접어 버리면 다른 화면으로 나갈 길이 없어
+  // 사용자가 갇힌다(실측: 묻기 탭에 들어가면 탭 막대가 통째로 사라져 있었다).
+  // 카메라를 켜고 답을 볼 때만 화면 전체를 쓴다.
+  const immersive = phase !== 'idle'
+  useEffect(() => { onImmersive?.(immersive) }, [immersive, onImmersive])
+  useEffect(() => () => onImmersive?.(false), [onImmersive])
 
   // 장소 목록은 화면에 들어오자마자 받아 둔다 — 물어본 뒤에 받으면 그만큼 늦다.
   useEffect(() => { void loadNearby(import.meta.env.BASE_URL).then(setNearby) }, [])
@@ -263,7 +268,7 @@ export default function AskMode({ notice, onImmersive }: Props) {
   // ── 시작 화면 ─────────────────────────────────────────────
   if (phase === 'idle') {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 p-6 text-center">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center gap-6 p-6 text-center">
         <button
           type="button"
           onClick={beginAsk}
@@ -302,8 +307,11 @@ export default function AskMode({ notice, onImmersive }: Props) {
   // ── 묻는 중 / 답하는 중 ───────────────────────────────────
   const asking = phase === 'asking'
 
+    // h-full — 감싼 요소가 블록이라 flex-1로는 높이를 못 받는다.
+  // (실측: flex-1로 두었더니 카메라 칸이 0px이 되고 버튼이 화면 맨 위로 올라왔다.
+  //  e2e는 버튼이 있는지만 보므로 이 고장을 잡지 못했다 — 사진으로 잡았다.)
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       {/* 아바타 — 답할 때 주인공 */}
       {!asking && (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -330,6 +338,17 @@ export default function AskMode({ notice, onImmersive }: Props) {
           <div className="absolute inset-0 grid place-items-center bg-space-950/90 p-6 text-center">
             <p className="text-lg text-red-300">{error}</p>
           </div>
+        )}
+        {/* 그만두기 — 촬영 중에는 탭이 접혀 있어 이 버튼이 유일한 나갈 길이다.
+            수어를 시작했다가 마음이 바뀌는 일은 흔하고, 그때 갇히면 앱을 껐다 켠다. */}
+        {asking && (
+          <button
+            type="button"
+            onClick={() => { stop(); setPhase('idle'); rec.clearTranscript() }}
+            className="absolute left-3 top-3 z-20 min-h-[44px] rounded-2xl bg-space-950/70 px-4 py-2 text-base font-bold text-slate-200"
+          >
+            ✕ 그만
+          </button>
         )}
         {asking && rec.modelStatus === 'loading' && running && (
           <div className="absolute inset-x-0 top-4 text-center">

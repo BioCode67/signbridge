@@ -103,9 +103,17 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
 function Rig() {
   const { camera } = useThree()
   useEffect(() => {
-    // Pulled back so head→waist fits with margin even when arms raise near the face.
-    camera.position.set(0, 1.15, 1.95)
-    camera.lookAt(0, 1.05, 0)
+    // **수어 공간이 다 들어와야 한다.**
+    //
+    // 예전 값(fov 30 · 거리 1.95 · 중심 y 1.05)은 세로로 약 1.05m만 담아서
+    // y 0.53~1.57 사이만 보였다. 손을 머리 위로 올리는 동작(높다·비·하늘·안녕 일부)
+    // 에서 **손이 화면 밖으로 나갔다** — 수어에서 손 위치는 뜻의 일부라 잘리면
+    // 그 문장은 읽을 수 없다. 실측 사진에서 창구 화면의 아바타가 그렇게 잘려 있었다.
+    //
+    // 지금 값은 세로 약 1.34m(y 0.57~1.91)를 담는다. 아바타가 조금 작아지지만
+    // **잘린 손보다 작은 손이 낫다.**
+    camera.position.set(0, 1.28, 2.0)
+    camera.lookAt(0, 1.24, 0)
   }, [camera])
   return null
 }
@@ -131,7 +139,7 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
       dpr={dpr}
       shadows
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      camera={{ fov: 30, near: 0.1, far: 20, position: [0, 1.15, 1.95] }}
+      camera={{ fov: 37, near: 0.1, far: 20, position: [0, 1.28, 2.0] }}
       style={{ width: '100%', height: '100%' }}
       onCreated={({ gl }) => {
         gl.toneMappingExposure = 1.0 // neutral exposure for realistic skin (no wash-out)
@@ -173,7 +181,7 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
         />
       </Suspense>
       <OrbitControls
-        target={[0, 1.15, 0]}
+        target={[0, 1.24, 0]}
         enablePan={false}
         enableZoom
         minDistance={0.8}

@@ -440,7 +440,10 @@ export default function TalkMode({ onImmersive }: TalkProps) {
       {/* 답할 차례에는 아바타를 줄이고 카드에 자리를 준다 — 그때 아바타는 멈춰 있고,
           답 카드는 126개라 화면이 좁으면 한참 굴려야 한다(실측 3.7화면). */}
       <div className={`relative flex shrink flex-col lg:min-h-0 lg:flex-1 ${
-        side === 'deaf' ? 'min-h-[26vh] sm:min-h-[30vh]' : 'min-h-[36vh] sm:min-h-[40vh]'
+        // 직원 말이 수어로 올 때가 **읽어야 하는 순간**이다. 실측 사진에서 이 칸이
+        // 화면의 33%뿐이라 아바타가 작았다 — 답 카드는 굴려서 볼 수 있지만
+        // 수어는 작으면 못 읽는다. 카드 쪽을 조금 내주고 아바타를 키운다.
+        side === 'deaf' ? 'min-h-[26vh] sm:min-h-[30vh]' : 'min-h-[42vh] sm:min-h-[44vh]'
       }`}>
         {/* 자막 크기·속도 — 아바타 위에 띄운다. 따로 한 줄을 쓰면 폰에서 대화 기록이
             마이크 버튼과 겹칠 만큼 세로가 모자란다(실측). */}

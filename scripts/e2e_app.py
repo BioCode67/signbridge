@@ -31,6 +31,7 @@ import http.server
 import socketserver
 import subprocess
 import sys
+import time
 import threading
 from functools import partial
 from pathlib import Path
@@ -93,16 +94,29 @@ def port_of(httpd: socketserver.TCPServer) -> int:
 
 
 class Report:
+    """검사 결과를 모으고 **그 자리에서 바로 찍는다.**
+
+    예전에는 끝에서 한 번에 찍었는데, 검사 한 판이 길어지자(카메라 화면이 들어온
+    뒤로 20분을 넘겼다) 로그가 0바이트라 **멈춘 건지 도는 건지 알 수 없었다.**
+    진행이 보이면 어디서 느려지는지도 함께 보인다."""
+
     def __init__(self) -> None:
         self.fails: list[str] = []
         self.lines: list[str] = []
+        self.t0 = time.monotonic()
 
     def check(self, ok: bool, label: str, detail: str = "") -> bool:
         mark = "✓" if ok else "✗"
-        self.lines.append(f"    {mark} {label}{(' — ' + detail) if detail else ''}")
+        line = f"    {mark} {label}{(' — ' + detail) if detail else ''}"
+        self.lines.append(line)
+        print(f"[{time.monotonic() - self.t0:6.0f}s]{line}", flush=True)
         if not ok:
             self.fails.append(label)
         return ok
+
+    def note(self, line: str) -> None:
+        self.lines.append(line)
+        print(f"[{time.monotonic() - self.t0:6.0f}s]{line}", flush=True)
 
 
 async def stage_state(pg) -> dict:
@@ -126,7 +140,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     pg.on("pageerror", lambda e: errors.append(str(e)))
     pg.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}") if r.status >= 400 else None)
 
-    rep.lines.append(f"  [{name} {w}×{h}]")
+    rep.note(f"  [{name} {w}×{h}]")
     await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
     await pg.wait_for_timeout(1200)
 
@@ -266,6 +280,10 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.wait_for_timeout(600)
     rep.check(await pg.get_by_text("수어로 물어보세요").count() > 0, "묻기: 시작 화면")
     rep.check(await pg.get_by_role("button", name="수어로 묻기").count() > 0, "묻기: 시작 버튼")
+    # **시작 화면에서는 탭이 남아 있어야 한다.** 접어 버리면 다른 화면으로 나갈 길이
+    # 없어 사용자가 갇힌다(실측: 묻기에 들어가면 탭 막대가 통째로 사라져 있었다).
+    rep.check(await pg.get_by_role("button", name="💬 대화").count() > 0,
+              "묻기: 시작 화면에서 탭이 살아 있음")
     # 장소 목록 — 오프라인에서도 답하려면 이 파일이 기기에 있어야 한다
     nearby = await pg.evaluate(
         "async () => { const r = await fetch('./data/nearby.json');"
@@ -287,6 +305,22 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         await pg.wait_for_timeout(2500)
         rep.check(await pg.get_by_role("button", name="💬 답 받기").count() > 0,
                   "묻기: 촬영 화면 진입")
+        # **화면이 실제로 자리를 차지하는가.** 버튼이 있는지만 보면 부모에서 높이를
+        # 못 받아 카메라 칸이 0px로 찌부러진 것을 놓친다 — 실측에서 버튼만 화면
+        # 맨 위에 뜨고 아래가 통째로 까맣게 비어 있었는데 검사는 전부 통과했다.
+        box = await pg.evaluate(
+            "() => { const v=document.querySelector('video');"
+            " const n=document.querySelector('nav');"
+            " if(!v||!n) return null;"
+            " const a=v.getBoundingClientRect(), b=n.getBoundingClientRect();"
+            " return {vh:a.height, navTop:b.top, ih:innerHeight}; }"
+        )
+        rep.check(bool(box) and box["vh"] > 200,
+                  "묻기: 카메라 칸이 화면을 채움",
+                  f"{box['vh']:.0f}px" if box else "video/nav 없음")
+        rep.check(bool(box) and box["navTop"] > box["ih"] * 0.5,
+                  "묻기: 버튼이 화면 아래쪽에 있음",
+                  f"nav {box['navTop']:.0f}px / 화면 {box['ih']}px" if box else "")
         # **카메라를 꼭 꺼야 한다.** 켜 둔 채로 두면 MediaPipe가 매 프레임 추론을
         # 계속하고, 소프트웨어 렌더링 환경에서는 CPU를 다 먹어 뒤 검사가 몇 배로
         # 느려진다(실측: 검사 한 판이 13분 → 40분 넘게). 화면을 떠나면 멈춘다.
@@ -316,7 +350,7 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     ctx = await browser.new_context(viewport={"width": 1080, "height": 1920},
                                     service_workers="block")
     pg = await ctx.new_page()
-    rep.lines.append("  [키오스크 모드 ?kiosk=1]")
+    rep.note("  [키오스크 모드 ?kiosk=1]")
     await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="networkidle")
     await pg.wait_for_timeout(1500)
     rep.check(await pg.get_by_text("어디에 계신가요?").count() > 0, "키오스크: 대화 화면으로 시작")

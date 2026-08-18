@@ -31,7 +31,8 @@ const SEVERITY_UI: Record<Severity, { label: string; cls: string }> = {
 const REGION_RE = /([가-힣]{2,6}(?:특별시|광역시|자치시|자치도|시|군|구|도|동|읍|면))(?![가-힣])/
 
 // 말하기(웹캠 인식)는 MediaPipe 번들이 무거워 탭을 열 때만 불러온다.
-const SpeakMode = lazy(() => import('./SpeakMode'))
+// 수어로 묻기 — 카메라 → 낱말 → 의도 → 위치 기반 답 → 아바타 수어 + 방향 지도.
+const AskMode = lazy(() => import('./AskMode'))
 const TalkMode = lazy(() => import('./TalkMode'))
 
 /** 키오스크로 세워 두는 모드 — 주소에 `#/app?kiosk=1`.
@@ -311,7 +312,7 @@ export default function UserApp() {
         </div>
         {/* 탭 — 좁은 화면에서는 두 번째 줄 전체를 차지해 네 칸이 고르게 눌린다 */}
         <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/10 bg-space-900 p-1 sm:flex sm:gap-1">
-          {([['watch', '📺 받기'], ['speak', '🙋 질문'], ['place', '💬 대화'], ['dict', '📖 사전']] as const).map(([id, label]) => (
+          {([['watch', '📺 받기'], ['speak', '📹 묻기'], ['place', '💬 대화'], ['dict', '📖 사전']] as const).map(([id, label]) => (
             <button
               key={id}
               type="button"
@@ -373,7 +374,10 @@ export default function UserApp() {
               </div>
             }
           >
-            <SpeakMode onAnswer={onAnswer} />
+            <AskMode
+              notice={feed[cursor] ? { text: feed[cursor].text, category: feed[cursor].category } : null}
+              onImmersive={onImmersive}
+            />
           </Suspense>
         </div>
       )}

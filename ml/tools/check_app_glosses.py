@@ -104,6 +104,19 @@ def main() -> None:
     if m:
         hard |= set(re.findall(r":\s*'([^']+)'", m.group(1)))
     hard |= {"공", "점"}  # 자릿수 읽기·소수점에서 코드가 직접 만들어 쓴다
+
+    # 길찾기 답변이 쓰는 갈래 글로스(nearby.ts의 KIND_KO) — "대피소 어디?"의 답에서
+    # 이 낱말이 빠지면 아바타가 방향과 거리만 하고 **무엇이 있는지는 말하지 않는다.**
+    nearby_src = (ROOT / "src/user/nearby.ts").read_text(encoding="utf-8")
+    kind_glosses = set(re.findall(r"gloss:\s*'([^']+)'", nearby_src))
+    # bank 키는 이형태 번호가 붙는다(대피0·대피1). 표제어로 하나라도 있으면 된다.
+    lemma_bank = {re.sub(r"[0-9#:@]+$", "", g) for g in bank}
+    gone_kind = sorted(g for g in kind_glosses if g not in lemma_bank)
+    print(f"[glosses] 길찾기 갈래 글로스 {len(kind_glosses)}종 중 "
+          f"재생 가능 {len(kind_glosses) - len(gone_kind)}종")
+    if gone_kind:
+        broken.append(("길찾기 갈래 글로스(nearby.ts)", sorted(kind_glosses), gone_kind))
+
     gone = sorted(g for g in hard if g not in bank)
     print(f"[glosses] 숫자·단위 글로스 {len(hard)}종 중 재생 가능 {len(hard) - len(gone)}종")
     if gone:

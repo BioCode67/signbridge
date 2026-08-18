@@ -249,6 +249,40 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     spoken = await pg.evaluate("window.__spoken")
     rep.check("어제부터 머리가 아파요" in spoken, "대화: 직접 쓴 말 → 소리로")
 
+    # ── 묻기: 수어로 물어 위치 기반 답을 받는 화면
+    #
+    # 카메라 앞 실제 수어는 자동으로 재현할 수 없다(가짜 카메라는 빈 영상이다).
+    # 그래서 여기서는 **입구가 살아 있는지**와 **장소 목록이 실려 있는지**만 본다.
+    # 낱말→의도→답 계산은 check_intent.mjs · check_nearby.mjs 가 따로 잰다.
+    # 창구 대화 중에는 탭이 접혀 있다 — 장소에서 나와야 탭이 돌아온다.
+    # 방금 소리로 내보낸 답이 전체화면으로 떠 있으면 먼저 닫는다(상대에게 보여주는 화면).
+    closer = pg.get_by_text("화면을 누르면 닫혀요")
+    if await closer.count():
+        await closer.first.click()
+        await pg.wait_for_timeout(400)
+    await pg.get_by_role("button", name="← 장소").click()
+    await pg.wait_for_timeout(500)
+    await pg.get_by_role("button", name="📹 묻기").click()
+    await pg.wait_for_timeout(600)
+    rep.check(await pg.get_by_text("수어로 물어보세요").count() > 0, "묻기: 시작 화면")
+    rep.check(await pg.get_by_role("button", name="수어로 묻기").count() > 0, "묻기: 시작 버튼")
+    # 장소 목록 — 오프라인에서도 답하려면 이 파일이 기기에 있어야 한다
+    nearby = await pg.evaluate(
+        "async () => { const r = await fetch('./data/nearby.json');"
+        " if(!r.ok) return null; const d = await r.json();"
+        " return {n: d.places.length, official: d.official,"
+        "         kinds: [...new Set(d.places.map(p=>p.kind))].length}; }"
+    )
+    rep.check(nearby and nearby["n"] > 100, "묻기: 주변 장소 목록",
+              f"{nearby['n']}곳 · 갈래 {nearby['kinds']}종 · 공식={nearby['official']}"
+              if nearby else "nearby.json 없음")
+    # 목록이 공식 지정이 아니면 화면이 그 사실을 말해야 한다 — 대피소는 특히.
+    if nearby and not nearby["official"]:
+        rep.check(await pg.get_by_text("참고용").count() > 0, "묻기: 출처가 참고용임을 표시")
+    await pg.get_by_role("button", name="수어로 묻기").click()
+    await pg.wait_for_timeout(1500)
+    rep.check(await pg.get_by_role("button", name="💬 답 받기").count() > 0, "묻기: 촬영 화면 진입")
+
     # ── 손가락으로 누를 수 있는 크기인가(모바일 접근성 최소 44px)
     small = await pg.evaluate(
         "() => [...document.querySelectorAll('button')]"
@@ -347,7 +381,15 @@ async def main(keep: bool) -> int:
                 if Path(cand).exists():
                     exe = cand
                     break
-            browser = await p.chromium.launch(executable_path=exe, args=["--no-sandbox"])
+            # 가짜 카메라 — '묻기'(수어로 묻기) 화면은 getUserMedia가 성공해야
+            # 촬영 화면까지 들어간다. 진짜 인식은 여기서 재지 않는다(내용 없는
+            # 영상이라 낱말이 나오지 않는다). 인식→의도→답 계산은 별도로
+            # scripts/check_intent.mjs · scripts/check_nearby.mjs 에서 잰다.
+            browser = await p.chromium.launch(
+                executable_path=exe,
+                args=["--no-sandbox",
+                      "--use-fake-ui-for-media-stream",
+                      "--use-fake-device-for-media-stream"])
             for name, w, h, mobile in DEVICES:
                 await run_device(browser, name, w, h, mobile, keep, rep, port_of(httpd))
             await run_kiosk(browser, rep, port_of(httpd))

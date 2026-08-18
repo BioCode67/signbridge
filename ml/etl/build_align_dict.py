@@ -86,6 +86,19 @@ SEED_OVERRIDES = {
     "안녕히": "안녕0",
     "이거": "이것",
     "그거": "그것0",
+    # 방향 — "대피소 어디?"의 답이 되는 낱말이다. 통계는 세 글자 방위어를
+    # 통째로 엉뚱한 곳에 붙여 놨다(**북동쪽 → km**, 실측). 대피 방향을 틀리게
+    # 말하는 것은 말하지 않는 것보다 나쁘므로 사람이 확정한다.
+    "북동쪽": "북동",
+    "북서쪽": "북서",
+    "남동쪽": "남동",
+    "남서쪽": "남서",
+    "북쪽": "북쪽0",
+    "남쪽": "남쪽0",
+    "동쪽": "동쪽0",
+    "서쪽": "서쪽1",
+    "미터": "m",
+    "킬로미터": "킬로미터",
 }
 
 
@@ -104,6 +117,8 @@ _JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
 _FUSE = {"ㅣ": "ㅕ", "ㅗ": "ㅘ", "ㅜ": "ㅝ", "ㅚ": "ㅙ", "ㅏ": "ㅏ", "ㅓ": "ㅓ", "ㅐ": "ㅐ", "ㅔ": "ㅔ"}
 # 양성모음이면 '아', 아니면 '어'가 붙는다(모음조화).
 _BRIGHT = {"ㅏ", "ㅗ", "ㅑ", "ㅛ"}
+# 어간 + 아/어 + 지다 꼴 — 넘다/넘어지다처럼 별개의 낱말이 되는 자리다.
+_PASSIVE_RE = re.compile(r"(집니다|졌)$")
 
 
 def _decompose(ch: str) -> tuple[int, int, int] | None:
@@ -315,6 +330,12 @@ def main() -> None:
     parser.add_argument("--top", type=int, default=3, help="낱말당 남길 글로스 후보 수")
     parser.add_argument("--min-pair", type=int, default=5, help="이보다 드문 공기는 버린다")
     parser.add_argument("--min-dice", type=float, default=0.06)
+    parser.add_argument(
+        "--conj-trust", type=int, default=1500,
+        help="표면형이 말뭉치에 이 횟수 미만으로 나오면 통계보다 활용형(어간)을 앞세운다. "
+             "0이면 예전 동작(통계 우선). 기본값은 0·20·50·200·400·800·1500을 실제로 "
+             "돌려 **바뀌는 매핑을 한 줄씩 눈으로 보고** 정했다. 이 수치가 커질수록 "
+             "형태론이 통계를 더 많이 덮는다")
     parser.add_argument("--vocab", type=Path, default=None,
                         help="동작 사전 bank.json — 있으면 표현 가능한 글로스만 남긴다")
     args = parser.parse_args()
@@ -399,16 +420,20 @@ def main() -> None:
     # 공기 통계에 안 잡혔더라도 표제어가 곧 낱말인 글로스는 사전에 넣는다 —
     # 지명·희귀어 커버리지가 공짜로 늘어난다.
     added = 0
+    # 표제어에서 직접 만든 키 — 나중에 통계·활용형이 덮지 못하게 표시해 둔다.
+    lemma_keys: set[str] = set()
     for lemma, g in lemma_best.items():
         # 한 글자 표제어는 **확인된 목록만** 직결 키로 넣는다(지문자 자모 혼입 방지).
         if len(lemma) < MIN_STEM and lemma not in ONE_CHAR_NOUNS:
             continue
         if lemma not in table:
             table[lemma] = [g]
+            lemma_keys.add(lemma)
             added += 1
         # 용언은 어간형 키도 함께 — "기다리다1"을 "기다리"(어간)로도 찾게 한다.
         if lemma.endswith("다") and len(lemma) >= 3 and lemma[:-1] not in table:
             table[lemma[:-1]] = [g]
+            lemma_keys.add(lemma[:-1])
             added += 1
     print(f"[align] 표제어 직결 추가 {added:,}개 (Dice 미포착분)")
 
@@ -426,14 +451,65 @@ def main() -> None:
     # **용언을 먼저 세운다.** 명사 + 조사가 동사 활용형과 같은 꼴이 되는 경우가 있다:
     # '도'(도수) + '와' = "도와" = 돕다의 활용형. 명사 쪽이 나중에 덮어쓰는 바람에
     # "도와주세요"가 '도'로 번역되고 있었다 — 사람이 가장 먼저 쓰는 말 중 하나다.
+    # **드물게 관측된 활용형은 형태론이 이긴다.**
+    #
+    # 원래는 "이미 있는 키는 건드리지 않는다"였다. Dice가 실제로 본 대응이 우선이라는
+    # 뜻이었는데, 말뭉치에 몇 번 안 나온 표면형은 그 관측 자체가 잡음이다. 실측에서
+    # "숨을 크게 들이쉬어 보세요"의 **크게 → 차이1**(크다0이 있는데도)처럼, 뜻이
+    # 전혀 다른 글로스가 1순위를 차지하고 있었다. 활용형은 어차피 어간의 뜻을 따르므로
+    # 관측이 얇을 때는 어간에서 만든 것이 맞을 확률이 훨씬 높다.
+    #
+    # 예외가 셋 있다. 없으면 오히려 나빠지는 것들이라 실제 차이 목록을 보고 넣었다.
+    #
+    #  ① **표면형이 그 자체로 표제어이면** 건드리지 않는다. 사고·신고·참고·안면은
+    #     활용형처럼 생겼지만(사+고, 신+고, 참+고, 안+면) 그 자체가 낱말이다.
+    #     이 예외가 없으면 "사고"가 '사다'가 되어 재난문자가 통째로 뒤집힌다.
+    #  ② **표제어에서 직접 만든 키**(아니다 → '아니')도 건드리지 않는다.
+    #  ③ **이미 다른 용언이 가져간 자리**도 건드리지 않는다. 이 반복문은 흔한 낱말부터
+    #     도는데, 덮어쓰기를 허용하면 **드문 쪽이 나중에 훔쳐 간다**:
+    #     떨어집니다(떨어지다)를 '떨다'가, 마시고(마시다)를 '말다'가 가져갔다.
+    #  ④ **-어지다 꼴**(넘어집니다·떨어졌)로는 덮지 않는다. 어간 + 어 + 지다는
+    #     그 자체가 별개의 낱말인 경우가 많아(넘다 ≠ 넘어지다, 떨다 ≠ 떨어지다)
+    #     덮으면 뜻이 바뀐다. 새로 채우는 것은 그대로 한다.
+    #
+    # 통계 관측을 다 버리지는 않는다 — 자주 나온 표면형은 그대로 둔다.
     for lemma, g in ordered:
         if not (lemma.endswith("다") and len(lemma) >= 2):
             continue
         for form in conjugations(lemma[:-1]):
-            if len(form) >= MIN_STEM and form not in table and form not in STOP_WORDS:
+            if len(form) < MIN_STEM or form in STOP_WORDS:
+                continue
+            if form not in table:
                 table[form] = [g]
                 derived.add(form)
                 conj += 1
+            elif (table[form][0] != g
+                  and form not in lemma_best          # 그 자체가 표제어면 건드리지 않는다
+                  and form not in lemma_keys          # 표제어에서 직접 만든 키도
+                  and form not in derived             # 더 흔한 용언이 이미 가져간 자리도
+                  and not _PASSIVE_RE.search(form)    # -어지다 꼴은 뜻이 달라진다
+                  and word_count.get(form, 0) < args.conj_trust):
+                # 관측이 얇다 — 어간에서 만든 글로스를 앞세우고 통계는 후보로 남긴다
+                table[form] = [g] + [x for x in table[form] if x != g][: args.top - 1]
+                derived.add(form)
+                conj += 1
+
+    # **-어지다 낱말은 자기 활용형을 되찾는다.**
+    # 넘다·떨다 같은 짧고 흔한 용언이 "넘어집니다·떨어졌"를 만들어 내는 바람에,
+    # 정작 그 꼴의 주인인 넘어지다·떨어지다가 자리를 잃는다. 더 긴 쪽이 더 구체적인
+    # 낱말이므로 마지막에 한 번 되돌려 준다(실측: 넘어집니다 → '넘다'로 뒤집혀 있었다).
+    reclaimed = 0
+    for lemma, g in ordered:
+        if not (lemma.endswith("지다") and len(lemma) >= 4):
+            continue
+        for form in conjugations(lemma[:-1]):
+            if len(form) < MIN_STEM or form in STOP_WORDS or form in lemma_best:
+                continue
+            if table.get(form, [None])[0] != g:
+                table[form] = [g] + [x for x in table.get(form, []) if x != g][: args.top - 1]
+                derived.add(form)
+                reclaimed += 1
+    print(f"[align] -어지다 활용형 회수 {reclaimed:,}개")
 
     for lemma, g in ordered:
         if lemma.endswith("다") and len(lemma) >= 2:

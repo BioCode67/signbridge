@@ -76,6 +76,29 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 `public/data/glosses/` 파일을 index.html로 폴백해(200 text/html) 모든 합성이 실패한다.
 배포본에서는 정상이다. 이 차이로 한동안 회귀를 오인했다.
 
+### 길찾기 답은 방향을 틀리면 안 된다
+
+`묻기` 화면은 "대피소 어디?"에 **방향과 거리**로 답한다. 이 계산이 틀려도 화면은
+멀쩡하다 — 화살표도 그려지고 숫자도 뜬다. 다만 엉뚱한 쪽을 가리킨다. 눈으로는 못 잡는다.
+
+실측에서 `북동쪽`이 통째로 **`km 지진 크기`** 로 번역되고 있었다(세 글자 방위어가
+복합어 프루닝 기준 4글자에 걸리지 않아 통계 잡음이 1순위로 남았다).
+
+```bash
+node --experimental-strip-types --import ./scripts/ts-register.mjs      scripts/check_nearby.mjs      # 거리·방위·어림수·답변 문장
+node --experimental-strip-types --import ./scripts/ts-register.mjs      scripts/check_intent.mjs      # 낱말 묶음 → 의도(오검출 포함)
+```
+
+주변 장소 목록(`public/data/nearby.json`)은 지금 OpenStreetMap 기반이라
+**공식 지정 대피소가 아니다.** 파일이 `official: false`를 들고 있고 화면이 그대로
+"참고용"이라고 쓴다. 공식 목록으로 바꾸려면:
+
+```bash
+python3 ml/tools/build_nearby.py --gov-key <공공데이터포털 키>   # official: true
+bash ml/tools/fetch_osm.sh > /tmp/osm.json                      # 키 없이(참고용)
+python3 ml/tools/build_nearby.py --osm /tmp/osm.json
+```
+
 ### 평가는 수어자 분리로
 
 같은 사람이 학습·평가에 함께 있으면 모델이 그 사람 버릇을 외워 정확도가 부풀려진다.
@@ -88,6 +111,10 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 ```
 src/                 React + three.js 프런트엔드 (아바타·웹캠 인식 데모)
   recognition/       브라우저 추론 — landmarks.ts가 특징 정의의 한쪽
+  user/              당사자 화면 — 받기 · 묻기(AskMode) · 대화(TalkMode) · 사전
+    askIntent.ts     수어 낱말 묶음 → 의도(후보까지 보고 판정)
+    nearby.ts        주변 장소 · 거리 · 방위 · 답변 문장
+    DirectionMap.tsx 타일 없는 방향 지도(오프라인)
 server/app.py        KoGPT2 Q&A FastAPI (선택)
 ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   signbridge/        features · models · dataset · openpose · naming · pack
@@ -95,8 +122,11 @@ ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   tools/             feature_parity(필수 검증) · check_app_glosses(앱↔사전 정합) · schema_report
   data/daily_vocab.txt  창구 생활 어휘 — 빈도로 잘리면 안 되는 낱말 목록
 scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
+scripts/shots.py       화면 사진만 찍는다 — "동작하는가"가 아니라 "보기 좋은가"를 사람이 볼 때
 scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠진 낱말)
-scripts/check_translation_cases.mjs  오역 회귀 검사(사례 34건)
+scripts/check_translation_cases.mjs  오역 회귀 검사(사례 40건)
+scripts/check_intent.mjs   수어 낱말 묶음 → 의도 판정 검사(오검출 포함 27건)
+scripts/check_nearby.mjs   길찾기 계산 — 거리·방위·어림수·답변 문장
 scripts/demo_rehearsal.py  시연 대본 조작을 그대로 눌러 보는 리허설
   jobs/              check_workspace · train_* · pbs_extract
                      rebuild_data.sh(웹 데이터 전부 재생성) · deploy_model.sh(모델 교체)

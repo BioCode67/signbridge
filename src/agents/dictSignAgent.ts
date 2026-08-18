@@ -63,6 +63,29 @@ export function stemKorean(word: string): string {
   return out.length >= MIN_STEM ? out : word
 }
 
+/** 조사를 한 겹씩 벗겨 가며 나오는 형태들 — 원형부터 끝까지.
+ *
+ *  **끝까지 벗긴 것만 보면 안 된다.** `엑스레이를`은 `를`을 떼면 `엑스레이`(사전에
+ *  있다)인데, 한 번 더 돌면 `이`까지 떼어 `엑스레`가 된다. 그 상태로만 찾으니
+ *  동작이 사전에 **있는데도** 못 찾았다(실측: "엑스레이를 찍어야 합니다" →
+ *  엑스레이가 빠짐). `장애인이 → 장애`처럼 뜻이 바뀌는 자리도 같은 이유다.
+ *
+ *  그래서 벗긴 순서대로 다 만들어 두고, 사전에 **처음 걸리는 것**을 쓴다. */
+export function stemChain(word: string): string[] {
+  const forms = [word]
+  let out = word
+  let prev = ''
+  while (out !== prev) {
+    prev = out
+    const stripped = out.replace(PARTICLE_RE, '')
+    if (stripped.length >= MIN_STEM && stripped !== out) {
+      out = stripped
+      forms.push(out)
+    }
+  }
+  return forms
+}
+
 export type AlignTable = Record<string, string[]>
 
 /** 시각·날짜·소요시간 전용 글로스 표 (`public/data/timegloss.json`).
@@ -269,7 +292,14 @@ export class DictSignAgent implements SignAgent {
       const chunk = nextChunk++
       for (const g of gs) pushAs(g, chunk)
     }
-    const lookup = (w: string): string[] | undefined => table[w] ?? table[stemKorean(w)]
+    // 조사를 한 겹씩 벗겨 가며 **처음 걸리는 것**을 쓴다(stemChain 주석 참고).
+    const lookup = (w: string): string[] | undefined => {
+      for (const form of stemChain(w)) {
+        const hit = table[form]
+        if (hit?.length) return hit
+      }
+      return undefined
+    }
 
     // 소요시간 | 날짜 | 시각 | 전화번호 | 숫자 | 한글 낱말 — 문장 순서를 지키며 훑는다.
     // 앞뒤를 봐야 하는 판정이 있어(한 글자 수사는 뒤에 단위가 올 때만 수사로 본다)

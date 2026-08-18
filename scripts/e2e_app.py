@@ -214,6 +214,31 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     rep.check(overflow["sw"] <= overflow["cw"] + 1, "가로 스크롤 없음",
               f"{overflow['sw']}px ≤ {overflow['cw']}px")
 
+    # ── 무엇이 번역했는가 · 고개 동작이 붙었는가
+    #
+    # **"오류가 없다"로는 부족하다.** 학습 모델이 안 뜨면 통계 사전이 대신 답하는데
+    # 화면도 콘솔도 똑같다(실측: ORT 진입점이 달라 wasm을 404로 못 찾아 30MB짜리
+    # 모델이 한 번도 안 쓰이고 있었다). 재지 않으면 영영 모른다.
+    #
+    # 모델은 30MB라 첫 문장은 일부러 사전으로 답한다 — 그래서 몇 문장 흘려보내며 본다.
+    backend = None
+    for _ in range(20):
+        await pg.wait_for_timeout(1000)
+        st = await pg.locator("[data-sign-backend]").first.evaluate(
+            "e => ({backend: e.dataset.signBackend, head: +e.dataset.signHead})"
+        )
+        backend = st["backend"]
+        if backend == "nn":
+            break
+        # 다음 문자를 재생시켜 번역을 한 번 더 돌게 한다
+        nxt = pg.get_by_role("button", name=re.compile("다음"))
+        if await nxt.count():
+            await nxt.first.click()
+    if (DIST / "models/t2g/meta.json").exists():
+        rep.check(backend == "nn", "번역: 학습 모델이 실제로 쓰임", str(backend))
+    else:
+        rep.note("    · 학습 모델이 배포본에 없어 사전 사용(정상) — 검사 건너뜀")
+
     # ── 대화 모드: 직원 카드 → 수어, 답 카드 → 소리
     await pg.get_by_role("button", name="💬 대화").click()
     await pg.wait_for_timeout(500)

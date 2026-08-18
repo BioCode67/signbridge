@@ -49,7 +49,7 @@ export class NnSignAgent implements SignAgent {
   private meta: Meta | null = null
   private enc: unknown = null
   private dec: unknown = null
-  private ort: typeof import('onnxruntime-web') | null = null
+  private ort: typeof import('onnxruntime-web/wasm') | null = null
   private loading: Promise<void> | null = null
   private fallback = new DictSignAgent()
   /** 재생 가능한 글로스 — 모델이 못 보여줄 낱말을 고르지 않게 후보를 제한한다. */
@@ -87,7 +87,11 @@ export class NnSignAgent implements SignAgent {
         const res = await fetch(`${base()}models/t2g/meta.json`)
         if (!res.ok) throw new Error('t2g meta 없음')
         this.meta = (await res.json()) as Meta
-        const ort = await import('onnxruntime-web')
+        // **인식기와 같은 진입점(`/wasm`)을 쓴다.** 기본 진입점을 쓰면 WebGPU용
+        // jsep 빌드를 찾아 `ort/ort-wasm-simd-threaded.jsep.mjs`를 요청하는데,
+        // public/ort에는 wasm 빌드만 두었다 — 404가 나고 세션이 안 뜬다(실측).
+        // 두 곳이 같은 파일을 쓰게 맞춰야 배포본에 한 벌만 실린다.
+        const ort = await import('onnxruntime-web/wasm')
         ort.env.wasm.wasmPaths = new URL(`${base()}ort/`, document.baseURI).href
         ort.env.wasm.numThreads = 1
         this.ort = ort
@@ -148,9 +152,9 @@ export class NnSignAgent implements SignAgent {
    *  매 스텝 지금 자리의 로짓만 읽으면 된다. */
   private async translate(text: string): Promise<string[]> {
     const meta = this.meta!
-    const ort = this.ort as typeof import('onnxruntime-web')
-    const enc = this.enc as import('onnxruntime-web').InferenceSession
-    const dec = this.dec as import('onnxruntime-web').InferenceSession
+    const ort = this.ort as typeof import('onnxruntime-web/wasm')
+    const enc = this.enc as import('onnxruntime-web/wasm').InferenceSession
+    const dec = this.dec as import('onnxruntime-web/wasm').InferenceSession
     const S = meta.max_src
     const T = meta.max_tgt
 

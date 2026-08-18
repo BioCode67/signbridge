@@ -47,10 +47,15 @@ export interface SignPlayer {
   compose(text: string, gloss?: string[]): Promise<Playable | null>
   /** 곧 쓸 글로스 조각을 미리 받아 둔다(창구에 들어설 때 그 장소의 문구들). */
   prewarm(glosses: string[]): void
+  /** 직전 번역을 무엇이 했는가 — 계측용.
+   *  모델이 안 뜨면 조용히 사전으로 떨어지는데 화면상 차이가 없어 재지 않으면 모른다. */
+  backend: 'nn' | 'dict' | 'rule'
 }
 
 export function useSignPlayer(): SignPlayer {
   const [data, setData] = useState<Playable | null>(null)
+  /** 직전 번역을 무엇이 했는지 — nn(학습 모델) · dict(통계 사전) · rule(최후 수단). */
+  const [backend, setBackend] = useState<'nn' | 'dict' | 'rule'>('rule')
   const [frame, setFrame] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -115,6 +120,11 @@ export function useSignPlayer(): SignPlayer {
         agentRef.current.setPlayable(Object.keys(index))
       }
       const { gloss: translated, unmatched } = await agentRef.current.convert(text)
+      // **무엇이 번역했는지 밖으로 내보낸다.** 모델이 안 뜨면 사전이 대신 답하는데,
+      // 화면상으로는 아무 차이가 없다(실측: ORT 진입점이 달라 wasm을 404로 못 찾아
+      // 30MB짜리 모델이 한 번도 안 쓰이고 있었다). 오류도 안 나므로 재지 않으면
+      // 영영 모른다.
+      setBackend(agentRef.current.lastBackend)
       const composed = translated.length
         ? await composeGlosses(text, translated, index, loadGloss)
         : null
@@ -242,6 +252,7 @@ export function useSignPlayer(): SignPlayer {
   }, [data, time])
 
   return {
+    backend,
     data, frame, playing, busy, nowGloss, time, speed,
     setSpeed, setPlaying, play, playData, restart, bank, compose, prewarm,
   }

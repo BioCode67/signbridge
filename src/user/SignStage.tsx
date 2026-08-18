@@ -33,6 +33,11 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
       data-sign-frames={data?.num_frames ?? 0}
       data-sign-playing={playing ? '1' : '0'}
       data-sign-glosses={data?.gloss_sequence.length ?? 0}
+      // 번역을 무엇이 했는지 — nn(학습 모델) · dict(통계 사전) · rule.
+      // 모델이 안 뜨면 사전이 대신 답하고 **화면은 똑같다.** 오류도 안 난다.
+      data-sign-backend={player.backend}
+      // 고개 동작이 몇 낱말에 붙었는지 — 배선이 끊기면 0이 된다(역시 화면상 차이 없음).
+      data-sign-head={data?.gloss_sequence.filter((g) => g.head).length ?? 0}
     >
       <Suspense
         fallback={

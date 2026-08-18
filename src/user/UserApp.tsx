@@ -254,8 +254,20 @@ export default function UserApp() {
     setTab('watch')
     setAuto(false) // 자동 수신이 답변 재생을 덮지 않게 잠시 멈춘다
     if (!keepNotice) setNotice(null) // 행동요령 재생은 배지를 유지한다(요령 버튼 재진입용)
-    // 행동요령은 재난 말뭉치와 같은 말투다 — 학습 모델이 배운 자리다.
-    void player.play(text, gloss, 'disaster')
+    // **행동요령은 사전으로 번역한다.** 한동안 여기에 "재난 말뭉치와 같은 말투라
+    // 학습 모델이 배운 자리"라고 적어 두었는데, 재 보니 틀렸다. 학습 모델은
+    // 재난문자(공지 말투)로 배웠고 행동요령은 명령 말투다.
+    //
+    //   가구 아래로 들어가 몸을 보호하세요
+    //     사전: 가구0 몸 보호 들어가다0 아래      모델: 지역1 장소1 홍보1
+    //   엘리베이터를 타지 말고 계단으로 대피하세요
+    //     사전: 엘리베이터1 타다0 계단0 대피0 하지마1
+    //     모델: 주말1 기간1 필요1 때1 사람2#
+    //
+    // 목숨이 걸린 안내가 헛소리로 나가고 있었다. 잘못된 수어는 표현되지 않은
+    // 것보다 나쁘다 — 농인은 그것을 믿는다.
+    // scripts/check_guide_domain.mjs가 이 경로를 지킨다.
+    void player.play(text, gloss, 'everyday')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.play])
 

@@ -444,6 +444,37 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     await pg.wait_for_timeout(1500)
     rep.check(await pg.get_by_text("어디에 계신가요?").count() > 0, "키오스크: 대화 화면으로 시작")
     rep.check(await pg.get_by_role("link", name="✕").count() == 0, "키오스크: 닫기 버튼 숨김")
+
+    # ── **앞사람 대화가 남지 않는가.** 로비·창구에 세워 두는 기기는 여러 사람이
+    # 돌려 쓴다. "머리가 아파요"라고 답한 화면이 다음 사람에게 그대로 보이면
+    # 그건 고장이 아니라 **개인정보 유출**이다. 5분 유휴 초기화가 실제로 도는지
+    # 문서로만 적어 두고 아무도 재지 않았다.
+    #
+    # 5분을 기다리지 않는다 — 브라우저 시계를 앞으로 돌린다. 앱 코드에 검사용
+    # 뒷문을 내지 않으려면 이 방법뿐이다.
+    await pg.clock.install()
+    await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="domcontentloaded")
+    await pg.wait_for_timeout(1500)
+    hospital = pg.get_by_role("button", name="🏥 병원")
+    if await hospital.count():
+        await hospital.first.click()
+        await pg.wait_for_timeout(800)
+        answer = pg.get_by_role("button", name="🤟 내 답 카드")
+        if await answer.count():
+            await answer.first.click()
+            await pg.wait_for_timeout(400)
+        card = pg.get_by_role("button", name="머리", exact=True)
+        if await card.count():
+            await card.first.click()
+            await pg.wait_for_timeout(800)
+        started = await pg.get_by_text("어디에 계신가요?").count() == 0
+        rep.check(started, "키오스크: 대화가 시작됨(초기화 시험 준비)")
+
+        await pg.clock.fast_forward("05:30")
+        await pg.wait_for_timeout(1200)
+        back = await pg.get_by_text("어디에 계신가요?").count() > 0
+        rep.check(back, "키오스크: 5분 뒤 앞사람 대화가 지워짐")
+
     await ctx.close()
 
 
@@ -491,6 +522,23 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
               f"{best['frames']}프레임 · 단어 {best['glosses']}개")
     # 인터넷이 없으면 마이크는 원리상 안 된다 — 그 사실과 대안을 화면이 말해야 한다.
     rep.check(await pg.get_by_text("인터넷이 없어요").count() > 0, "오프라인: 마이크 대안 안내")
+
+    # ── **묻기도 오프라인에서 살아 있어야 한다.** "재난 때가 곧 오프라인"이라
+    # 적어 두고 정작 창구 화면만 재고 있었다. 대피소를 물어야 하는 순간이 바로
+    # 회선이 끊긴 순간이다. 지도 타일을 안 쓰는 것이 요점이므로, 주변 장소 목록이
+    # 캐시에서 열리는지 본다(카메라·인식은 이 환경에서 못 돌린다).
+    ask = pg.get_by_role("button", name="📹 묻기")
+    if await ask.count():
+        await ask.first.click()
+        await pg.wait_for_timeout(1200)
+        places = await pg.evaluate(
+            "async () => { try { const r = await fetch('./data/nearby.json');"
+            " if(!r.ok) return 0; const d = await r.json();"
+            " return d.places.length; } catch { return 0; } }"
+        )
+        rep.check(places > 0, "오프라인: 주변 장소 목록이 캐시에서 열림", f"{places}곳")
+        rep.check(await pg.get_by_text("참고용").count() > 0,
+                  "오프라인: 출처가 참고용임을 그대로 표시")
 
     if keep or rep.fails:
         await pg.screenshot(path=str(ROOT / "e2e_오프라인.png"))

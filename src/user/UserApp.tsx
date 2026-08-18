@@ -215,6 +215,18 @@ export default function UserApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.bank])
 
+  /** 탭을 옮긴다. **사전에서 나갈 때는 뒷정리를 한다** — 재생기는 네 화면이
+   *  함께 쓰는 하나라서, 사전에서 본 낱말이 받기 화면에 그대로 남는다.
+   *  재난문자를 보러 돌아왔는데 방금 찾아본 낱말이 떠 있으면 무엇을 보고 있는지
+   *  헷갈린다. 사전을 닫고 받기의 자동 재생을 되돌린다. */
+  const leaveTo = useCallback((next: typeof tab) => {
+    if (tab === 'dict' && next !== 'dict' && dictWord) {
+      setDictWord('')
+      if (next === 'watch') setAuto(true)
+    }
+    setTab(next)
+  }, [tab, dictWord])
+
   const playDictWord = useCallback(async (gloss: string) => {
     // **탭을 옮기지 않는다.** 사전은 낱말을 잇따라 넘겨 보는 화면인데, 하나 누를
     // 때마다 받기 탭으로 튀면 검색 결과로 돌아오는 데만 두 번을 더 눌러야 한다.
@@ -354,7 +366,7 @@ export default function UserApp() {
             <button
               key={id}
               type="button"
-              onClick={() => setTab(id)}
+              onClick={() => leaveTo(id)}
               aria-pressed={tab === id}
               className={`whitespace-nowrap rounded-lg px-2 py-2 text-sm font-bold sm:px-3 sm:py-1.5 sm:text-base ${
                 tab === id ? 'bg-cyan-glow/20 text-cyan-soft' : 'text-slate-400'

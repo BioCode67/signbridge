@@ -59,3 +59,9 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 
 echo
 echo "다음: npm run build && python3 scripts/e2e_app.py"
+
+# ── 사전·어순표를 다시 만들면 **번역이 내는 글로스**도 바뀐다. 동작 사전에 없는
+# 글로스는 재생 때 조용히 건너뛴다 — 화면은 정상으로 보인다. 문장에서 실제로
+# 만들어지는 글로스를 재난문자·측정용 문장 여섯 갈래로 훑어 확인한다.
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_silent_skip.mjs

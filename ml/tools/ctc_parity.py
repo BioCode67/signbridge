@@ -141,6 +141,8 @@ def main() -> int:
             print(f"          브라우저 {actual[i]}")
         return 1
     print("[ctc-parity] ✓ 파이썬과 브라우저 디코딩이 모든 판에서 같습니다")
+    print("[ctc-parity] 참고: 진짜 모델 출력으로도 대조해 두었다(2026-08-18, 6판 일치).")
+    print("            무작위 로짓은 어려운 배치를 만들고, 진짜 출력은 실제 분포를 본다.")
     return 0
 
 

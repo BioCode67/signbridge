@@ -367,9 +367,13 @@ export default function AskMode({ notice, onImmersive }: Props) {
             <p className="mx-auto max-w-xs rounded-2xl bg-space-950/75 px-4 py-3 text-lg leading-relaxed text-slate-200">
               카메라를 보고 <b className="text-cyan-soft">수어로 물어보세요</b>
               <br />
-              <span className="text-base text-slate-400">
-                예 · “대피소 어디” · “병원 어디” · “화장실 어디”
-                <br />“지금 무슨 일” · “어떻게 해야 해” · “도와주세요”
+              <span className="mt-1 flex flex-wrap justify-center gap-1.5 text-base text-slate-400">
+                {['대피소 어디', '병원 어디', '화장실 어디',
+                  '지금 무슨 일', '어떻게 해야 해', '도와주세요'].map((ex) => (
+                  <span key={ex} className="whitespace-nowrap rounded-full bg-white/10 px-2.5 py-0.5">
+                    {ex}
+                  </span>
+                ))}
               </span>
             </p>
           </div>

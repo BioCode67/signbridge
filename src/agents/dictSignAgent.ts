@@ -39,6 +39,9 @@ const STOP_WORDS = new Set([
   '등으로', '등과', '이내', '도가량', '가량',
   '있으며', '예정이니', '완료되었으며', '기하시기', '되었으며', '하시어',
   '없이', '않고', '때에는', '기해주시기', '함으로', '됨으로',
+  // 시각·날짜를 전용 동작으로 내면서 남는 조사들. 범위는 물결표로 표시하므로
+  // 이 말들 자체는 수어로 옮기지 않는다("21시부터" → 밤 시:9시).
+  '부터', '까지', '부로', '이후', '이전',
 ])
 
 /** 미매칭 보고(낱말 카드)에서 뺄 기능어·상투구 — 정보가 없어 카드로 띄우면 소음이다.
@@ -61,6 +64,39 @@ export function stemKorean(word: string): string {
 }
 
 export type AlignTable = Record<string, string[]>
+
+/** 시각·날짜·소요시간 전용 글로스 표 (`public/data/timegloss.json`).
+ *  키는 `시:분` / `월-일` 꼴, 값은 동작 사전의 글로스 이름이다. */
+export interface TimeGlossTable {
+  time: Record<string, string>
+  date: Record<string, string>
+  dur: Record<string, string>
+}
+
+/** 시각 앞에 붙는 시간대 표지 — **말뭉치에서 재어 정한 것이다.**
+ *
+ * 사람 번역가는 시각 글로스 앞에 거의 언제나 시간대를 붙인다(실측: 아침 6,120회 ·
+ * 새벽 4,259 · 밤 3,331 · 저녁 2,865 · 오후 2,310 · 낮 1,449). 그럴 이유가 있다 —
+ * 수어 시각은 12시간제라 `시:9시`만으로는 **오전 9시인지 21시인지 알 수 없다.**
+ * 표지가 그 모호함을 없앤다.
+ *
+ * 원문 시각별로 어떤 표지가 붙었는지 26,000여 건에서 재어 아래를 정했다.
+ * (0시 밤 70% · 2시 새벽 92% · 8시 아침 94% · 12시 낮 92% · 21시 밤 96% · 23시 밤 100%)
+ * 13·14·17시는 두 표지가 팽팽해(오후/낮, 저녁/오후) 순서가 자연스러운 쪽을 골랐다. */
+/** 요일 — 날짜 뒤에 붙인다. 동작 사전에 실존하는 이름이어야 한다. */
+const WEEKDAY: Record<string, string> = {
+  월: '월요일1', 화: '화요일1', 수: '수요일1', 목: '목요일1',
+  금: '금요일0', 토: '토요일1', 일: '일요일0',
+}
+
+const DAYPART: readonly string[] = [
+  '밤1', '새벽1', '새벽1', '새벽1', '새벽1', '새벽1', '새벽1',   // 0-6
+  '아침1', '아침1', '아침1', '아침1', '아침1',                  // 7-11
+  '낮1', '낮1', '낮1',                                        // 12-14
+  '오후1', '오후1', '오후1',                                   // 15-17
+  '저녁1', '저녁1', '저녁1',                                   // 18-20
+  '밤1', '밤1', '밤1', '밤1',                                  // 21-24
+]
 
 // ── 숫자 → 수어 글로스열 ─────────────────────────────────────────────
 // 재난문자의 숫자(규모 4.0, 3일, 전화번호)는 한글 토큰화에서 통째로 사라졌다.
@@ -158,6 +194,8 @@ export class DictSignAgent implements SignAgent {
   private table: AlignTable | null = null
   /** 글로스별 문장 내 평균 위치(0=앞, 1=끝). 없으면 어순을 건드리지 않는다. */
   private order: Record<string, number> | null = null
+  /** 시각·날짜 전용 글로스 표. 없으면 예전처럼 숫자를 자릿수로 읽는다. */
+  private timeGloss: TimeGlossTable | null = null
   private loading: Promise<void> | null = null
   private fallback = new RuleSignAgent()
   /** 직전 변환이 사전으로 됐는지 — UI 표시용. */
@@ -189,6 +227,16 @@ export class DictSignAgent implements SignAgent {
             if (res.ok) this.order = (await res.json()) as Record<string, number>
           } catch {
             this.order = null
+          }
+          // 시각·날짜 표도 마찬가지 — 없으면 자릿수 읽기로 되돌아갈 뿐이다.
+          try {
+            const res = await fetch(this.url.replace(/align\.json$/, 'timegloss.json'))
+            const t = res.ok ? ((await res.json()) as Partial<TimeGlossTable>) : null
+            // **모양을 확인하고 받는다.** 표가 아닌 것이 와도(옛 배포본·검사 스텁)
+            // 번역이 죽으면 안 된다 — 이 자리에서 죽으면 문장 전체가 안 나간다.
+            this.timeGloss = t?.time && t?.date && t?.dur ? (t as TimeGlossTable) : null
+          } catch {
+            this.timeGloss = null
           }
         })
     }
@@ -223,10 +271,47 @@ export class DictSignAgent implements SignAgent {
     }
     const lookup = (w: string): string[] | undefined => table[w] ?? table[stemKorean(w)]
 
-    // 전화번호 | 숫자 | 한글 낱말 — 문장 순서를 지키며 훑는다.
+    // 소요시간 | 날짜 | 시각 | 전화번호 | 숫자 | 한글 낱말 — 문장 순서를 지키며 훑는다.
     // 앞뒤를 봐야 하는 판정이 있어(한 글자 수사는 뒤에 단위가 올 때만 수사로 본다)
     // 한 번에 모아 놓고 색인으로 돈다.
-    const SCAN_RE = /(\d{2,4}-\d{3,4}-\d{4})|(\d+(?:\.\d+)?)|([가-힣]+)/g
+    //
+    // **시각·날짜를 숫자보다 먼저 잡는다.** 사람 번역가는 "21시"를 `시:9시`,
+    // "10.26"을 `날짜:10월26일`이라는 **전용 동작 하나**로 낸다(말뭉치에서 `시:*`가
+    // 17,149회, `날짜:*`가 6,640회 — 가장 많이 쓰는 부류다). 자릿수로 읽으면
+    // ("이 십 일 시") 형식도 어법도 틀린다.
+    //
+    // 날짜의 점 표기(`10.26`)는 **요일 괄호가 붙었을 때만** 날짜로 본다.
+    // 그러지 않으면 "규모 4.5"가 4월 5일이 된다.
+    const SCAN_RE = new RegExp(
+      [
+        '(\\d{1,2})시간\\s*(?:(\\d{1,2})분)?',                    // 1,2  소요시간
+        '(\\d{1,2})월\\s*(\\d{1,2})일',                           // 3,4  날짜(월일)
+        '(\\d{1,2})\\.(\\d{1,2})\\s*\\(\\s*([월화수목금토일])\\s*\\)',  // 5,6,7 날짜(요일 괄호)
+        '(\\d{1,2}):(\\d{2})',                                   // 8,9  시각(콜론)
+        '(?:(오전|오후|아침|저녁|새벽|밤|낮)\\s*)?(\\d{1,2})시\\s*(?:(\\d{1,2})분)?',  // 10,11,12 시각
+        '(\\d{2,4}-\\d{3,4}-\\d{4})',                           // 13   전화번호
+        '(\\d+(?:\\.\\d+)?)',                                   // 14   숫자
+        '([가-힣]+)',                                            // 15   낱말
+        '([~∼])',                                                // 16   범위 물결표
+      ].join('|'),
+      'g',
+    )
+    const tg = this.timeGloss
+    /** 시각 → [시간대 표지, 시각 글로스]. 표가 없거나 조각이 없으면 null. */
+    const timeGlosses = (h24: number, min: number, said?: string): string[] | null => {
+      if (!tg) return null
+      // 수어 시각은 12시간제다 — 21시는 `시:9시`. 그래서 시간대 표지가 필요하다.
+      const h12 = h24 > 12 ? h24 - 12 : h24
+      const g = tg.time[`${h12}:${min}`] ?? (min === 0 ? undefined : tg.time[`${h12}:0`])
+      if (!g) return null
+      // 원문이 "오후 3시"처럼 시간대를 이미 말했으면 그 말을 그대로 쓴다.
+      const spoken: Record<string, string> = {
+        오전: '오전1', 오후: '오후1', 아침: '아침1', 저녁: '저녁1',
+        새벽: '새벽1', 밤: '밤1', 낮: '낮1',
+      }
+      const mark = (said && spoken[said]) || DAYPART[Math.min(24, Math.max(0, h24))]
+      return mark ? [mark, g] : [g]
+    }
     const matches = [...text.matchAll(SCAN_RE)]
     let afterNumber = false
     // 한글 수사가 이어지면 합쳐 읽는다: "만" + "오천" → 15000
@@ -239,13 +324,67 @@ export class DictSignAgent implements SignAgent {
     }
     for (let mi = 0; mi < matches.length; mi++) {
       const m = matches[mi]
-      if (m[3]) {
-        const word = m[3]
+
+      // ── 시각·날짜·소요시간 — 전용 동작 하나로 낸다 ──────────────
+      const dedicated = (): boolean => {
+        if (!tg) return false
+        if (m[1]) {                                   // "2시간 30분"
+          const g = tg.dur[`${+m[1]}:${+(m[2] ?? 0)}`] ?? tg.dur[`${+m[1]}:0`]
+          if (g) { pushGroup([g]); return true }
+        }
+        if (m[3]) {                                   // "10월 26일"
+          const g = tg.date[`${+m[3]}-${+m[4]}`]
+          if (g) { pushGroup([g]); return true }
+        }
+        if (m[5]) {                                   // "10.26(화)"
+          const g = tg.date[`${+m[5]}-${+m[6]}`]
+          // 요일도 함께 낸다 — 사람 번역가가 그렇게 한다(`날짜:1월7일 목요일1 …`).
+          // 재난문자의 날짜는 "언제까지"가 핵심이라 요일이 정보의 일부다.
+          const wd = m[7] ? WEEKDAY[m[7]] : undefined
+          if (g) { pushGroup(wd ? [g, wd] : [g]); return true }
+        }
+        if (m[8]) {                                   // "15:30"
+          const gs = timeGlosses(+m[8], +m[9])
+          if (gs) { pushGroup(gs); return true }
+        }
+        if (m[11]) {                                  // "오후 3시 20분"
+          const gs = timeGlosses(+m[11], +(m[12] ?? 0), m[10])
+          if (gs) { pushGroup(gs); return true }
+        }
+        return false
+      }
+      if (m[1] || m[3] || m[5] || m[8] || m[11]) {
+        flushNumber()
+        if (dedicated()) { afterNumber = false; continue }
+        // 표에 없는 값이면 예전처럼 숫자 + 단위로 읽는다 — 빈손으로 두지 않는다.
+        const digits = m[1] ?? m[3] ?? m[5] ?? m[8] ?? m[11]
+        const tail = m[2] ?? m[4] ?? m[6] ?? m[9] ?? m[12]
+        const unit = m[1] ? '시간' : (m[3] || m[5]) ? '월' : '시'
+        pushGroup([...numberGlosses(digits), ...(UNIT_GLOSS[unit[0]] ? [UNIT_GLOSS[unit[0]]] : [])])
+        if (tail) pushGroup(numberGlosses(tail))
+        afterNumber = false
+        continue
+      }
+
+      // 범위 표시 — "11:00~15:30", "10.26~10.28". 사람 번역가도 `물결표1`을 쓴다
+      // (말뭉치 282회, 앞 글로스가 시:* 49회 · 날짜:* 45회로 대부분 시각·날짜 범위다).
+      if (m[16]) {
+        flushNumber()
+        // **앞 덩어리에 붙인다.** 물결표는 "여기서부터 저기까지"의 시작을 가리키는
+        // 표지라, 어순을 다시 잡을 때 떨어져 나가면 뜻이 사라진다(실측에서
+        // "날짜 날짜 물결표"로 맨 뒤에 밀렸다).
+        pushAs('물결표1', chunkIds[chunkIds.length - 1] ?? nextChunk++)
+        afterNumber = false
+        continue
+      }
+
+      if (m[15]) {
+        const word = m[15]
         const value = readKoreanNumber(word)
         if (value !== null) {
           // 한 글자 수사(일·이·삼·오·만…)는 낱말과 겹친다. 뒤에 단위가 와야 수사로 본다
           // — "만 오천 원"은 수, "만 나이"의 '만'은 수가 아니다.
-          const next = matches[mi + 1]?.[3]
+          const next = matches[mi + 1]?.[15]
           const unitNext = next !== undefined && UNIT_GLOSS[next[0]] !== undefined
           // 뒤에 수사가 또 오면 이어지는 수다("만" + "오천" = 15000).
           const numberNext = next !== undefined && readKoreanNumber(next) !== null
@@ -258,18 +397,18 @@ export class DictSignAgent implements SignAgent {
         }
       }
       flushNumber()
-      if (m[1]) {
+      if (m[13]) {
         // 전화번호: 자릿수 읽기 (032 → 공 삼 이)
-        pushGroup(numberGlosses(m[1].replace(/-/g, '')))
+        pushGroup(numberGlosses(m[13].replace(/-/g, '')))
         afterNumber = false
         continue
       }
-      if (m[2]) {
-        pushGroup(numberGlosses(m[2]))
+      if (m[14]) {
+        pushGroup(numberGlosses(m[14]))
         afterNumber = true
         continue
       }
-      const raw = m[3]
+      const raw = m[15]
       // 숫자 뒤의 단위(3일·14시·5층)는 한 글자여도 살린다 — 조사가 붙어도("14시에")
       // 단위 글자 + 조사뿐이면 단위로 본다.
       if (afterNumber && UNIT_GLOSS[raw[0]]) {

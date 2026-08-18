@@ -136,6 +136,72 @@ def main() -> None:
         if missing:
             print(f"[web] 사전에 없는 생활 어휘 {len(missing)}개: {missing[:15]}")
 
+    # ── 시각·날짜·소요시간 전용 조각 ──────────────────────────────
+    #
+    # 위에서 `:` 글로스를 전부 뺐는데, 그건 **번역 사전을 지키려는 것**이지
+    # 조각이 쓸모없어서가 아니다. 사람 번역가는 "21시"를 `시:9시`로, "10.26"을
+    # `날짜:10월26일`로 낸다 — 말뭉치 4만 문장에서 `시:*`가 17,149회, `날짜:*`가
+    # 6,640회로 **가장 많이 쓰는 부류 중 하나**다. 우리는 이걸 빼놓고 숫자를
+    # 자릿수로 읽고 있었다("이 십 일 시"). 형식도 어법도 틀린 셈이다.
+    #
+    # 그래서 조각은 싣되, **낱말로는 쓰지 않는다.** 앱이 문장에서 시각·날짜
+    # 패턴을 알아봤을 때만 표를 보고 꺼내 쓴다(`timegloss.json` → dictSignAgent).
+    # 이러면 "주택 → 날짜:9월16일" 같은 오염은 생기지 않는다.
+    #
+    # 원본 키는 지저분하다(`시:-00시00분`, `날짜:-19월-19일`, 18월 같은 것). 정규화해
+    # 말이 되는 것만 남기고, 같은 시각·날짜에 여러 클립이 있으면 품질 점수가 높은
+    # 것을 고른다.
+    TIME_RE = re.compile(r"^시:[-.]?0*(\d{1,2})시(?:[-.]?0*(\d{1,2})분)?$")
+    DATE_RE = re.compile(r"^날짜:[-.]?0*(\d{1,2})월[-.]?0*(\d{1,2})일$")
+    DUR_RE = re.compile(r"^시간:[-.]?0*(\d{1,2})시간(?:[-.]?0*(\d{1,2})분)?$")
+
+    def _pick(cands: list[str]) -> str:
+        """같은 값에 여러 클립이 있으면 **표기가 깔끔한 것 → 품질 점수 → 프레임 수** 순.
+
+        원본 키는 표기가 제각각이다(`시:9시` / `시:09시` / `시:9시00분` / `시:-9시`).
+        내용은 같은 시각인데 화면 자막과 검사에 서로 다른 이름이 나오면 읽는 쪽도
+        검사하는 쪽도 헷갈린다. 사람이 쓰는 꼴(앞자리 0·부호 없음, 0분 생략)을
+        우선한다.
+        """
+        def key(g: str):
+            body = g.split(":", 1)[1]
+            clean = 0 if re.search(r"[-.]|:0\d|월0\d|시0\d|간0\d|^0\d", body) else 1
+            short = -len(body)
+            return (clean, short, bank[g].get("score", 0), bank[g].get("frames", 0))
+        return max(cands, key=key)
+
+    buckets: dict[str, dict[str, list[str]]] = {"time": {}, "date": {}, "dur": {}}
+    for g in bank:
+        m = TIME_RE.match(g)
+        if m:
+            h, mi = int(m.group(1)), int(m.group(2) or 0)
+            if 0 <= h <= 24 and 0 <= mi < 60:
+                buckets["time"].setdefault(f"{h}:{mi}", []).append(g)
+            continue
+        m = DATE_RE.match(g)
+        if m:
+            mo, d = int(m.group(1)), int(m.group(2))
+            if 1 <= mo <= 12 and 1 <= d <= 31:
+                buckets["date"].setdefault(f"{mo}-{d}", []).append(g)
+            continue
+        m = DUR_RE.match(g)
+        if m:
+            h, mi = int(m.group(1)), int(m.group(2) or 0)
+            if 0 <= h <= 24 and 0 <= mi < 60:
+                buckets["dur"].setdefault(f"{h}:{mi}", []).append(g)
+
+    table = {kind: {k: _pick(v) for k, v in b.items()} for kind, b in buckets.items()}
+    have = set(chosen)
+    time_added = [g for kind in table for g in table[kind].values() if g not in have]
+    chosen = chosen + sorted(set(time_added))
+    print(
+        f"[web] 시각 {len(table['time']):,} · 날짜 {len(table['date']):,} · "
+        f"소요시간 {len(table['dur']):,} 조합 → 조각 {len(set(time_added)):,}종 추가"
+    )
+    (args.out / "timegloss.json").write_text(
+        json.dumps(table, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+    )
+
     gloss_dir = args.out / "glosses"
     if args.clean and gloss_dir.exists():
         shutil.rmtree(gloss_dir)

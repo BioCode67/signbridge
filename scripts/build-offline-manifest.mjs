@@ -47,7 +47,7 @@ const essential = new Set()
 // nearby.json은 **재난 때가 곧 오프라인**이라 필수다 — 통신이 끊긴 상태에서
 // "대피소 어디?"에 답하지 못하면 이 기능은 정작 필요한 순간에 없는 것과 같다.
 for (const f of ['./data/bank.json', './data/align.json', './data/order.json',
-                 './data/feed.json', './data/nearby.json'])
+                 './data/feed.json', './data/nearby.json', './data/timegloss.json'])
   essential.add(f)
 for (const g of phraseGlosses) {
   const f = fileOf(g)

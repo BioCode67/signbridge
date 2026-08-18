@@ -17,9 +17,17 @@ const align = JSON.parse(readFileSync('public/data/align.json', 'utf8'))
 const order = JSON.parse(readFileSync('public/data/order.json', 'utf8'))
 // 번역기는 사전과 어순표를 각각 받아온다 — 스텁도 **URL을 보고** 갈라 주어야 한다.
 // (한동안 모든 요청에 사전을 돌려주는 바람에 어순 검사가 조용히 무력화돼 있었다.)
+const timegloss = JSON.parse(readFileSync('public/data/timegloss.json', 'utf8'))
+// 번역기는 사전·어순표·시각표를 각각 받아온다 — 스텁도 **URL을 보고** 갈라 주어야 한다.
+// (한동안 모든 요청에 사전을 돌려주는 바람에 어순 검사가 조용히 무력화돼 있었다.)
 globalThis.fetch = async (url) => ({
   ok: true,
-  json: async () => (String(url).includes('order.json') ? order : align),
+  json: async () => {
+    const u = String(url)
+    if (u.includes('order.json')) return order
+    if (u.includes('timegloss.json')) return timegloss
+    return align
+  },
 })
 
 const { cases, koreanCases = [] } = JSON.parse(

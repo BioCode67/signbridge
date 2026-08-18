@@ -105,6 +105,12 @@ def main() -> None:
         hard |= set(re.findall(r":\s*'([^']+)'", m.group(1)))
     hard |= {"공", "점"}  # 자릿수 읽기·소수점에서 코드가 직접 만들어 쓴다
 
+    # 시간대 표지(DAYPART) — 시각 앞에 붙는다. 빠지면 "오전 9시"와 "밤 9시"가
+    # 똑같이 `시:9시` 하나로 나가 **어느 쪽인지 알 수 없게 된다**(수어 시각은 12시간제).
+    m = re.search(r"const DAYPART: readonly string\[\] = \[(.*?)\]", agent, re.S)
+    if m:
+        hard |= set(re.findall(r"'([^']+)'", m.group(1)))
+
     # 길찾기 답변이 쓰는 갈래 글로스(nearby.ts의 KIND_KO) — "대피소 어디?"의 답에서
     # 이 낱말이 빠지면 아바타가 방향과 거리만 하고 **무엇이 있는지는 말하지 않는다.**
     nearby_src = (ROOT / "src/user/nearby.ts").read_text(encoding="utf-8")
@@ -121,6 +127,21 @@ def main() -> None:
     print(f"[glosses] 숫자·단위 글로스 {len(hard)}종 중 재생 가능 {len(hard) - len(gone)}종")
     if gone:
         broken.append(("숫자·단위 글로스(코드 상수)", sorted(hard), gone))
+
+    # 시각·날짜 표가 가리키는 조각이 실제로 실려 있는가.
+    timegloss = ROOT / "public/data/timegloss.json"
+    if timegloss.exists():
+        tg = json.loads(timegloss.read_text(encoding="utf-8"))
+        targets = {g for kind in tg.values() for g in kind.values()}
+        gone_t = sorted(g for g in targets if g not in bank)
+        print(f"[glosses] 시각·날짜 조각 {len(targets):,}종 중 "
+              f"재생 가능 {len(targets) - len(gone_t):,}종 "
+              f"(시각 {len(tg.get('time', {})):,} · 날짜 {len(tg.get('date', {})):,} · "
+              f"소요시간 {len(tg.get('dur', {})):,} 조합)")
+        if gone_t:
+            broken.append(("시각·날짜 조각(timegloss.json)", sorted(targets)[:5], gone_t[:20]))
+    else:
+        print("[glosses] ⚠️ timegloss.json 이 없습니다 — 시각·날짜가 자릿수로 읽힙니다")
 
     if not broken:
         print("[glosses] ✓ 모든 상용구가 재생 가능합니다")

@@ -23,9 +23,16 @@ const align = JSON.parse(readFileSync('public/data/align.json', 'utf8'))
 const order = JSON.parse(readFileSync('public/data/order.json', 'utf8'))
 
 // 브라우저 코드는 사전과 어순표를 각각 fetch로 받는다 — URL을 보고 갈라 주는 가짜 fetch.
+const timegloss = JSON.parse(readFileSync('public/data/timegloss.json', 'utf8'))
+// 사전·어순표·시각표를 URL로 갈라 준다. 시각표를 안 주면 검사가 **옛 동작**을 잰다.
 globalThis.fetch = async (url) => ({
   ok: true,
-  json: async () => (String(url).includes('order.json') ? order : align),
+  json: async () => {
+    const u = String(url)
+    if (u.includes('order.json')) return order
+    if (u.includes('timegloss.json')) return timegloss
+    return align
+  },
 })
 
 const file = process.argv[2]

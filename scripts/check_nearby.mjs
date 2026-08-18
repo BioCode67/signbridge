@@ -64,8 +64,16 @@ ok(nearest(places, 37.5, 127.0, null, 9).length === 3, '갈래 null이면 전부
 // ── 답변 문장이 실제로 수어가 되는가 — 여기서 끊기면 아바타가 조용히 선다
 const align = JSON.parse(readFileSync('public/data/align.json', 'utf8'))
 const order = JSON.parse(readFileSync('public/data/order.json', 'utf8'))
+const timegloss = JSON.parse(readFileSync('public/data/timegloss.json', 'utf8'))
+// 사전·어순표·시각표를 URL로 갈라 준다. 시각표를 안 주면 검사가 **옛 동작**을 잰다.
 globalThis.fetch = async (url) => ({
-  ok: true, json: async () => (String(url).includes('order.json') ? order : align),
+  ok: true,
+  json: async () => {
+    const u = String(url)
+    if (u.includes('order.json')) return order
+    if (u.includes('timegloss.json')) return timegloss
+    return align
+  },
 })
 const { DictSignAgent } = await import('../src/agents/dictSignAgent.ts')
 const agent = new DictSignAgent('align.json')

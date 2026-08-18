@@ -279,9 +279,14 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # 목록이 공식 지정이 아니면 화면이 그 사실을 말해야 한다 — 대피소는 특히.
     if nearby and not nearby["official"]:
         rep.check(await pg.get_by_text("참고용").count() > 0, "묻기: 출처가 참고용임을 표시")
-    await pg.get_by_role("button", name="수어로 묻기").click()
-    await pg.wait_for_timeout(1500)
-    rep.check(await pg.get_by_role("button", name="💬 답 받기").count() > 0, "묻기: 촬영 화면 진입")
+    # 촬영 화면 진입은 **폰에서만** 본다. 카메라를 켜면 MediaPipe와 인식 모델을
+    # 함께 내려받아 소프트웨어 렌더링으로 몇 분이 걸린다 — 기기마다 되풀이할 이유가
+    # 없다(화면 구성은 세 기기가 같은 컴포넌트다).
+    if name == "폰":
+        await pg.get_by_role("button", name="수어로 묻기").click()
+        await pg.wait_for_timeout(2500)
+        rep.check(await pg.get_by_role("button", name="💬 답 받기").count() > 0,
+                  "묻기: 촬영 화면 진입")
 
     # ── 손가락으로 누를 수 있는 크기인가(모바일 접근성 최소 44px)
     small = await pg.evaluate(

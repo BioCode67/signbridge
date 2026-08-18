@@ -41,7 +41,7 @@ const SosScreen = lazy(() => import('./SosScreen'))
 
 interface Props {
   /** 지금 재생 중인 재난 정보 — "지금 무슨 일?"의 답이 된다 */
-  notice: { text: string; category?: string } | null
+  notice: { text: string; category?: string; region?: string } | null
   /** 이 화면에 있는 동안 앱 헤더·탭을 접는다(아바타·카메라에 자리를 준다) */
   onImmersive?(on: boolean): void
 }
@@ -56,6 +56,8 @@ interface Answer {
   sign: string
   target?: Ranked
   others?: Ranked[]
+  /** 이어서 볼 문장들 — 행동요령 여러 줄, 재난문자 원문 */
+  steps?: string[]
   /** 목록·위치가 없어 답할 수 없을 때의 안내 */
   problem?: string
 }
@@ -124,14 +126,26 @@ export default function AskMode({ notice, onImmersive }: Props) {
           sign: '지금 소식 없다', problem: 'no-notice',
         }
       }
-      return { intent, headline: notice.text, sign: notice.text }
+      // **문자 원문을 통째로 수어로 내지 않는다.** 재난문자는 길고(평균 두세 문장)
+      // 문의 답으로는 너무 무겁다. 먼저 한 줄로 짧게 답하고, 원문 전체는 화면에
+      // 띄운 뒤 '전체 수어로 보기'로 넘긴다 — 급할 때 필요한 건 요점이다.
+      const g = guideFor(notice.category)
+      const what = g?.name ?? notice.category ?? '재난'
+      const where = notice.region ? `${notice.region} ` : ''
+      return {
+        intent,
+        headline: notice.text,
+        sign: `지금 ${where}${what} 조심하세요`,
+        steps: [notice.text],
+      }
     }
     if (intent.kind === 'howto') {
       const g = guideFor(notice?.category)
       if (!g || g.steps.length === 0) {
         return { intent, headline: '행동요령이 없어요', sign: '방법 없다', problem: 'no-guide' }
       }
-      return { intent, headline: g.steps[0], sign: g.steps[0] }
+      // 요령은 한 줄로 끝나지 않는다 — 첫 줄을 수어로 내고 나머지는 눌러서 이어 본다.
+      return { intent, headline: g.steps[0], sign: g.steps[0], steps: g.steps }
     }
     // 장소 질문
     const kind: PlaceKind = intent.place
@@ -158,6 +172,15 @@ export default function AskMode({ notice, onImmersive }: Props) {
     const t = list[0]
     return { intent, headline: answerHeadline(t), sign: answerSentence(t), target: t, others: list }
   }, [nearby, coords, notice])
+
+  /** 의도 하나로 곧장 답한다 — 예시 버튼과 수어 인식이 같은 길을 쓴다. */
+  const answerNow = useCallback(async (intent: Intent) => {
+    locate()
+    const a = makeAnswer(intent)
+    setAnswer(a)
+    setPhase('answering')
+    await player.play(a.sign)
+  }, [makeAnswer, player, locate])
 
   const respond = useCallback(async () => {
     const got = detectIntent(rec.transcript, rec.transcriptAlts)
@@ -194,6 +217,31 @@ export default function AskMode({ notice, onImmersive }: Props) {
     () => detectIntent(rec.transcript, rec.transcriptAlts),
     [rec.transcript, rec.transcriptAlts],
   )
+
+  // **손을 내리면 알아서 답한다.**
+  //
+  // 버튼을 눌러야 답이 나오면 그건 대화가 아니라 조작이다. 사람에게 물을 때는
+  // 수어를 마치면 상대가 답하지, "다 했어요" 버튼을 누르지 않는다. 그래서
+  // 뜻이 확실하고(1순위 낱말끼리 맞아 점수 1.8 이상) 잠시 손이 멎으면 스스로 답한다.
+  //
+  // 확실할 때만 그런다. 애매한 판정으로 먼저 답해 버리면 사용자는 문장을 끝내지도
+  // 못한 채 엉뚱한 답을 보게 된다 — 그때는 '답 받기'를 직접 누르게 둔다.
+  const AUTO_SCORE = 1.8
+  const AUTO_WAIT = 1600
+  const respondRef = useRef<() => void>(() => {})
+  const [autoIn, setAutoIn] = useState(false)
+  useEffect(() => {
+    if (phase !== 'asking' || !intentPreview || intentPreview.score < AUTO_SCORE) {
+      setAutoIn(false)
+      return
+    }
+    setAutoIn(true)
+    // 낱말이 하나라도 더 들어오면 이 효과가 다시 돌아 타이머가 처음부터 간다 —
+    // 문장을 이어 가는 동안에는 답하지 않는다는 뜻이다.
+    const t = window.setTimeout(() => { setAutoIn(false); respondRef.current() }, AUTO_WAIT)
+    return () => window.clearTimeout(t)
+  }, [phase, intentPreview?.score, rec.transcript.length])
+  useEffect(() => { respondRef.current = () => void respond() }, [respond])
   const confident = rec.current !== null && rec.current.confidence >= 0.5
 
   if (sos) {
@@ -225,13 +273,22 @@ export default function AskMode({ notice, onImmersive }: Props) {
           📹
         </button>
         <p className="text-3xl font-extrabold text-slate-100">수어로 물어보세요</p>
-        <ul className="flex flex-wrap justify-center gap-2">
+        {/* 예시는 **누를 수 있게** 둔다.
+            수어를 아직 잘 못 하는 사람(중도 실청·학습 중), 손을 다친 사람,
+            카메라를 켤 수 없는 자리(어두운 곳·사람이 많은 곳)에도 길이 있어야 한다.
+            같은 답이 같은 방식으로 나오므로 배우는 데도 도움이 된다. */}
+        <div className="flex flex-wrap justify-center gap-2">
           {(['shelter', 'hospital', 'pharmacy', 'toilet'] as PlaceKind[]).map((k) => (
-            <li key={k} className="rounded-full bg-space-800 px-4 py-2 text-lg text-slate-300">
+            <button
+              key={k}
+              type="button"
+              onClick={() => void answerNow({ kind: 'where', place: k })}
+              className="min-h-[48px] rounded-full border border-white/15 bg-space-800 px-4 py-2 text-lg font-bold text-slate-200 active:scale-95"
+            >
               {KIND_KO[k].icon} {KIND_KO[k].label} 어디?
-            </li>
+            </button>
           ))}
-        </ul>
+        </div>
         <p className="max-w-sm text-base leading-relaxed text-slate-500">
           카메라 영상은 이 기기 밖으로 나가지 않아요.
           {nearby && !nearby.official && (
@@ -291,8 +348,10 @@ export default function AskMode({ notice, onImmersive }: Props) {
               words={rec.transcript} alts={rec.transcriptAlts} onReplace={rec.replaceWord} />
             {/* 무엇으로 알아들었는지 **묻는 동안** 보여준다 — 틀렸으면 지금 고쳐야 한다 */}
             {intentPreview && (
-              <p className="mt-2 rounded-full bg-emerald-400/15 px-4 py-1.5 text-lg font-bold text-emerald-300">
-                “{intentKo(intentPreview.intent)}”로 알아들었어요
+              <p className={`mt-2 rounded-full px-4 py-1.5 text-lg font-bold ${
+                autoIn ? 'bg-emerald-400/30 text-emerald-200' : 'bg-emerald-400/15 text-emerald-300'}`}>
+                “{intentKo(intentPreview.intent)}”
+                {autoIn ? ' — 곧 답할게요' : '로 알아들었어요'}
               </p>
             )}
           </div>
@@ -342,6 +401,22 @@ export default function AskMode({ notice, onImmersive }: Props) {
                 🗺 지도 앱으로 열기
               </a>
             </>
+          )}
+
+          {/* 이어지는 문장 — 누르면 그 줄을 수어로 본다 */}
+          {(answer.steps?.length ?? 0) > 0 && (
+            <div className="mt-3 space-y-2">
+              {answer.steps!.map((st, i) => (
+                <button key={i} type="button"
+                  onClick={() => void player.play(st)}
+                  className="flex w-full items-start gap-3 rounded-2xl border border-emerald-400/30 bg-space-800 px-4 py-3 text-left">
+                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-400/20 text-base font-extrabold text-emerald-300">
+                    {i + 1}
+                  </span>
+                  <span className="text-lg font-bold leading-snug text-slate-100">{st}</span>
+                </button>
+              ))}
+            </div>
           )}
 
           {answer.problem === 'no-location' && (

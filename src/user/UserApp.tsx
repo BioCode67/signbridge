@@ -375,7 +375,13 @@ export default function UserApp() {
             }
           >
             <AskMode
-              notice={feed[cursor] ? { text: feed[cursor].text, category: feed[cursor].category } : null}
+              notice={feed[cursor]
+                ? {
+                    text: feed[cursor].text,
+                    category: feed[cursor].category,
+                    region: REGION_RE.exec(feed[cursor].text)?.[1],
+                  }
+                : null}
               onImmersive={onImmersive}
             />
           </Suspense>

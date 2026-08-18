@@ -182,9 +182,18 @@ async def main() -> int:
         # 창구 대화 중에는 탭이 접혀 있다 — 장소로 나오면 다시 나타난다.
         await tap(pg.get_by_role("button", name="← 장소"))
         await pg.wait_for_timeout(400)
-        await r.step("장면3", "[🙋 질문] 탭(카메라 인식)",
-                     lambda: pg.get_by_role("button", name="🙋 질문").click(timeout=8000))
-        await pg.wait_for_timeout(1500)
+        await r.step("장면3", "[📹 묻기] 탭(수어로 물어 위치로 답받기)",
+                     lambda: pg.get_by_role("button", name="📹 묻기").click(timeout=8000))
+        await pg.wait_for_timeout(1200)
+        await r.step("장면3", "묻기 시작 화면 — 큰 버튼 하나",
+                     lambda: pg.get_by_text("수어로 물어보세요").wait_for(timeout=5000))
+        await r.step("장면3", "주변 장소 목록이 실려 있다(오프라인 답변의 재료)",
+                     lambda: pg.evaluate(
+                         "async () => { const r = await fetch('./data/nearby.json');"
+                         " if (!r.ok) throw new Error('nearby.json 없음');"
+                         " const d = await r.json();"
+                         " if (!(d.places?.length > 100)) throw new Error('장소가 너무 적다'); }"))
+        await pg.wait_for_timeout(600)
 
         await r.step("장면4", "[📥 오프라인] 버튼이 있다",
                      lambda: pg.get_by_role("button", name="📥", exact=False).first.wait_for(timeout=5000))

@@ -20,7 +20,8 @@
 이 프로젝트에서 가장 찾기 어려운 실패다.
 
 ```bash
-python -m ml.tools.feature_parity     # 둘 중 하나라도 건드리면 반드시 실행
+python -m ml.tools.feature_parity        # 둘 중 하나라도 건드리면 반드시 실행
+python3 ml/tools/check_rule_parity.py   # 조사·어미·제외어 규칙도 양쪽이 같아야 한다
 ```
 
 Node 22의 타입 스트리핑으로 TS를 직접 실행해 수치를 대조한다. 현재 **오차 0**.
@@ -59,6 +60,13 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 ```
 
 ### 커버리지는 정확도가 아니다
+
+오역을 **찾는** 도구가 따로 있다. 표현률은 오역을 성공으로 세기 때문이다.
+
+```bash
+python3 ml/tools/suspect_align.py --top 60   # 글자를 안 겹치는 고빈도 대응 = 검토 대상
+```
+
 
 낱말 표현률은 "몇 %가 수어로 나갔나"만 잰다. **맞게 나갔는지는 재지 않는다.**
 실제로 복합어 프루닝 버그로 "어디가 아프신지"가 "어디 아프다 **신다(신발)**"로
@@ -120,6 +128,7 @@ ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   signbridge/        features · models · dataset · openpose · naming · pack
   etl/               aihub_disaster · aihub_sl · prepare · merge_index · extract_mediapipe
   tools/             feature_parity(필수 검증) · check_app_glosses(앱↔사전 정합) · schema_report
+                     suspect_align(고빈도 오역 후보 검토) · build_nearby(주변 장소 데이터)
   data/daily_vocab.txt  창구 생활 어휘 — 빈도로 잘리면 안 되는 낱말 목록
 scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
 scripts/shots.py       화면 사진만 찍는다 — "동작하는가"가 아니라 "보기 좋은가"를 사람이 볼 때

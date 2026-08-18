@@ -23,6 +23,23 @@ interface Props {
   accuracy?: number
 }
 
+/** 아이폰은 나침반을 **사용자 동작으로 허락**받아야 한다(iOS 13+).
+ *  이 절차가 없으면 아이폰에서는 화면이 영영 북쪽 고정이라, 사용자는
+ *  머릿속에서 방향을 한 번 변환해야 한다 — 국내 사용자 상당수가 아이폰이다. */
+type OriCtor = { requestPermission?: () => Promise<'granted' | 'denied'> }
+function needsPermission(): boolean {
+  const C = (globalThis as unknown as { DeviceOrientationEvent?: OriCtor }).DeviceOrientationEvent
+  return typeof C?.requestPermission === 'function'
+}
+async function askPermission(): Promise<boolean> {
+  const C = (globalThis as unknown as { DeviceOrientationEvent?: OriCtor }).DeviceOrientationEvent
+  try {
+    return (await C?.requestPermission?.()) === 'granted'
+  } catch {
+    return false
+  }
+}
+
 /** 기기 나침반 — 지원하지 않으면 null(그때는 북쪽 위 고정). */
 function useHeading(): number | null {
   const [heading, setHeading] = useState<number | null>(null)
@@ -48,6 +65,7 @@ const C = SIZE / 2
 
 export default function DirectionMap({ target, others = [], accuracy }: Props) {
   const heading = useHeading()
+  const [asked, setAsked] = useState(false)
   // 화면 회전 — 나침반이 있으면 내가 보는 쪽이 위로 온다.
   const rot = heading == null ? 0 : -heading
   const dir = directionKo(target.bearing)
@@ -118,6 +136,15 @@ export default function DirectionMap({ target, others = [], accuracy }: Props) {
           : '휴대폰이 향한 쪽이 위쪽이에요'}
         {' · '}약 {walkMinutes(target.distance)}분 걸어요
       </p>
+      {heading == null && !asked && needsPermission() && (
+        <button
+          type="button"
+          onClick={() => { setAsked(true); void askPermission() }}
+          className="mt-2 min-h-[44px] rounded-2xl border border-white/15 px-4 py-2 text-base font-bold text-slate-300"
+        >
+          🧭 나침반 켜기 — 내가 보는 쪽 기준으로
+        </button>
+      )}
     </div>
   )
 }

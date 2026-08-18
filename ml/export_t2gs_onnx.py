@@ -36,22 +36,28 @@ class EncoderWrap(nn.Module):
         super().__init__()
         self.m = m
 
-    def forward(self, src: torch.Tensor) -> torch.Tensor:
+    def forward(self, src: torch.Tensor, pad: torch.Tensor) -> torch.Tensor:
         import math
         h = self.m.pos(self.m.src_emb(src) * math.sqrt(self.m.d))
-        return self.m.tr.encoder(h)
+        return self.m.tr.encoder(h, src_key_padding_mask=pad)
 
 
 class DecoderWrap(nn.Module):
-    def __init__(self, m: SmallT2G) -> None:
+    """인과 마스크는 그래프 안에 고정 크기로 굽는다(입력 길이가 고정이라 안전하다)."""
+
+    def __init__(self, m: SmallT2G, max_tgt: int) -> None:
         super().__init__()
         self.m = m
+        self.register_buffer(
+            "causal", torch.triu(torch.full((max_tgt, max_tgt), float("-inf")), diagonal=1)
+        )
 
-    def forward(self, memory: torch.Tensor, tgt: torch.Tensor) -> torch.Tensor:
+    def forward(self, memory: torch.Tensor, mem_pad: torch.Tensor,
+                tgt: torch.Tensor) -> torch.Tensor:
         import math
-        causal = nn.Transformer.generate_square_subsequent_mask(tgt.size(1), device=tgt.device)
         h = self.m.pos(self.m.tgt_emb(tgt) * math.sqrt(self.m.d))
-        h = self.m.tr.decoder(h, memory, tgt_mask=causal)
+        h = self.m.tr.decoder(h, memory, tgt_mask=self.causal,
+                              memory_key_padding_mask=mem_pad)
         return self.m.out(h)
 
 
@@ -60,7 +66,18 @@ def main() -> int:
     ap.add_argument("--checkpoint", type=Path, required=True, help="t2gs 출력 폴더")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--quantize", action="store_true")
+    ap.add_argument("--max-src", type=int, default=128,
+                    help="입력 음절 칸 수(고정). 재난문자는 대개 60~120음절이다")
     a = ap.parse_args()
+
+    # **MultiheadAttention의 빠른 경로를 끈다.**
+    #
+    # 켜 두면 트레이서가 어텐션 안의 reshape에 **그때의 문장 길이를 상수로 굽는다.**
+    # 내보내기는 성공하고 파일도 나오는데, 길이가 다른 문장을 넣는 순간
+    # `Reshape ... requested shape {24,6,64}` 로 죽는다(실측: 24글자로 뽑고
+    # 29글자를 넣었더니 바로 깨졌다). 빌드가 아니라 **실행 시점에** 드러나는 종류라
+    # 반드시 돌려 보고 확인해야 한다.
+    torch.backends.mha.set_fastpath_enabled(False)
 
     ck = torch.load(a.checkpoint / "best.pt", map_location="cpu", weights_only=False)
     cfg = ck["cfg"]
@@ -69,21 +86,37 @@ def main() -> int:
     model.eval()
 
     a.out.mkdir(parents=True, exist_ok=True)
-    src = torch.randint(4, cfg["n_src"], (1, 24))
+    # **모양을 전부 고정한다.**
+    #
+    # 동적 길이로 내보내는 두 길을 다 시도했는데 둘 다 막혔다:
+    #   · 예전 트레이서(dynamic_axes) → 어텐션 reshape에 그때의 길이가 **상수로 구워진다.**
+    #     파일은 나오는데 길이가 다른 문장에서 죽는다
+    #     (`Reshape ... Input shape:{29,1,384}, requested shape:{24,6,64}`, 실측).
+    #   · dynamo → 디코더에서 `Could not guard on data-dependent expression Eq(u0, 1)`.
+    #
+    # 그래서 입력 길이를 고정하고 **패딩 마스크로 처리**한다. 학습 때도 마스크를
+    # 쓰므로 결과가 달라지지 않는다. 그래프가 완전히 정적이라 브라우저에서
+    # 모양 때문에 깨질 자리가 아예 없다 — 대가는 짧은 문장에서도 정해진 칸을
+    # 다 계산하는 것뿐이고, 모델이 작아 문제되지 않는다.
+    S_FIX = int(a.max_src)
+    T_FIX = int(cfg["max_tgt"])
+
+    src = torch.full((1, S_FIX), PAD, dtype=torch.long)
+    src[0, :20] = torch.randint(4, cfg["n_src"], (20,))
+    pad = src == PAD
+    tgt = torch.full((1, T_FIX), PAD, dtype=torch.long)
+    tgt[0, 0] = BOS
     with torch.no_grad():
-        memory = EncoderWrap(model)(src)
-    tgt = torch.tensor([[BOS, 5, 6]])
+        memory = EncoderWrap(model)(src, pad)
 
     torch.onnx.export(
-        EncoderWrap(model), (src,), a.out / "encoder.onnx",
-        input_names=["src"], output_names=["memory"],
-        dynamic_axes={"src": {1: "S"}, "memory": {1: "S"}},
+        EncoderWrap(model), (src, pad), a.out / "encoder.onnx",
+        input_names=["src", "pad"], output_names=["memory"],
         opset_version=OPSET, do_constant_folding=True,
     )
     torch.onnx.export(
-        DecoderWrap(model), (memory, tgt), a.out / "decoder.onnx",
-        input_names=["memory", "tgt"], output_names=["logits"],
-        dynamic_axes={"memory": {1: "S"}, "tgt": {1: "T"}, "logits": {1: "T"}},
+        DecoderWrap(model, T_FIX), (memory, pad, tgt), a.out / "decoder.onnx",
+        input_names=["memory", "mem_pad", "tgt"], output_names=["logits"],
         opset_version=OPSET, do_constant_folding=True,
     )
 
@@ -92,7 +125,7 @@ def main() -> int:
         "task": "text2gloss",
         "src": vocab["src"], "tgt": vocab["tgt"],
         "pad": PAD, "bos": BOS, "eos": EOS,
-        "max_src": cfg["max_src"], "max_tgt": cfg["max_tgt"],
+        "max_src": S_FIX, "max_tgt": T_FIX, "fixed_shapes": True,
         "d_model": cfg["d"], "enc": cfg["enc"], "dec": cfg["dec"],
         "opset": OPSET,
     }, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")

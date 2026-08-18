@@ -155,7 +155,12 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # (오류 목록에 섞으면 무해한 라이브러리 경고까지 검사를 깨뜨린다.)
     warns: list[str] = []
     pg.on("console", lambda m: warns.append(m.text) if m.type == "warning" else None)
-    pg.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}") if r.status >= 400 else None)
+    # 학습 번역 모델(models/t2g)은 **있으면 쓰고 없으면 사전으로 되돌아가는** 선택 자산이다.
+    # 아직 안 실은 배포본에서 404가 나는 것은 정상 동작이라 오류로 세지 않는다.
+    # (그 외 404는 그대로 잡는다 — 조각·모델이 빠진 배포를 놓치면 안 된다.)
+    OPTIONAL_404 = "/models/t2g/"
+    pg.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}")
+          if r.status >= 400 and OPTIONAL_404 not in r.url else None)
 
     rep.note(f"  [{name} {w}×{h}]")
     # **networkidle을 기다리지 않는다.** 이 앱은 첫 방문 뒤 오프라인 필수 세트

@@ -30,7 +30,9 @@ interface Meta {
   pad: number
   bos: number
   eos: number
+  /** 입력 음절 칸 수 — **고정이다.** 짧으면 패딩하고 마스크로 가린다. */
   max_src: number
+  /** 출력 글로스 칸 수 — 역시 고정. 매 스텝 전체를 계산하고 그 자리만 읽는다. */
   max_tgt: number
 }
 
@@ -117,33 +119,50 @@ export class NnSignAgent implements SignAgent {
     }
   }
 
-  /** 그리디 디코딩. 캐시를 쓰지 않고 매 스텝 앞부분을 다시 계산한다 —
-   *  글로스 40개를 넘지 않는 문장이라 이 정도로 충분하고, 그래프가 훨씬 단순하다. */
+  /** 그리디 디코딩.
+   *
+   *  **모양이 전부 고정이다.** 입력은 항상 `max_src`칸(뒤는 패딩 + 마스크),
+   *  출력 버퍼도 항상 `max_tgt`칸이다. 동적 길이로 내보내려던 두 길이 다 막혀서
+   *  (어텐션 reshape에 길이가 상수로 구워지거나, dynamo가 마스크 모양에서 죽는다)
+   *  정적으로 굳혔다 — 브라우저에서 모양 때문에 깨질 자리가 아예 없다.
+   *
+   *  인과 마스크가 그래프 안에 있어 **뒤쪽 패딩이 앞쪽 결과를 오염시키지 않는다.**
+   *  매 스텝 지금 자리의 로짓만 읽으면 된다. */
   private async translate(text: string): Promise<string[]> {
     const meta = this.meta!
     const ort = this.ort as typeof import('onnxruntime-web')
     const enc = this.enc as import('onnxruntime-web').InferenceSession
     const dec = this.dec as import('onnxruntime-web').InferenceSession
+    const S = meta.max_src
+    const T = meta.max_tgt
 
     const index = new Map(meta.src.map((s, i) => [s, i]))
-    const ids = syllables(text).slice(0, meta.max_src).map((c) => index.get(c) ?? 3 /* <unk> */)
-    if (ids.length === 0) return []
+    const chars = syllables(text).slice(0, S)
+    if (chars.length === 0) return []
 
-    const srcTensor = new ort.Tensor('int64', BigInt64Array.from(ids.map(BigInt)), [1, ids.length])
-    const encOut = await enc.run({ src: srcTensor })
+    const srcArr = new BigInt64Array(S).fill(BigInt(meta.pad))
+    const padArr = new Uint8Array(S).fill(1)
+    chars.forEach((c, i) => {
+      srcArr[i] = BigInt(index.get(c) ?? 3 /* <unk> */)
+      padArr[i] = 0
+    })
+    const src = new ort.Tensor('int64', srcArr, [1, S])
+    const pad = new ort.Tensor('bool', padArr, [1, S])
+    const encOut = await enc.run({ src, pad })
     const memory = encOut[enc.outputNames[0]]
 
-    const out: number[] = [meta.bos]
-    for (let step = 0; step < meta.max_tgt; step += 1) {
-      const tgt = new ort.Tensor('int64', BigInt64Array.from(out.map(BigInt)), [1, out.length])
-      const res = await dec.run({ memory, tgt })
-      const logits = res[dec.outputNames[0]]
-      const vocab = meta.tgt.length
-      const base = (out.length - 1) * vocab       // 마지막 위치의 로짓만 본다
-      const data = logits.data as Float32Array
+    const tgtArr = new BigInt64Array(T).fill(BigInt(meta.pad))
+    tgtArr[0] = BigInt(meta.bos)
+    const out: number[] = []
+    const vocab = meta.tgt.length
+    for (let step = 0; step < T - 1; step += 1) {
+      const tgt = new ort.Tensor('int64', tgtArr, [1, T])
+      const res = await dec.run({ memory, mem_pad: pad, tgt })
+      const data = res[dec.outputNames[0]].data as Float32Array
+      const base = step * vocab                  // 지금 자리의 로짓
       let best = -1
       let bestVal = -Infinity
-      for (let v = 4; v < vocab; v += 1) {        // 특수 토큰(0~3)은 후보에서 뺀다
+      for (let v = 4; v < vocab; v += 1) {       // 특수 토큰(0~3)은 후보에서 뺀다
         if (this.playable && !this.playable.has(v)) continue
         const val = data[base + v]
         if (val > bestVal) {
@@ -151,10 +170,11 @@ export class NnSignAgent implements SignAgent {
           best = v
         }
       }
-      // EOS는 위 반복에서 제외되므로 따로 견준다 — 문장을 끝낼 줄 알아야 한다.
-      if (data[base + meta.eos] > bestVal || best < 0) break
+      // EOS는 위 반복에서 빠지므로 따로 견준다 — 문장을 끝낼 줄 알아야 한다.
+      if (best < 0 || data[base + meta.eos] > bestVal) break
       out.push(best)
+      tgtArr[step + 1] = BigInt(best)
     }
-    return out.slice(1).map((i) => meta.tgt[i]).filter(Boolean)
+    return out.map((i) => meta.tgt[i]).filter(Boolean)
   }
 }

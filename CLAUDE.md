@@ -57,6 +57,13 @@ bash ml/jobs/deploy_model.sh ~/sbruns/iso-v2
 npm run build && python3 scripts/e2e_app.py    # 폰·태블릿·키오스크 실조작
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_translation_cases.mjs        # 번역 오역 회귀 검사
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_guide_domain.mjs             # 행동요령이 사전으로 가는가(모델로 가면 헛소리)
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_intent_words.mjs             # 의도 낱말이 인식 클래스에 실존하는가
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_categories.mjs               # 재난 갈래에 한국어 이름이 있는가
+python -m ml.tools.ctc_parity                   # CTC 디코딩 파이썬==브라우저
 ```
 
 ### 커버리지는 정확도가 아니다
@@ -248,7 +255,10 @@ CTC가 끝나면 **브라우저 쪽은 이미 준비되어 있다** —
 
 **번역기 세 단계** (`useSignPlayer` → `NnSignAgent` → `DictSignAgent` → `RuleSignAgent`)
 
-**학습 모델은 재난문자에서만 쓴다.** 재난안전 말뭉치로만 배워서 그 밖에서는
+**학습 모델은 재난문자 본문에서만 쓴다.** 같은 "재난"이라도 **행동요령은 사전으로**
+보낸다 — 모델은 공지 말투로 배웠고 행동요령은 명령 말투다. 한동안 모델로 보내는
+바람에 "엘리베이터를 타지 말고 계단으로 대피하세요"가 `주말1 기간1 필요1 때1 사람2#`로
+나갔다(2026-08-18 실측). 목숨이 걸린 안내다. 재난안전 말뭉치로만 배워서 그 밖에서는
 **자신 있게 틀린다**(실측: "화장실이 어디예요" → 꽃 꽃 지도 지시# 물 준비 가능 높다).
 `compose(text, gloss, domain)`의 domain이 `disaster`일 때만 모델을 쓰고, 기본값은
 `everyday`(사전)다 — 모르는 자리에서는 덜 틀리는 쪽을 쓴다.

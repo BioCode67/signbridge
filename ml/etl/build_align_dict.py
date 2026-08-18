@@ -76,6 +76,9 @@ STOP_WORDS = {
 
 # 수동 시드 — 통계가 놓치는 고빈도 대응을 사람이 확정한 것. 자신 있는 것만 넣는다.
 # (실측 감사에서 발견된 잡음 1위 후보를 교정: 곳으로→편하다1 등)
+# 재난문자 머리말 `[기관명]` — 내용이 아니라 보낸 곳 표시다.
+_SENDER_RE = re.compile(r"^\s*\[[^\]]{1,20}\]\s*")
+
 SEED_OVERRIDES = {
     "곳으로": "장소1",
     "곳에서": "장소1",
@@ -84,6 +87,11 @@ SEED_OVERRIDES = {
     "주민들": "주민0",
     "많은": "많다1",
     "여진": "지진1",
+    # 통계가 엉뚱하게 배운 것들 — 실측 감사에서 드러났다(2026-08-18).
+    # `부위`는 `뱀1`로, `주의`는 `주`(주간)로 붙어 있었다.
+    "부위": "몸",
+    "주의": "조심1",
+    "주의사항": "조심1",
     # 금지("가지 마세요")는 수어에서 전용 표현이 있다. 통계는 '마세요'를 '마다'로 잡았다.
     "마세요": "하지마1",
     "마십시오": "하지마1",
@@ -593,6 +601,12 @@ def main() -> None:
     for line in open(args.data / "index.jsonl", encoding="utf-8"):
         record = json.loads(line)
         korean = record.get("korean_text") or ""
+        # **발신 기관명은 정렬에서 뺀다.** 재난문자의 22%가 `[행정안전부]`·
+        # `[전라남도청]`으로 시작하는데, 그 낱말은 문장 내용과 아무 상관 없이
+        # 모든 글로스와 함께 나타난다. 통계가 그것을 뜻으로 배운다 —
+        # 실측: `계곡물` → `도청`(전라남도청과 자주 같이 나와서),
+        # `행정안전부` → `다스리다1`. 머리말을 떼면 이 오염이 사라진다.
+        korean = _SENDER_RE.sub("", korean, count=1) or korean
         glosses = {normalize_gloss(g.get("gloss", "")) for g in record.get("glosses", [])}
         glosses = {g for g in glosses if g and (playable is None or g in playable)}
         words = set(tokenize(korean))

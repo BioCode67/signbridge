@@ -125,6 +125,13 @@ export function useSignPlayer(): SignPlayer {
       // 글로스를 직접 준 문구(장소 상용구)는 번역을 거치지 않는다 — 사람이 확정한 매핑이다.
       if (gloss?.length) return composeGlosses(text, gloss, index, loadGloss)
 
+      // **발신 기관명은 번역하지 않는다.** 재난문자의 22%가 `[행정안전부]`·
+      // `[전라남도청]`처럼 보낸 곳 이름으로 시작하는데, 그건 알림의 머리말이지
+      // 전할 내용이 아니다. 번역에 넣으면 문장마다 엉뚱한 수어가 앞에 붙는다
+      // (실측: `[행정안전부]` → `다스리다1`). 자막에는 원문 그대로 남는다 —
+      // 누가 보냈는지는 화면에서 읽을 수 있어야 한다.
+      const body = text.replace(/^\s*\[[^\]]{1,20}\]\s*/, '') || text
+
       /** 번역 결과를 동작으로 — 어느 번역기를 썼든 마무리는 같다. */
       const finish = async (r: { gloss: string[]; unmatched?: string[] }) => {
         const composed = r.gloss.length
@@ -160,7 +167,7 @@ export function useSignPlayer(): SignPlayer {
       // 그래서 **부르는 쪽이 어느 자리인지 알려 준다.** 모르면 사전이 기본이다.
       if (domain !== 'disaster') {
         if (!dictRef.current) dictRef.current = new DictSignAgent()
-        const r = await dictRef.current.convert(text)
+        const r = await dictRef.current.convert(body)
         setBackend(dictRef.current.lastBackend)
         return finish(r)
       }
@@ -170,7 +177,7 @@ export function useSignPlayer(): SignPlayer {
         // 아바타가 그 자리를 조용히 건너뛴다 — 화면상 정상처럼 보이는 실패다.
         agentRef.current.setPlayable(Object.keys(index))
       }
-      const r = await agentRef.current.convert(text)
+      const r = await agentRef.current.convert(body)
       // **무엇이 번역했는지 밖으로 내보낸다.** 모델이 안 뜨면 사전이 대신 답하는데,
       // 화면상으로는 아무 차이가 없다(실측: ORT 진입점이 달라 wasm을 404로 못 찾아
       // 30MB짜리 모델이 한 번도 안 쓰이고 있었다). 오류도 안 나므로 재지 않으면

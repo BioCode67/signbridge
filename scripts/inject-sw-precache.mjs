@@ -8,6 +8,12 @@ import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const assets = readdirSync('dist/assets')
   .filter((f) => f.endsWith('.js') || f.endsWith('.css') || f.endsWith('.wasm'))
+  // **ORT wasm 사본은 빼야 한다.** 번들러가 assets/에도 한 벌 만들지만 아무도 쓰지
+  // 않아(wasmPaths가 ./ort/로 고정) 다음 빌드 단계에서 지운다. 목록에 남겨 두면
+  // `cache.addAll`이 없는 파일을 받으러 갔다가 실패하고 — **서비스워커 설치가
+  // 통째로 실패해 오프라인이 전부 죽는다.** 온라인에서는 멀쩡해 보인다.
+  // (실측: 오프라인 검사가 ERR_INTERNET_DISCONNECTED로 죽었다.)
+  .filter((f) => !f.startsWith('ort-wasm'))
   .map((f) => `./assets/${f}`)
 const extra = ['./ort/ort-wasm-simd-threaded.wasm', './ort/ort-wasm-simd-threaded.mjs']
 

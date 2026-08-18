@@ -179,6 +179,8 @@ export default function UserApp() {
   const [dictHits, setDictHits] = useState<string[]>([])
   /** 동작 사전 크기 — "여기에 무엇이 있는지"를 숫자로 보여준다. */
   const [dictCount, setDictCount] = useState(0)
+  /** 지금 사전에서 보고 있는 낱말 — 사전 탭 안에서 아바타를 띄운다. */
+  const [dictWord, setDictWord] = useState('')
   const searchDict = useCallback(async (q: string) => {
     setDictQuery(q)
     const query = q.trim()
@@ -214,14 +216,27 @@ export default function UserApp() {
   }, [player.bank])
 
   const playDictWord = useCallback(async (gloss: string) => {
-    setTab('watch')
+    // **탭을 옮기지 않는다.** 사전은 낱말을 잇따라 넘겨 보는 화면인데, 하나 누를
+    // 때마다 받기 탭으로 튀면 검색 결과로 돌아오는 데만 두 번을 더 눌러야 한다.
+    // 사전 안에서 바로 보여주고, 다음 낱말을 이어서 누를 수 있게 한다.
     setAuto(false)
-    setNotice(null)
+    setDictWord(glossLabel(gloss))
     // 단어 하나를 그 자체 글로스로 재생한다 — 원문은 번호를 뗀 표제어로 보여준다.
     const composed = await player.play(glossLabel(gloss), [gloss])
     if (composed) player.playData({ ...composed, korean_text: glossLabel(gloss) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [player.play, player.playData])
+
+  /** 시작 낱말 — "누르면 수어로 보여드려요"라고 써 두었으면 **한 번에** 나와야 한다.
+   *  검색만 걸어 두면 결과에서 다시 눌러야 해서 안내문이 거짓말이 된다.
+   *  이름이 정확히 같은 동작이 있으면 바로 재생하고, 없을 때만 검색으로 넘긴다. */
+  const startWord = useCallback(async (w: string) => {
+    const index = await player.bank()
+    if (index && index[w]) { void playDictWord(w); return }
+    void searchDict(w)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player.bank, playDictWord])
+
 
   const onAnswer = useCallback((text: string, gloss?: string[], keepNotice?: boolean) => {
     setTab('watch')
@@ -353,7 +368,21 @@ export default function UserApp() {
 
       {/* 사전 — 단어를 찾아 수어를 본다. 찾으면 받기 화면에서 재생한다. */}
       {tab === 'dict' && (
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* 지금 보고 있는 낱말 — **사전 안에서** 보여준다. 탭을 옮기면 흐름이 끊긴다. */}
+          {dictWord && (
+            <div className="relative flex min-h-[38vh] shrink-0 flex-col border-b border-white/10">
+              <SignStage player={player} compact fontScale={fontScale} />
+              <button
+                type="button"
+                onClick={() => setDictWord('')}
+                className="absolute right-2 top-2 z-10 min-h-[44px] rounded-xl bg-space-950/70 px-3 py-2 text-base text-slate-300"
+              >
+                ✕ 닫기
+              </button>
+            </div>
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
           <input
             type="search"
             value={dictQuery}
@@ -383,7 +412,7 @@ export default function UserApp() {
               눌러서 바로 볼 수 있는 낱말을 갈래별로 놓아 두면, 한 글자도 안 치고도
               쓸 수 있고 "여기에 무엇이 있는지"도 알게 된다.
               (실측 사진에서 이 화면은 검색창 하나에 나머지가 통째로 검었다.) */}
-          {!dictQuery && (
+          {!dictQuery && !dictWord && (
             <div className="mt-5">
               <p className="mb-4 text-center text-base text-slate-500">
                 {dictCount ? `${dictCount.toLocaleString()}개 낱말이 들어 있어요` : ''}
@@ -397,7 +426,7 @@ export default function UserApp() {
                       <button
                         key={w}
                         type="button"
-                        onClick={() => void searchDict(w)}
+                        onClick={() => void startWord(w)}
                         className="min-h-[48px] rounded-2xl border border-white/10 bg-space-800 px-4 py-2 text-lg font-bold text-slate-200"
                       >
                         {w}
@@ -408,6 +437,7 @@ export default function UserApp() {
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
 

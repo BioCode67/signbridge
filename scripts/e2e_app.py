@@ -392,6 +392,29 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
         await pg.wait_for_timeout(800)
 
+    # ── 사전: 첫 화면이 비어 있지 않은가 · 눌러서 **사전 안에서** 보이는가
+    #
+    # 사전은 낱말을 잇따라 넘겨 보는 화면이다. 하나 누를 때마다 다른 탭으로 튀면
+    # 검색 결과로 돌아오는 데만 두 번을 더 눌러야 한다(실측 사진에서 그랬다).
+    await pg.get_by_role("button", name="📖 사전").click()
+    await pg.wait_for_timeout(700)
+    rep.check(await pg.get_by_text("낱말을 누르면 수어로 보여드려요").count() > 0,
+              "사전: 첫 화면에 시작 낱말")
+    starter = pg.get_by_role("button", name="병원", exact=True)
+    if await starter.count():
+        await starter.first.click()
+        played = False
+        for _ in range(10):
+            await pg.wait_for_timeout(600)
+            st = await stage_state(pg)
+            if st["frames"] > 5:
+                played = True
+                break
+        rep.check(played, "사전: 낱말을 누르면 수어로 재생")
+        # 탭이 그대로여야 한다 — 사전 안에서 보여주는 것이 요점이다
+        rep.check(await pg.get_by_placeholder("🔍 단어 찾기").count() > 0,
+                  "사전: 재생해도 사전 화면에 머무름")
+
     # ── 손가락으로 누를 수 있는 크기인가(모바일 접근성 최소 44px)
     small = await pg.evaluate(
         "() => [...document.querySelectorAll('button')]"

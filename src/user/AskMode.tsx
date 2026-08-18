@@ -358,6 +358,23 @@ export default function AskMode({ notice, onImmersive }: Props) {
           </div>
         )}
 
+        {/* 아직 한 낱말도 못 알아들었을 때 — **무엇을 물으면 되는지** 보여준다.
+            카메라만 켜 두면 처음 쓰는 사람은 무엇을 해야 할지 모른다(실측 사진에서
+            화면에 있는 것이라고는 점 세 개뿐이었다). 여기 적는 예시는 실제로
+            답할 수 있는 것만 쓴다 — 못 답할 것을 예시로 걸면 첫 시도가 실패한다. */}
+        {asking && running && rec.transcript.length === 0 && !error && (
+          <div className="absolute inset-x-0 top-16 z-10 px-4 text-center">
+            <p className="mx-auto max-w-xs rounded-2xl bg-space-950/75 px-4 py-3 text-lg leading-relaxed text-slate-200">
+              카메라를 보고 <b className="text-cyan-soft">수어로 물어보세요</b>
+              <br />
+              <span className="text-base text-slate-400">
+                예 · “대피소 어디” · “병원 어디” · “화장실 어디”
+                <br />“지금 무슨 일” · “어떻게 해야 해” · “도와주세요”
+              </span>
+            </p>
+          </div>
+        )}
+
         {asking && running && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 to-transparent px-3 pb-3 pt-12 text-center">
             <p className={`text-4xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-600'}`}>

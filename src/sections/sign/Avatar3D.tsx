@@ -139,7 +139,7 @@ function headOffset(data: SignData | undefined, frame: number): { x: number; y: 
 
 /** Frames the upper body and gives a gentle cyan-lit studio look. */
 function Rig() {
-  const { camera } = useThree()
+  const { camera, size } = useThree()
   useEffect(() => {
     // **수어 공간이 다 들어와야 한다.**
     //
@@ -150,9 +150,27 @@ function Rig() {
     //
     // 지금 값은 세로 약 1.34m(y 0.57~1.91)를 담는다. 아바타가 조금 작아지지만
     // **잘린 손보다 작은 손이 낫다.**
-    camera.position.set(0, 1.28, 2.0)
+    // **가로도 세로와 같은 문제가 있다.** fov는 세로 기준이라, 세로로 긴 화면
+    // (폰 세로)에서는 가로 시야가 오히려 좁아진다. 실측(폰 390px, 받기 화면):
+    //
+    //     y=500 줄의 아바타 구간 → [141~251] 몸통, [334~388] **오른손**
+    //     화면은 389에서 끝난다 → 손가락이 잘린다
+    //
+    // 몸통과 떨어진 덩어리라 어깨가 아니라 손이다. 수어에서 손 모양은 뜻 그 자체라
+    // 잘리면 그 낱말은 못 읽는다. 세로를 고쳤을 때와 똑같은 이유다.
+    //
+    // 담고 싶은 가로 폭을 정해 두고 화면 비율에 맞춰 카메라를 물린다.
+    // 넓은 화면(태블릿 가로·키오스크)에서는 지금 거리를 그대로 쓴다 — 공연히
+    // 작아질 이유가 없다.
+    const WIDE = 1.4                       // 담고 싶은 가로 폭(m)
+    const aspect = size.height > 0 ? size.width / size.height : 1
+    const fov = (camera as THREE.PerspectiveCamera).fov
+    const half = Math.tan((fov * Math.PI) / 360)
+    const need = WIDE / (2 * Math.max(0.2, aspect) * half)
+    const z = Math.max(2.0, Math.min(3.2, need))
+    camera.position.set(0, 1.28, z)
     camera.lookAt(0, 1.24, 0)
-  }, [camera])
+  }, [camera, size.width, size.height])
   return null
 }
 

@@ -13,6 +13,7 @@
 #   check_translation_cases 과거에 났던 오역이 되살아나지 않았는가
 #   check_intent           수어 낱말 묶음이 옳은 의도로 이어지는가(오검출 포함)
 #   check_nearby           거리·방위·어림수·답변 문장이 맞는가
+#   check_nonmanual        고개 끄덕임·젓기가 합성 결과에 실제로 실리는가
 #   e2e_app                폰·태블릿·키오스크에서 실제로 재생되는가
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -22,31 +23,35 @@ SCRIPT=${SCRIPT:-~/sbdata/script}
 INDEX=${INDEX:-"$HOME/sbdata/ksl $HOME/sbdata/ksl-slword"}
 TOP=${TOP:-10000}
 
-echo "── 1/7 웹 동작 사전 (빈도 상위 $TOP + 생활 어휘 보장)"
+echo "── 1/8 웹 동작 사전 (빈도 상위 $TOP + 생활 어휘 보장)"
 # shellcheck disable=SC2086
 python -m ml.etl.export_web_bank --bank "$BANK" --index $INDEX \
   --out public/data --top "$TOP" \
   --must ml/data/daily_vocab.txt ml/data/daily_vocab_aihub.txt
 
-echo "── 2/7 번역 사전 (Dice + 표제어 직결 + 활용형)"
+echo "── 2/8 번역 사전 (Dice + 표제어 직결 + 활용형)"
 python -m ml.etl.build_align_dict --data "$SCRIPT" \
   --out public/data/align.json --vocab public/data/bank.json
 
-echo "── 3/7 어순표 (말뭉치에서 잰 낱말 위치)"
+echo "── 3/8 어순표 (말뭉치에서 잰 낱말 위치)"
 python -m ml.etl.build_order --data "$SCRIPT" \
   --out public/data/order.json --vocab public/data/bank.json
 
-echo "── 4/7 앱 글로스 정합 검사"
+echo "── 4/8 앱 글로스 정합 검사"
 python3 ml/tools/check_app_glosses.py
 
-echo "── 5/7 파이썬↔TS 규칙 대조 (조사·어미·제외어)"
+echo "── 5/8 파이썬↔TS 규칙 대조 (조사·어미·제외어)"
 python3 ml/tools/check_rule_parity.py
 
-echo "── 6/7 번역 오역 회귀 검사"
+echo "── 6/8 번역 오역 회귀 검사"
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
   scripts/check_translation_cases.mjs
 
-echo "── 7/7 묻기 화면 — 의도 판정 · 길찾기 계산"
+echo "── 7/8 고개 동작이 합성에 실리는가"
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+  scripts/check_nonmanual.mjs
+
+echo "── 8/8 묻기 화면 — 의도 판정 · 길찾기 계산"
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
   scripts/check_intent.mjs
 node --experimental-strip-types --import ./scripts/ts-register.mjs \

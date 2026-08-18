@@ -145,7 +145,13 @@ export async function composeGlosses(
   // 10단어 문장에 십수 초가 걸린다(실측 14.7초). 실시간이라 부를 수 없는 수치였다.
   const tFetch0 = performance.now()
   // 고개 동작 표는 한 번만 받아 둔다(작다). 실패해도 합성은 그대로 진행된다.
-  void loadHeadTable(import.meta.env.BASE_URL)
+  // 배포 기준 경로는 **쓸 때 읽는다** — 검사 도구는 Node에서 이 파일을 불러오는데
+  // 그때는 import.meta.env가 없다. 없으면 현재 경로 기준으로 둔다.
+  //
+  // **기다렸다 쓴다.** 시작만 걸어 두면 표가 도착하기 전에 타임라인이 끝나서
+  // **첫 문장에만 고개 동작이 안 붙는다**(실측). 파일은 작고 한 번만 받으므로
+  // 기다리는 비용이 없다시피 하다 — 두 번째 문장부터는 이미 끝나 있다.
+  await loadHeadTable(import.meta.env?.BASE_URL ?? './')
   const unique = [...new Set(glosses)].filter((g) => bank[g])
   const loaded = new Map<string, SignData>()
   await Promise.all(

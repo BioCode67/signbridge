@@ -439,7 +439,10 @@ export default function TalkMode({ onImmersive }: TalkProps) {
       {/* 아바타 — 직원 말이 수어로 오는 곳 */}
       {/* 답할 차례에는 아바타를 줄이고 카드에 자리를 준다 — 그때 아바타는 멈춰 있고,
           답 카드는 126개라 화면이 좁으면 한참 굴려야 한다(실측 3.7화면). */}
-      <div className={`relative flex shrink flex-col lg:min-h-0 lg:flex-1 ${
+      {/* 넓은 화면(태블릿 가로·키오스크)에서는 아바타가 자리를 더 가져간다.
+          아바타와 기록이 flex-1로 반씩 나눠 갖던 탓에, 기록이 한 줄뿐인데도
+          화면의 절반을 비워 두고 아바타가 작게 남아 있었다(실측 사진). */}
+      <div className={`relative flex shrink flex-col lg:min-h-0 lg:flex-[3] ${
         // 직원 말이 수어로 올 때가 **읽어야 하는 순간**이다. 실측 사진에서 이 칸이
         // 화면의 33%뿐이라 아바타가 작았다 — 답 카드는 굴려서 볼 수 있지만
         // 수어는 작으면 못 읽는다. 카드 쪽을 조금 내주고 아바타를 키운다.
@@ -495,7 +498,7 @@ export default function TalkMode({ onImmersive }: TalkProps) {
       {/* 대화 기록 — 폰에서는 아바타·입력에 밀려 한 줄도 안 보이곤 했다.
           최소 높이를 확보하고 아바타 쪽이 줄어들게 한다(아바타는 크게 보이는 편이
           좋지만, 방금 한 말이 안 보이는 것이 더 나쁘다). */}
-      <div ref={threadRef} className="min-h-[72px] flex-1 overflow-y-auto px-3 py-2">
+      <div ref={threadRef} className="min-h-[72px] flex-1 overflow-y-auto px-3 py-2 lg:flex-[1]">
         {turns.length === 0 ? (
           <p className="py-4 text-center text-base text-slate-500">
             주고받은 말이 여기에 남아요

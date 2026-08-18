@@ -26,15 +26,19 @@ from dataclasses import dataclass
 #
 # ⚠️ 가이드 문서는 `WRD`로 적혀 있지만 **실제 배포본은 `WORD`** 를 쓴다.
 # (실제 샘플 확인: NIA_SL_WORD1501_REAL01_D_000000000000_keypoints.json)
+# ⚠️ 지문자도 같은 함정이다. 가이드는 `FINSP`인데 **실제 배포본은 `FS`** 를 쓴다.
+# (실제 샘플 확인: NIA_SL_FS0001_CROWD01_F_morpheme.json — CROWD 조각 17,000개 전부)
+# `FS`를 빠뜨리면 지문자 클립이 **한 개도 안 잡히는데 오류도 안 난다** — 그냥
+# 0건으로 조용히 지나간다. 실제로 그래서 한동안 "지문자 데이터가 없다"고 적어 두었다.
 # 둘 다 받아들이고 kind는 표준형으로 정규화한다.
 CLIP_RE = re.compile(
-    r"^NIA_SL_(?P<kind>SEN|SENTENCE|WORD|WRD|FINSP|FSP)(?P<content>\d+)"
+    r"^NIA_SL_(?P<kind>SEN|SENTENCE|WORD|WRD|FINSP|FSP|FS)(?P<content>\d+)"
     r"_(?P<method>REAL|SYN|CROWD)(?P<signer>\d*)"
     r"_(?P<angle>[FUDRL])$"
 )
 
 # 표기 흔들림을 표준형으로 모은다.
-KIND_ALIASES = {"SENTENCE": "SEN", "WRD": "WORD", "FSP": "FINSP"}
+KIND_ALIASES = {"SENTENCE": "SEN", "WRD": "WORD", "FSP": "FINSP", "FS": "FINSP"}
 
 ANGLES = ("F", "U", "D", "R", "L")
 

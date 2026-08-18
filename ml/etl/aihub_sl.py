@@ -43,7 +43,13 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from ml.signbridge.naming import frame_index, parse_clip_name, strip_suffix  # noqa: E402
+from ml.signbridge.jamo import decompose  # noqa: E402
+from ml.signbridge.naming import (  # noqa: E402
+    KIND_ALIASES,
+    frame_index,
+    parse_clip_name,
+    strip_suffix,
+)
 from ml.signbridge.openpose import convert_clip, convert_clip_3d, split_keypoints  # noqa: E402
 from ml.signbridge.pack import SANE_FEATURE_LIMIT, feature_health, save_pack  # noqa: E402
 
@@ -129,6 +135,11 @@ def read_morpheme(path: Path) -> tuple[str, list[dict]]:
             if isinstance(attribute, dict):
                 name = name or attribute.get("name")
                 nonmanual = nonmanual or attribute.get("attribute")
+        # **양끝 공백·개행을 떼어낸다.** 실데이터 라벨에 `'마천로\n'`·`'대방동길 '`처럼
+        # 섞여 있어(지문자 17,000건 중 8건), 그대로 두면 같은 지명이 두 종류로 갈린다
+        # (실측: 1,022종 → 정리 후 1,015종). 학습에서는 표본만 쪼개지고, 사전에서는
+        # 눈에 똑같아 보이는 항목이 둘 생긴다.
+        name = str(name).strip() if name else None
         if not name:
             continue
         try:
@@ -137,7 +148,7 @@ def read_morpheme(path: Path) -> tuple[str, list[dict]]:
         except (KeyError, TypeError, ValueError):
             continue
         glosses.append(
-            {"gloss": str(name), "start": start, "end": end, "nonmanual": nonmanual or []}
+            {"gloss": name, "start": start, "end": end, "nonmanual": nonmanual or []}
         )
 
     glosses.sort(key=lambda g: (g["start"], g["end"]))
@@ -151,6 +162,7 @@ def convert_clip_files(
     out_dir: Path,
     fps: float,
     prefer_3d: bool = True,
+    jamo: bool = False,
 ) -> dict | None:
     if not keypoint_paths:
         return None
@@ -206,6 +218,19 @@ def convert_clip_files(
     korean, glosses = read_morpheme(morpheme_path) if morpheme_path else ("", [])
     parsed = parse_clip_name(stem)
 
+    # 지문자를 **자모열로** 바꾼다. 라벨은 낱말 하나(`충정로`)지만 손은 자모를
+    # 하나씩 쓴다(실측: 자모 개수 ↔ 구간 길이 상관 0.845). 낱말 통째로 배우면
+    # 배운 1,022개 지명만 알아듣지만, 자모열로 배우면 **배우지 않은 이름도 읽는다.**
+    # 자모마다 시각을 지어내지 않는다 — CTC는 시각이 없어도 학습된다.
+    if jamo and glosses:
+        korean = korean or "".join(g["gloss"] for g in glosses)
+        spelled: list[dict] = []
+        for entry in glosses:
+            for unit in decompose(entry["gloss"]):
+                spelled.append({"gloss": unit})
+        if spelled:
+            glosses = spelled
+
     source = "aihub-sl-3d" if is_3d else "aihub-sl-2d"
     meta = {
         "id": stem,
@@ -236,9 +261,11 @@ def convert_clip_files(
 
 
 def _worker(payload: tuple) -> dict | None:
-    stem, morpheme_path, keypoint_paths, out_dir, fps, prefer_3d = payload
+    stem, morpheme_path, keypoint_paths, out_dir, fps, prefer_3d, jamo = payload
     try:
-        return convert_clip_files(stem, morpheme_path, keypoint_paths, out_dir, fps, prefer_3d)
+        return convert_clip_files(
+            stem, morpheme_path, keypoint_paths, out_dir, fps, prefer_3d, jamo
+        )
     except Exception as error:
         print(f"  [warn] {stem}: {type(error).__name__}: {error}", flush=True)
         return None
@@ -270,7 +297,14 @@ def main() -> None:
         default="F",
         help="쓸 촬영각도(쉼표). 기본 F만. 'all'이면 5각도 전부(데이터 5배·각도 강건성 ↑)",
     )
-    parser.add_argument("--kinds", default="SEN,WRD", help="SEN(문장)/WRD(단어)/FINSP(지문자)")
+    parser.add_argument(
+        "--kinds", default="SEN,WRD",
+        help="SEN(문장)/WORD(단어)/FINSP(지문자). 실데이터 표기 WRD·FS도 받는다",
+    )
+    parser.add_argument(
+        "--jamo", action="store_true",
+        help="지문자 라벨을 자모열로 펼친다(CTC 학습용). 낱말 대신 자모가 라벨이 된다",
+    )
     parser.add_argument("--fps", type=float, default=30.0)
     parser.add_argument("--workers", type=int, default=8)
     parser.add_argument("--limit", type=int, default=0)
@@ -286,7 +320,13 @@ def main() -> None:
     args = parser.parse_args()
 
     angles = None if args.angles.lower() == "all" else {a.strip().upper() for a in args.angles.split(",")}
-    kinds = {k.strip().upper() for k in args.kinds.split(",") if k.strip()}
+    # 갈래 표기를 표준형으로 모은다 — 실데이터는 WRD가 아니라 WORD, FINSP가 아니라 FS다.
+    # 사용자가 어느 쪽으로 적어도 같은 것을 가리키게 한다.
+    kinds = {
+        KIND_ALIASES.get(k.strip().upper(), k.strip().upper())
+        for k in args.kinds.split(",")
+        if k.strip()
+    }
     args.out.mkdir(parents=True, exist_ok=True)
 
     print("[etl] 키포인트 파일 목록을 훑는 중… (파일 수가 많아 시간이 걸립니다)")
@@ -309,7 +349,10 @@ def main() -> None:
             if angles is not None and parsed.angle not in angles:
                 skipped_angle += 1
                 continue
-        payloads.append((stem, morpheme_index.get(stem), paths, args.out, args.fps, not args.force_2d))
+        payloads.append(
+            (stem, morpheme_index.get(stem), paths, args.out, args.fps,
+             not args.force_2d, args.jamo)
+        )
 
     if args.num_shards > 1:
         payloads = [p for i, p in enumerate(payloads) if i % args.num_shards == args.shard]

@@ -538,9 +538,20 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
     # 적어 두고 정작 창구 화면만 재고 있었다. 대피소를 물어야 하는 순간이 바로
     # 회선이 끊긴 순간이다. 지도 타일을 안 쓰는 것이 요점이므로, 주변 장소 목록이
     # 캐시에서 열리는지 본다(카메라·인식은 이 환경에서 못 돌린다).
-    ask = pg.get_by_role("button", name="📹 묻기")
-    if await ask.count():
-        await ask.first.click()
+    # 대화 화면에 들어가 있으면 탭이 접혀 있다 — **다시 열고** 시작한다.
+    # 처음에 이걸 안 해서 `count()`가 0이 나왔고, 검사가 통째로 조용히 빠진 채
+    # "전부 통과"가 찍혔다(있어야 할 것을 count 한 번으로 판단하면 늘 이렇게 된다).
+    await pg.reload(wait_until="domcontentloaded")
+    await pg.wait_for_timeout(1500)
+    ask = pg.get_by_role("button", name="📹 묻기").first
+    try:
+        await ask.wait_for(state="visible", timeout=10000)
+        found = True
+    except Exception:
+        found = False
+    rep.check(found, "오프라인: 묻기 탭이 열림")
+    if found:
+        await ask.click()
         await pg.wait_for_timeout(1200)
         places = await pg.evaluate(
             "async () => { try { const r = await fetch('./data/nearby.json');"

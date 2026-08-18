@@ -42,8 +42,19 @@ def main() -> None:
 
     table = json.loads(a.align.read_text(encoding="utf-8"))
 
-    # 말뭉치 빈도 — 자주 쓰이는 낱말의 오역이 더 아프다
+    # 말뭉치 빈도 — 자주 쓰이는 낱말의 오역이 더 아프다.
+    #
+    # 함께 **비율**도 센다: 그 낱말이 나온 문장 중 몇 %에서 1순위 글로스가 같이
+    # 나왔나. 이 값이 맞는 짝과 틀린 짝을 잘 가른다(실측, 2026-08-18).
+    #
+    #   급류 → 도청   28문장 중 6번(21%)   ← 우연히 스친 것
+    #   폭염 → 덥다1  143문장 중 124번(87%) ← 진짜
+    #
+    # 문턱으로 자동으로 자르지는 않는다 — 잘라 보니 표현률이 96.1 → 93.7%로
+    # 떨어지는데, 잘린 것 중 얼마가 진짜 오역인지는 못 잰다. 대신 **비율이 낮은
+    # 것부터** 보여 주어 사람이 골라내게 한다. 낮을수록 의심스럽다.
     count: collections.Counter[str] = collections.Counter()
+    cooc: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     if a.corpus.exists():
         with a.corpus.open(encoding="utf-8") as fh:
             for line in fh:
@@ -52,7 +63,24 @@ def main() -> None:
                 except json.JSONDecodeError:
                     continue
                 text = o.get("korean_text") or o.get("text") or ""
-                count.update(HANGUL.findall(text))
+                words = set(HANGUL.findall(text))
+                count.update(words)
+                glosses = {
+                    str(g.get("gloss", "")).strip() for g in o.get("glosses", [])
+                }
+                glosses.discard("")
+                if not glosses:
+                    continue
+                for w in words:
+                    cooc[w].update(glosses)
+
+    def ratio(word: str, gloss: str) -> float:
+        """그 낱말이 나온 문장 중 이 글로스가 같이 나온 비율."""
+        n = count.get(word, 0)
+        if not n:
+            return -1.0
+        # 이형 번호까지 정확히 맞는 것만 센다 — 대응은 그 번호로 재생된다.
+        return cooc[word].get(gloss, 0) / n
 
     keys = set(table)
 
@@ -89,9 +117,11 @@ def main() -> None:
     print(f"[suspect] 사전 {len(table):,}개 중 검토 대상 {len(suspects):,}개 "
           f"(말뭉치 {a.min_count}회 이상 · 글자 공유 없음 · 분해 불가)")
     print(f"[suspect] 빈도 상위 {min(a.top, len(suspects))}개 — 사람이 보고 판단할 것\n")
-    print(f"  {'빈도':>6}  {'낱말':<12} {'1순위':<14} 다음 후보")
+    print(f"  {'빈도':>6} {'비율':>5}  {'낱말':<12} {'1순위':<14} 다음 후보")
     for c, word, g, alts in suspects[: a.top]:
-        print(f"  {c:>6}  {word:<12} {g:<14} {', '.join(alts)}")
+        r = ratio(word, g)
+        mark = f"{100 * r:4.0f}%" if r >= 0 else "   ?"
+        print(f"  {c:>6} {mark}  {word:<12} {g:<14} {', '.join(alts)}")
     print("\n  진짜 오역이면 ml/etl/build_align_dict.py 의 SEED_OVERRIDES 에 넣고")
     print("  bash ml/jobs/rebuild_data.sh 를 다시 돌린다.")
 

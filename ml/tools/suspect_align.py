@@ -50,9 +50,16 @@ def main() -> None:
     #   급류 → 도청   28문장 중 6번(21%)   ← 우연히 스친 것
     #   폭염 → 덥다1  143문장 중 124번(87%) ← 진짜
     #
-    # 문턱으로 자동으로 자르지는 않는다 — 잘라 보니 표현률이 96.1 → 93.7%로
-    # 떨어지는데, 잘린 것 중 얼마가 진짜 오역인지는 못 잰다. 대신 **비율이 낮은
-    # 것부터** 보여 주어 사람이 골라내게 한다. 낮을수록 의심스럽다.
+    # **낮다고 틀린 것은 아니다.** 이 비율만 보고 고치기 시작하면 오히려 나빠진다.
+    # 날씨·재난 문장에는 배경처럼 깔리는 글로스가 있다(심하다1·지도1·조심1·전국1이
+    # 문장 절반에 나온다). Dice는 글로스 쪽 빈도로 나누기 때문에 그런 배경을 이미
+    # 걸러 내고 더 구체적인 글로스를 고른다 — 그래서 **맞는 대응인데 비율이 낮은**
+    # 자리가 생긴다(실측: `한때`는 심하다1 44%·지도1 40%가 위에 있지만 뜻은 `가끔`).
+    #
+    # 그래서 문턱으로 자동으로 자르지 않는다. 잘라 보니 표현률이 96.1 → 93.7%로
+    # 떨어지는데, 잘린 것 중 얼마가 진짜 오역인지는 못 잰다.
+    # 이 숫자는 **판단 재료 하나**일 뿐이다. 낮으면서 뜻이 안 닿는 것을 찾는 데 쓴다
+    # (급류 → 도청 21%처럼).
     count: collections.Counter[str] = collections.Counter()
     cooc: dict[str, collections.Counter[str]] = collections.defaultdict(collections.Counter)
     if a.corpus.exists():
@@ -116,7 +123,10 @@ def main() -> None:
     suspects.sort(reverse=True)
     print(f"[suspect] 사전 {len(table):,}개 중 검토 대상 {len(suspects):,}개 "
           f"(말뭉치 {a.min_count}회 이상 · 글자 공유 없음 · 분해 불가)")
-    print(f"[suspect] 빈도 상위 {min(a.top, len(suspects))}개 — 사람이 보고 판단할 것\n")
+    print(f"[suspect] 빈도 상위 {min(a.top, len(suspects))}개 — 사람이 보고 판단할 것")
+    print("[suspect] '비율' = 그 낱말이 나온 문장 중 이 글로스가 같이 나온 비율.")
+    print("          낮다고 틀린 것이 아니다 — 배경처럼 깔리는 흔한 글로스를")
+    print("          Dice가 이미 걸러 낸 결과일 수 있다. 뜻이 안 닿는지를 함께 볼 것.\n")
     print(f"  {'빈도':>6} {'비율':>5}  {'낱말':<12} {'1순위':<14} 다음 후보")
     for c, word, g, alts in suspects[: a.top]:
         r = ratio(word, g)

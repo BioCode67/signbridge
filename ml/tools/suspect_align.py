@@ -81,6 +81,39 @@ def main() -> None:
                 for w in words:
                     cooc[w].update(glosses)
 
+    # ── 지명이 낱말 자리를 차지한 것을 표시한다.
+    #
+    # 실측에서 계속 나온 부류다 — `계곡물 → 도청`, `거주지 → 성북1`,
+    # `세부 → 강동2`, `전구간 → 신천동로`, `자택 → 권선`, `북상중 → 바비`.
+    # 재난문자에는 어느 지역 이야기인지가 늘 붙어 있어서, 지명 글로스가 아무
+    # 낱말에나 달라붙는다. **뜻이 완전히 달라지므로 우선순위가 높다.**
+    #
+    # 지명 목록은 지어내지 않는다. 두 곳에서 가져온다.
+    #   · 지문자(FS) 라벨 1,015종 — 서울 지명·거리 이름이다(오늘 찾은 데이터).
+    #   · 행정구역 꼬리(시·군·구·동·읍·면·리·로·길·도)로 끝나는 두 글자 이상 글로스.
+    # 낱말 자체가 그 지명을 품고 있으면(`강동구 → 강동2`) 정상이므로 표시하지 않는다.
+    place: set[str] = set()
+    fs_root = Path.home() / "sbdata/sl-crowd"
+    if fs_root.exists():
+        for path in fs_root.rglob("*_morpheme.json"):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+            for entry in data.get("data") or []:
+                for attr in entry.get("attributes") or []:
+                    name = str(attr.get("name") or "").strip()
+                    if len(name) >= 2 and HANGUL.fullmatch(name):
+                        place.add(name)
+    # `로`·`천`은 뺐다 — `앞으로1`·`하천`처럼 지명이 아닌 낱말이 걸린다(실측 오검출).
+    # 길 이름은 지문자 목록이 대신 잡아 준다(`신천동로`도 거기 있다).
+    PLACE_TAIL = ("시", "군", "구", "동", "읍", "면", "리", "길", "도")
+
+    def looks_place(lemma: str) -> bool:
+        if len(lemma) < 2:
+            return False
+        return lemma in place or (len(lemma) >= 3 and lemma.endswith(PLACE_TAIL))
+
     def ratio(word: str, gloss: str) -> float:
         """그 낱말이 나온 문장 중 이 글로스가 같이 나온 비율."""
         n = count.get(word, 0)
@@ -127,11 +160,13 @@ def main() -> None:
     print("[suspect] '비율' = 그 낱말이 나온 문장 중 이 글로스가 같이 나온 비율.")
     print("          낮다고 틀린 것이 아니다 — 배경처럼 깔리는 흔한 글로스를")
     print("          Dice가 이미 걸러 낸 결과일 수 있다. 뜻이 안 닿는지를 함께 볼 것.\n")
-    print(f"  {'빈도':>6} {'비율':>5}  {'낱말':<12} {'1순위':<14} 다음 후보")
+    print(f"  {'빈도':>6} {'비율':>5} {'':<2}  {'낱말':<12} {'1순위':<14} 다음 후보")
     for c, word, g, alts in suspects[: a.top]:
         r = ratio(word, g)
         mark = f"{100 * r:4.0f}%" if r >= 0 else "   ?"
-        print(f"  {c:>6} {mark}  {word:<12} {g:<14} {', '.join(alts)}")
+        lemma = LEMMA_RE.sub("", g)
+        flag = "지명" if looks_place(lemma) and lemma not in word else "  "
+        print(f"  {c:>6} {mark} {flag}  {word:<12} {g:<14} {', '.join(alts)}")
     print("\n  진짜 오역이면 ml/etl/build_align_dict.py 의 SEED_OVERRIDES 에 넣고")
     print("  bash ml/jobs/rebuild_data.sh 를 다시 돌린다.")
 

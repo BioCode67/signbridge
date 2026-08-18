@@ -528,7 +528,20 @@ export class DictSignAgent implements SignAgent {
       this.lastBackend = 'dict'
       return { text, gloss: [], unmatched }
     }
+    // **같은 낱말이 잇따라 나오면 하나만 남긴다.** 이형 번호가 달라도 같은 낱말이다
+    // (`복구0 복구1`·`기차1 기차2`·`연기1 연기`). 위에서 한 번 걸렀지만 그때는
+    // 글로스 이름이 똑같은 경우만 잡았다. 이형까지 보면 실측 284문장 중 8문장에서
+    // 아바타가 같은 말을 두 번 했다 — "화재 발생 화재 발생"처럼 보인다.
+    // 수어에서 반복은 복수·강조를 뜻할 수 있지만, 사전 경로는 반복을 **의도해서**
+    // 만들지 않는다. 여기 있는 것은 전부 복합어 분해가 남긴 찌꺼기다.
+    const squashed: string[] = []
+    for (const g of gloss) {
+      const prev = squashed[squashed.length - 1]
+      if (prev && glossLabel(prev) === glossLabel(g)) continue
+      squashed.push(g)
+    }
+
     this.lastBackend = 'dict'
-    return { text, gloss, unmatched }
+    return { text, gloss: squashed, unmatched }
   }
 }

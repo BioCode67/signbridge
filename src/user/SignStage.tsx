@@ -140,13 +140,17 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
           }`}>
             {nowGloss || ' '}
           </p>
-          <p className={`mx-auto mt-1 max-w-2xl leading-relaxed text-slate-300 ${
-            compact
-              ? ['text-xs', 'text-sm', 'text-lg'][fontScale]
-              : ['text-xs sm:text-sm', 'text-sm sm:text-base', 'text-lg sm:text-xl'][fontScale]
-          }`}>
-            {data.korean_text}
-          </p>
+          {/* 원문이 지금 글로스와 **같은 글자면 접는다.** 사전에서 낱말 하나를 볼 때
+              "병원 / 병원"처럼 같은 말이 두 줄로 겹쳐 보였다(실측 사진). */}
+          {data.korean_text.trim() !== (nowGloss ?? '').trim() && (
+            <p className={`mx-auto mt-1 max-w-2xl leading-relaxed text-slate-300 ${
+              compact
+                ? ['text-xs', 'text-sm', 'text-lg'][fontScale]
+                : ['text-xs sm:text-sm', 'text-sm sm:text-base', 'text-lg sm:text-xl'][fontScale]
+            }`}>
+              {data.korean_text}
+            </p>
+          )}
           {compact && data.num_frames > 1 && (
             <button
               type="button"

@@ -139,7 +139,7 @@ function headOffset(data: SignData | undefined, frame: number): { x: number; y: 
 
 /** Frames the upper body and gives a gentle cyan-lit studio look. */
 function Rig() {
-  const { camera, size } = useThree()
+  const { camera, size, controls } = useThree()
   useEffect(() => {
     // **수어 공간이 다 들어와야 한다.**
     //
@@ -173,12 +173,30 @@ function Rig() {
     // (실측: 무대 세로의 40%가 빈 공간이었다). 위쪽 경계를 예전에 맞춰 둔 값
     // (y 1.91 — 손을 머리 위로 올리는 동작이 들어가는 높이)에 고정하고, 늘어난
     // 만큼은 아래(다리 쪽)로 보낸다. 빈 하늘보다 몸이 보이는 편이 낫다.
+    // 위쪽 경계 — **예전 값 1.91이 맞았다.**
+    //
+    // 중간에 "머리 위가 187px 비었다"고 보고 1.6으로 내렸는데, 그 187px은
+    // OrbitControls가 시선을 되돌리는 바람에 생긴 **고장 난 프레이밍**에서 잰
+    // 값이었다. target까지 옮기고 나서 1.6으로 재니 머리가 화면 맨 위에 붙었다
+    // (여백 0px) — 손을 머리 위로 올리는 동작이 곧바로 잘린다.
+    //
+    // 고장 난 상태에서 잰 값으로 기준을 바꾸면 안 된다. 고치고 나서 다시 잰다.
     const TOP_Y = 1.91
     const halfH = z * half                 // 이 거리에서 보이는 세로 절반(m)
     const centerY = TOP_Y - halfH
     camera.position.set(0, centerY + 0.04, z)
     camera.lookAt(0, centerY, 0)
-  }, [camera, size.width, size.height])
+
+    // **OrbitControls가 매 프레임 시선을 자기 target으로 되돌린다.** 여기서 카메라만
+    // 옮기면 세로 조정이 통째로 무효가 된다 — 실제로 위쪽 경계를 1.91에서 1.6으로
+    // 내렸는데 화면이 1px도 안 움직였다(빌드에는 값이 들어 있었다). 손으로 돌려
+    // 보는 기능은 살려야 하므로 컨트롤을 없애지 않고 **target을 같이 옮긴다.**
+    const orbit = controls as { target?: THREE.Vector3; update?: () => void } | null
+    if (orbit?.target) {
+      orbit.target.set(0, centerY, 0)
+      orbit.update?.()
+    }
+  }, [camera, controls, size.width, size.height])
   return null
 }
 
@@ -245,6 +263,7 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
         />
       </Suspense>
       <OrbitControls
+        makeDefault
         target={[0, 1.24, 0]}
         enablePan={false}
         enableZoom

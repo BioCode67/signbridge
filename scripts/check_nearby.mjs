@@ -124,5 +124,34 @@ for (const kind of ['shelter', 'hospital', 'pharmacy', 'subway']) {
   console.log(`    ${kind.padEnd(9)} ${answerHeadline(t)}  →  ${gloss.join(' ')}`)
 }
 
+// ── **답이 실제로 재생되는가.** 방위·거리 계산이 맞아도 그 문장의 글로스가
+// 동작 사전에 없으면 아바타가 조용히 건너뛴다 — 화면에는 지도와 자막이 그대로
+// 떠 있어서 정상으로 보인다. 이 앱의 대표적인 실패 모양이다.
+// 서울 네 지점 × 갈래 전부로 답 문장을 만들어 훑는다.
+const bank = JSON.parse(readFileSync('public/data/bank.json', 'utf8'))
+const SPOTS = [[37.5665, 126.978], [37.5, 127.05], [37.62, 126.92], [37.55, 127.0]]
+const allKinds = [...new Set(data.places.map((p) => p.kind))]
+const seen = new Set()
+let unplayable = 0
+const examples = []
+for (const [lat, lon] of SPOTS) {
+  for (const kind of allKinds) {
+    for (const p of nearest(data.places, lat, lon, kind, 4)) {
+      const sentence = answerSentence(p)
+      if (seen.has(sentence)) continue
+      seen.add(sentence)
+      const { gloss } = await agent.convert(sentence)
+      for (const g of gloss) {
+        if (!bank[g]) {
+          unplayable += 1
+          if (examples.length < 5) examples.push(`${sentence} → ${g}`)
+        }
+      }
+    }
+  }
+}
+ok(unplayable === 0, `답변 ${seen.size}종의 글로스가 모두 재생 가능`,
+  examples.join(' · '))
+
 console.log(failed ? `\n길찾기 검사 실패 ${failed}건` : '\n길찾기 검사 ✓ 전부 통과')
 process.exit(failed ? 1 : 0)

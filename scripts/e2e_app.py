@@ -188,6 +188,10 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
 
     # ── 행동요령: 재난 종류에 맞는 요령을 문장 단위로 수어로 본다
     guide = pg.get_by_role("button", name="📋 행동요령")
+    # 갈래 41종 중 21종에만 행동요령이 있다 — 없는 갈래가 뜨면 버튼도 없다.
+    # 그때 검사를 조용히 건너뛰면 "통과"에 이 항목이 통째로 빠진다. 남긴다.
+    if not await guide.count():
+        rep.note("    · 이 재난 갈래에는 행동요령이 없어 관련 검사 2건을 건너뜀")
     if await guide.count():
         await guide.first.click()
         await pg.wait_for_timeout(500)
@@ -400,7 +404,10 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.wait_for_timeout(700)
     rep.check(await pg.get_by_text("낱말을 누르면 수어로 보여드려요").count() > 0,
               "사전: 첫 화면에 시작 낱말")
+    # 시작 낱말 '병원'은 DICT_STARTERS에 **반드시 있다.** 없으면 화면이 바뀐 것이니
+    # 조용히 건너뛰지 말고 실패로 본다.
     starter = pg.get_by_role("button", name="병원", exact=True)
+    rep.check(await starter.count() > 0, "사전: 시작 낱말 '병원'이 있음")
     if await starter.count():
         await starter.first.click()
         played = False
@@ -455,7 +462,9 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     await pg.clock.install()
     await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="domcontentloaded")
     await pg.wait_for_timeout(1500)
+    # 장소 목록의 '병원'도 반드시 있다(places.ts 고정 목록).
     hospital = pg.get_by_role("button", name="🏥 병원")
+    rep.check(await hospital.count() > 0, "키오스크: 장소 목록에 병원이 있음")
     if await hospital.count():
         await hospital.first.click()
         await pg.wait_for_timeout(800)

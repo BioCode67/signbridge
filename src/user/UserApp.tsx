@@ -424,12 +424,16 @@ export default function UserApp() {
               눌러서 바로 볼 수 있는 낱말을 갈래별로 놓아 두면, 한 글자도 안 치고도
               쓸 수 있고 "여기에 무엇이 있는지"도 알게 된다.
               (실측 사진에서 이 화면은 검색창 하나에 나머지가 통째로 검었다.) */}
-          {!dictQuery && !dictWord && (
+          {/* 낱말을 보는 중에도 **목록은 남겨 둔다.** 넘겨 보라고 만든 화면인데
+              목록이 사라지면 다음 낱말로 갈 길이 없다(사진에서 그랬다). */}
+          {!dictQuery && (
             <div className="mt-5">
-              <p className="mb-4 text-center text-base text-slate-500">
-                {dictCount ? `${dictCount.toLocaleString()}개 낱말이 들어 있어요` : ''}
-                <br />낱말을 누르면 수어로 보여드려요
-              </p>
+              {!dictWord && (
+                <p className="mb-4 text-center text-base text-slate-500">
+                  {dictCount ? `${dictCount.toLocaleString()}개 낱말이 들어 있어요` : ''}
+                  <br />낱말을 누르면 수어로 보여드려요
+                </p>
+              )}
               {DICT_STARTERS.map((group) => (
                 <div key={group.name} className="mb-4">
                   <p className="mb-2 text-lg font-bold text-slate-300">{group.name}</p>

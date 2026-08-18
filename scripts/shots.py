@@ -63,6 +63,20 @@ async def shoot(browser, port: int, label: str, w: int, h: int) -> None:
         await pg.screenshot(path=str(OUT / f"{label}_{name}.png"))
         print(f"  {label}_{name}.png")
 
+    async def wait_playing(page, limit: int = 15) -> bool:
+        """아바타가 실제로 움직일 때까지 기다린다 — 너무 일찍 찍으면 빈 무대가 남는다."""
+        for _ in range(limit):
+            await page.wait_for_timeout(700)
+            try:
+                frames = await page.locator("[data-sign-frames]").first.evaluate(
+                    "e => +e.dataset.signFrames"
+                )
+            except Exception:
+                continue
+            if frames > 20:
+                return True
+        return False
+
     await snap("01_받기")
     await pg.get_by_role("button", name="📹 묻기").click()
     await pg.wait_for_timeout(1200)
@@ -92,16 +106,31 @@ async def shoot(browser, port: int, label: str, w: int, h: int) -> None:
     # 사전 — 낱말을 찾아 동작을 확인하는 화면. 여기도 눈으로 봐야 한다.
     await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
     await pg.wait_for_timeout(1500)
-    dict_tab = pg.get_by_role("button", name="📖 사전")
-    if await dict_tab.count():
-        await dict_tab.first.click()
-        await pg.wait_for_timeout(900)
-        await snap("09_사전")
-        box = pg.get_by_placeholder("🔍 단어 찾기")
-        if await box.count():
-            await box.first.fill("병원")
-            await pg.wait_for_timeout(1200)
-            await snap("10_사전_검색")
+    # **count()로 한 번만 보고 넘기지 않는다.** 아직 안 그려졌으면 0이 나오고,
+    # 그러면 사진이 조용히 빠진다 — 실제로 그래서 사전 화면 두 장이 없는 채로
+    # "16장 찍었습니다"라고 끝났다. 없으면 소리 내어 알린다.
+    dict_tab = pg.get_by_role("button", name="📖 사전").first
+    try:
+        await dict_tab.wait_for(state="visible", timeout=15000)
+    except Exception:
+        print("  ✗ 사전 탭을 찾지 못했습니다 — 사진 두 장이 빠집니다")
+        await ctx.close()
+        return
+    await dict_tab.click()
+    await pg.wait_for_timeout(900)
+    await snap("09_사전")
+
+    # 시작 낱말을 눌러 **사전 안에서** 재생되는지 본다(탭이 튀면 안 된다).
+    starter = pg.get_by_role("button", name="병원", exact=True).first
+    if await starter.count():
+        await starter.click()
+        await wait_playing(pg)
+        await snap("10_사전_재생")
+
+    box = pg.get_by_placeholder("🔍 단어 찾기").first
+    await box.fill("병원")
+    await pg.wait_for_timeout(1200)
+    await snap("11_사전_검색")
     await ctx.close()
 
 

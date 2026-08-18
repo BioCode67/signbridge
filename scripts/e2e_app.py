@@ -138,11 +138,19 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     pg = await ctx.new_page()
     errors: list[str] = []
     pg.on("pageerror", lambda e: errors.append(str(e)))
+    # console.warn 은 따로 모은다 — 동봉 모델 로드 실패는 예외가 아니라 경고로 나온다.
+    # (오류 목록에 섞으면 무해한 라이브러리 경고까지 검사를 깨뜨린다.)
+    warns: list[str] = []
+    pg.on("console", lambda m: warns.append(m.text) if m.type == "warning" else None)
     pg.on("response", lambda r: errors.append(f"HTTP {r.status} {r.url}") if r.status >= 400 else None)
 
     rep.note(f"  [{name} {w}×{h}]")
-    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
-    await pg.wait_for_timeout(1200)
+    # **networkidle을 기다리지 않는다.** 이 앱은 첫 방문 뒤 오프라인 필수 세트
+    # 13MB를 조용히 내려받기 시작해서, 망이 한가해지는 순간이 한동안 오지 않는다.
+    # 기기가 바쁠 때는 30초 안에 오지 않아 검사가 통째로 죽는다(실측).
+    # 화면이 뜬 것만 확인하고 넘어간다 — 이어지는 검사들이 어차피 결과를 기다린다.
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
+    await pg.wait_for_timeout(2500)
 
     # ── 받기: 재난문자가 실제로 수어로 합성되는가(프레임 수로 확인)
     played = {"frames": 0, "glosses": 0}
@@ -321,6 +329,20 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         rep.check(bool(box) and box["navTop"] > box["ih"] * 0.5,
                   "묻기: 버튼이 화면 아래쪽에 있음",
                   f"nav {box['navTop']:.0f}px / 화면 {box['ih']}px" if box else "")
+        # **인식 부품이 동봉돼 있는가.** MediaPipe를 CDN에서 받아 오면 회선이 끊긴
+        # 곳에서 카메라가 아예 켜지지 않는다 — 정작 그때가 대피소를 물어야 하는
+        # 때다. 파일이 실제로 서빙되는지와, 동봉본으로 떴는지(폴백 경고 없음)를 본다.
+        mp = await pg.evaluate(
+            "async () => { const out = {};"
+            " for (const f of ['vision_wasm_internal.wasm','holistic_landmarker.task']) {"
+            "   const r = await fetch('./mediapipe/' + f, {method:'HEAD'});"
+            "   out[f] = r.ok; }"
+            " return out; }"
+        )
+        rep.check(all(mp.values()), "묻기: MediaPipe 인식 부품 동봉", str(mp))
+        rep.check(not any("동봉 모델 로드 실패" in w for w in warns),
+                  "묻기: 동봉본으로 인식기 기동(CDN 폴백 아님)",
+                  next((w[:60] for w in warns if "동봉" in w), ""))
         # **카메라를 꼭 꺼야 한다.** 켜 둔 채로 두면 MediaPipe가 매 프레임 추론을
         # 계속하고, 소프트웨어 렌더링 환경에서는 CPU를 다 먹어 뒤 검사가 몇 배로
         # 느려진다(실측: 검사 한 판이 13분 → 40분 넘게). 화면을 떠나면 멈춘다.
@@ -351,7 +373,8 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
                                     service_workers="block")
     pg = await ctx.new_page()
     rep.note("  [키오스크 모드 ?kiosk=1]")
-    await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="networkidle")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="domcontentloaded")
+    await pg.wait_for_timeout(2000)
     await pg.wait_for_timeout(1500)
     rep.check(await pg.get_by_text("어디에 계신가요?").count() > 0, "키오스크: 대화 화면으로 시작")
     rep.check(await pg.get_by_role("link", name="✕").count() == 0, "키오스크: 닫기 버튼 숨김")
@@ -369,7 +392,7 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
     await ctx.add_init_script(TTS_STUB)
     pg = await ctx.new_page()
     rep.lines.append("  [오프라인 390×844]")
-    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
 
     # 필수 세트를 조용히 받아 둘 때까지 기다린다(첫 방문 뒤 자동으로 받는다).
     level = None

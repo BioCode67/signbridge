@@ -12,7 +12,7 @@
 //
 // 고빈도 순서는 `bank.json`의 키 순서를 그대로 쓴다 — export_web_bank가 출현 빈도
 // 내림차순으로 기록한다(상위 3,000종이 출현의 96.2%를 덮는다는 실측이 그 근거).
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, writeFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 const DIST = 'dist'
@@ -94,6 +94,20 @@ const walk = (rel) => {
   }
 }
 walk('models')
+// 수어 인식은 MediaPipe(랜드마크)와 ONNX(글로스)가 **둘 다** 있어야 돈다.
+// 동봉해 두었으니 오프라인 전체 세트에 함께 넣는다 — 이게 빠지면 회선이 끊긴 곳에서
+// 카메라가 켜지지 않는다(정작 그때가 대피소를 물어야 하는 때다).
+walk('mediapipe')
+
+// **번들러가 만들어 놓고 아무도 안 쓰는 ORT wasm을 지운다.**
+// onnxRecognizer가 wasmPaths를 public/ort/ 로 고정하기 때문에 assets/ 쪽 사본은
+// 한 번도 요청되지 않는다(실측: 요청 로그 0회 / ort/ 쪽 8회). 13MB짜리다.
+for (const f of readdirSync(join(DIST, 'assets'))) {
+  if (/^ort-wasm.*\.wasm$/.test(f)) {
+    rmSync(join(DIST, 'assets', f))
+    console.log(`[offline] 안 쓰는 번들 사본 제거: assets/${f}`)
+  }
+}
 
 const bytes = (list) => [...list].reduce((n, f) => n + sizeOf(f), 0)
 const manifest = {

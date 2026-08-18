@@ -41,7 +41,7 @@ async def shoot(browser, port: int, label: str, w: int, h: int) -> None:
     ctx = await browser.new_context(viewport={"width": w, "height": h},
                                     service_workers="block")
     pg = await ctx.new_page()
-    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
     await pg.wait_for_timeout(2500)
 
     async def snap(name: str) -> None:
@@ -56,7 +56,7 @@ async def shoot(browser, port: int, label: str, w: int, h: int) -> None:
     await pg.wait_for_timeout(2500)
     await snap("03_묻기_촬영")
 
-    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle")
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
     await pg.wait_for_timeout(1500)
     await pg.get_by_role("button", name="💬 대화").click()
     await pg.wait_for_timeout(700)

@@ -103,7 +103,7 @@ async def main() -> int:
         print("[리허설] 대본 순서대로 눌러 봅니다\n")
 
         await r.step("장면1", "소개 페이지가 열린다",
-                     lambda: pg.goto(f"http://127.0.0.1:{port}/", wait_until="networkidle"))
+                     lambda: pg.goto(f"http://127.0.0.1:{port}/", wait_until="domcontentloaded"))
         await pg.wait_for_timeout(1500)
         async def demo_section() -> None:
             # 소개 페이지는 3D·애니메이션이 많아 뜨는 데 시간이 걸린다.
@@ -112,7 +112,7 @@ async def main() -> int:
         await r.step("장면1", "수어 데모 섹션이 있다", demo_section)
 
         await r.step("장면2", "수어 이용자 화면으로 이동",
-                     lambda: pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="networkidle"))
+                     lambda: pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded"))
         await pg.wait_for_timeout(1500)
         await r.step("장면2", "[💬 대화] 탭",
                      lambda: pg.get_by_role("button", name="💬 대화").click(timeout=8000))

@@ -26,6 +26,12 @@ class Threaded(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+    def handle_error(self, request, client_address) -> None:
+        # 서비스워커가 배경 갱신을 취소하면 나는 정상적인 끊김이다 — 조용히 넘긴다.
+        if sys.exc_info()[0] in (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            return
+        super().handle_error(request, client_address)
+
 
 def serve() -> Threaded:
     h = partial(SimpleHTTPRequestHandler, directory=str(DIST))

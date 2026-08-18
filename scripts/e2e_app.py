@@ -74,6 +74,19 @@ class ReusableServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
+    def handle_error(self, request, client_address) -> None:
+        """끊긴 연결은 조용히 넘긴다.
+
+        서비스워커가 배경 갱신 요청을 취소하면 `ConnectionResetError`가 나는데,
+        정상 동작이다. 그대로 두면 파이썬이 스택 트레이스를 찍어 **검증 로그가
+        오류처럼 보인다**(실제로 이 때문에 통과한 판을 실패로 읽었다).
+        진짜 오류는 그대로 올린다.
+        """
+        import sys as _sys
+        if _sys.exc_info()[0] in (ConnectionResetError, BrokenPipeError, ConnectionAbortedError):
+            return
+        super().handle_error(request, client_address)
+
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
     """요청 로그를 삼킨다 — 9,500개 조각 요청이 검증 결과를 덮는다."""

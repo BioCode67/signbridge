@@ -9,6 +9,7 @@ import AgentConsole from './sections/AgentConsole'
 import HowItWorks from './sections/HowItWorks'
 import ImpactSection from './sections/ImpactSection'
 import ResultsSection from './sections/ResultsSection'
+import LimitsSection from './sections/LimitsSection'
 import Footer from './sections/Footer'
 
 // 실시간 인식은 MediaPipe·TF.js 번들이 무거우므로 지연 로드(초기 페인트 보호).
@@ -63,6 +64,7 @@ export default function App() {
           <AgentConsole />
           <HowItWorks />
           <ResultsSection />
+          <LimitsSection />
           <ImpactSection />
         </main>
         <Footer />

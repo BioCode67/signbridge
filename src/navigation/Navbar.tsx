@@ -12,6 +12,7 @@ const LINKS = [
   { label: '에이전트', href: '#agents' },
   { label: '작동 원리', href: '#how' },
   { label: '실측 성과', href: '#results' },
+  { label: '한계', href: '#limits' },
   { label: '기대효과', href: '#impact' },
 ]
 

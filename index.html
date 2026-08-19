@@ -3,6 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!-- PWA — 수어 이용자 화면(#/app)을 폰 홈 화면에 앱처럼 설치할 수 있게 한다.
+         재난 도구는 "브라우저 열고 주소 입력"부터가 장벽이다. -->
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
@@ -12,6 +16,14 @@
       content="SignBridge — 재난 안전 정보를 실시간 AI 수어 아바타로 변환·송출하는 KOREN 기반 시스템. 실제 키포인트 기반 수어 아바타 데모."
     />
     <meta name="theme-color" content="#03040a" />
+
+    <!-- 아이폰(사파리)은 매니페스트를 거의 쓰지 않는다. 이 세 줄이 없으면
+         '홈 화면에 추가'로 넣어도 **사파리 껍데기 안에서 열리고**, 아이콘도
+         페이지를 찍은 그림이 된다 — 설치했는데 앱 같지 않다. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SignBridge" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
     <title>SignBridge · 들리지 않아도, 닿습니다</title>
 
     <!-- Open Graph / social sharing -->
@@ -35,8 +47,9 @@
       name="twitter:description"
       content="재난 안전 정보를 실시간 AI 수어 아바타로 — KOREN 기반 양방향 통역 시스템 데모."
     />
-    <script type="module" crossorigin src="./assets/index-BhXvjGF8.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-DrhwXJcm.css">
+    <script type="module" crossorigin src="./assets/index-CQMx0quI.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/chunk-CMxvf4Kt.js">
+    <link rel="stylesheet" crossorigin href="./assets/index-CqGoNBKZ.css">
   </head>
   <body>
     <div id="root"></div>

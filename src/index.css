@@ -1,0 +1,162 @@
+/* 글꼴을 **동봉한다.** 예전에는 jsdelivr에서 받아 왔는데, 이 앱은 재난 상황과
+   회선이 끊긴 창구·키오스크에서 쓰는 것이 요점이다. MediaPipe·ONNX를 동봉한 것과
+   같은 이유다("CDN에서 받아 와서 회선이 끊기면 카메라가 아예 켜지지 않았다").
+   font-display: swap이라 글꼴이 못 와도 글자는 보이지만, 재난 앱이 바깥 서버에
+   기대는 자리를 남겨 둘 이유가 없다.
+
+   쓰는 굵기만 넣는다 — 400·600·700·800 넉 종(각 ~770KB, 합계 3.0MB).
+   500(font-medium 12곳)은 400으로 맞춰 붙는다. 9종을 다 넣으면 7MB다.
+   local()을 먼저 두어 기기에 이미 깔려 있으면 내려받지 않는다. */
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 400;
+  font-display: swap;
+  src: local('Pretendard Regular'), url('../fonts/Pretendard-Regular.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 600;
+  font-display: swap;
+  src: local('Pretendard SemiBold'), url('../fonts/Pretendard-SemiBold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 700;
+  font-display: swap;
+  src: local('Pretendard Bold'), url('../fonts/Pretendard-Bold.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Pretendard';
+  font-weight: 800;
+  font-display: swap;
+  src: local('Pretendard ExtraBold'), url('../fonts/Pretendard-ExtraBold.woff2') format('woff2');
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-space-950 text-slate-100 font-sans antialiased;
+    margin: 0;
+    overflow-x: hidden;
+    /* 한국어는 **낱말 단위로** 끊는다. 기본값(break-word)은 글자 단위로 잘라
+       "화장실 어/디", "도와주세/요"처럼 낱말이 두 줄에 걸친다(실측 사진).
+       읽기 부담이 커지고, 특히 큰 글씨·좁은 화면(폰·키오스크)에서 자주 난다.
+       overflow-wrap은 남겨 둔다 — 끊을 데가 없는 긴 문자열(주소·글로스)이
+       화면 밖으로 삐져나가는 것은 막아야 한다. */
+    word-break: keep-all;
+    overflow-wrap: break-word;
+  }
+
+  /* Respect reduced-motion: kill non-essential animation */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+}
+
+@layer components {
+  /* Keyboard skip link — visually hidden until focused. */
+  .skip-link {
+    position: fixed;
+    top: 0.75rem;
+    left: 50%;
+    z-index: 100;
+    transform: translate(-50%, -150%);
+    border-radius: 0.6rem;
+    background: #22d3ee;
+    color: #03040a;
+    padding: 0.6rem 1.1rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    transition: transform 0.2s ease;
+  }
+  .skip-link:focus {
+    transform: translate(-50%, 0);
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+
+  /* Reusable glowing cyan text */
+  .text-glow {
+    text-shadow: 0 0 24px rgba(34, 211, 238, 0.45);
+  }
+
+  /* Frosted glass surface used by nav + cards */
+  .glass {
+    background: rgba(10, 14, 26, 0.55);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(148, 163, 184, 0.12);
+  }
+
+  /* Section vertical rhythm */
+  .section-pad {
+    @apply px-6 py-24 sm:px-8 md:py-32 lg:px-12;
+  }
+
+  /* Cyan timeline scrubber used by the sign-avatar demo */
+  .seek {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 5px;
+    border-radius: 3px;
+    background: #1a2740;
+    cursor: pointer;
+  }
+  .seek::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: #22d3ee;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  }
+  .seek::-moz-range-thumb {
+    width: 15px;
+    height: 15px;
+    border: none;
+    border-radius: 50%;
+    background: #22d3ee;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+  }
+  .seek:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+/* Thin custom scrollbar to match the dark theme */
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #03040a;
+}
+::-webkit-scrollbar-thumb {
+  background: #1e293b;
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}

@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a1322"/>
+      <stop offset="0.55" stop-color="#070b14"/>
+      <stop offset="1" stop-color="#03040a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.78" cy="0.4" r="0.5">
+      <stop offset="0" stop-color="#22d3ee" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <!-- right-side network motif -->
+  <g stroke="#22d3ee" stroke-opacity="0.5" stroke-width="1.5" fill="none">
+    <path d="M915 140 L1010 200 L965 320 L1060 380 L980 470 M1010 200 L1090 150 M965 320 L880 360 M1060 380 L1120 300"/>
+  </g>
+  <g fill="#67e8f9">
+    <circle cx="915" cy="140" r="6"/><circle cx="1010" cy="200" r="9"/><circle cx="965" cy="320" r="7"/>
+    <circle cx="1060" cy="380" r="10"/><circle cx="980" cy="470" r="6"/><circle cx="1090" cy="150" r="5"/>
+    <circle cx="880" cy="360" r="5"/><circle cx="1120" cy="300" r="6"/>
+  </g>
+
+  <!-- wordmark -->
+  <g transform="translate(80,78)">
+    <rect x="0" y="-26" width="40" height="40" rx="11" fill="#22d3ee" fill-opacity="0.16"/>
+    <path d="M13 -16 L29 -6 L13 4 Z" fill="#67e8f9"/>
+    <text x="56" y="6" font-size="34" fill="#ffffff" font-weight="bold">SignBridge</text>
+  </g>
+
+  <!-- badge -->
+  <g transform="translate(80,150)">
+    <rect x="0" y="0" width="560" height="46" rx="23" fill="#22d3ee" fill-opacity="0.10" stroke="#22d3ee" stroke-opacity="0.35"/>
+    <circle cx="28" cy="23" r="5" fill="#22d3ee"/>
+    <text x="48" y="31" font-size="22" fill="#a5f3fc">KOREN 기반 실시간 재난방송 AI 수어 통역</text>
+  </g>
+
+  <!-- headline -->
+  <text x="78" y="320" font-size="96" fill="#ffffff" font-weight="bold">들리지 않아도,</text>
+  <text x="78" y="430" font-size="96" fill="url(#cyan)" font-weight="bold">닿습니다.</text>
+
+  <!-- subtitle -->
+  <text x="82" y="498" font-size="30" fill="#cbd5e1">재난의 순간, AI 수어가 모두에게 닿는 가장 빠른 길</text>
+
+  <!-- url -->
+  <text x="82" y="566" font-size="24" fill="#64748b">biocode67.github.io/signbridge</text>
+</svg>

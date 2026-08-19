@@ -1,0 +1,29 @@
+{
+  "name": "SignBridge — 수어로 소통",
+  "short_name": "SignBridge",
+  "description": "병원·택시·관공서 창구에서 수어로 대화하고, 재난 정보를 수어로 받는 도구",
+  "start_url": "./#/app",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#05070d",
+  "theme_color": "#05070d",
+  "lang": "ko",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "창구 대화",
+      "short_name": "대화",
+      "description": "병원·택시·관공서에서 바로 대화",
+      "url": "./#/app"
+    },
+    {
+      "name": "키오스크로 세우기",
+      "short_name": "키오스크",
+      "description": "로비에 세워 두는 화면(대화 시작·큰 글씨)",
+      "url": "./#/app?kiosk=1"
+    }
+  ]
+}

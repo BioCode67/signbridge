@@ -12,6 +12,20 @@ const viewport = { once: true, margin: '-60px' }
 
 const LIMITS = [
   {
+    state: '학습은 끝났습니다',
+    tone: 'cyan',
+    title: '이어서 하는 수어 — 지금은 낱말을 끊어야 합니다',
+    body:
+      '“머리” 멈춤 “아프다” 멈춤. 농인에게 이건 대화가 아니라 조작입니다. ' +
+      '이어서 수어해도 문장으로 읽히는 모델(CTC)을 학습해 두었습니다.',
+    found:
+      '검증 WER 0.218까지 내렸지만 앱에는 아직 잇지 않았습니다. 이 모델은 클래스가 ' +
+      '8,147종이라 배포본 13,576종과 집합이 달라, 그대로 바꾸면 “화장실” 의도가 ' +
+      '통째로 죽습니다 — 오류도 경고도 없이.',
+    have: ['WER 0.218', '학습 135,446클립', '브라우저 디코더 준비됨'],
+    need: '두 모델을 함께 돌릴지, 이어서 수어한 표본을 받아 재고 정합니다',
+  },
+  {
     state: '길이 열렸다',
     tone: 'amber',
     title: '지문자 — 이름·지명을 손으로 쓰는 것',
@@ -80,7 +94,7 @@ export default function LimitsSection() {
           description="숨기면 질문 한 번에 무너집니다. 아래는 우리가 재어 보고 알게 된 한계이고, 무엇이 있으면 풀리는지까지 적었습니다."
         />
 
-        <div className="mt-14 grid gap-5 lg:grid-cols-3">
+        <div className="mt-14 grid gap-5 md:grid-cols-2">
           {LIMITS.map((l, i) => {
             const t = TONE[l.tone]
             return (

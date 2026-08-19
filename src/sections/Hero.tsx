@@ -8,12 +8,14 @@ const HeroScene = lazy(() => import('../three/HeroScene'))
 const ease = [0.22, 1, 0.36, 1] as const
 
 // Rotating sub-headline — each line frames the value from a different angle.
+// **첫 줄은 고정한다.** 영상의 첫 3초에 무엇을 만든 건지가 전달돼야 한다.
+// 나머지는 각도를 바꿔 가며 돈다.
 const TAGLINES = [
+  '재난문자를 수어로. 수어를 말과 글로. — 양쪽 다 됩니다.',
   '재난의 순간, AI 수어가 모두에게 도달하는 가장 빠른 길.',
-  '재난문자를 한국수어로 — 실시간으로 변환해 송출합니다.',
-  'KOREN 저지연망으로 전국에, 골든타임 안에 닿습니다.',
   '들을 수 없어 늦게 아는 격차를, 기술로 메웁니다.',
   '재난이 없는 날에도 — 병원·택시·관공서 창구에서 대화가 오갑니다.',
+  '서버 없이 브라우저 안에서 — 비행기 모드에서도 답합니다.',
 ]
 
 export default function Hero() {

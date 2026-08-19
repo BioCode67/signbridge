@@ -27,7 +27,7 @@ nav = "".join(
 
 scenes = "\n".join(f'''
 <section id="s{s["no"]}">
-  <h2><span class="n">{s["no"]}</span> {e(s["title"])}
+  <h2 class="{'skip' if s.get('skip') else ''}"><span class="n">{s["no"]}</span> {e(s["title"])}
       <em>{s["t"]}</em>{f'<i class="st">{STAR[s["star"]]}</i>' if s["star"] else ''}</h2>
   <p class="where">{e(s["where"])}</p>
   {rows_html(s["rows"])}
@@ -71,6 +71,10 @@ h2 .n{{background:var(--fg);color:var(--bg);border-radius:50%;width:27px;height:
 h2 em{{font-style:normal;color:var(--mut);font-size:14px;font-weight:500;margin-left:auto}}
 h2 .st{{font-style:normal;color:#e0641a;font-size:14px}}
 .where{{color:var(--mut);font-size:14px;margin:0 0 14px 36px}}
+h2.skip{{opacity:.72;border-top-style:dashed}}
+h2.skip::after{{content:'건너뛸 수 있음';font-size:11px;font-weight:700;color:#b45309;
+  background:#fef3c7;border-radius:99px;padding:3px 9px;margin-left:6px}}
+html[data-dark] h2.skip::after{{background:#3a2d10;color:#e3b862}}
 .say{{font-size:21px;font-weight:600;line-height:1.75;background:var(--say);
   border-left:6px solid var(--sayb);border-radius:0 10px 10px 0;padding:15px 18px;margin:12px 0}}
 .say.end{{font-size:25px;border-left-width:10px}}
@@ -105,7 +109,10 @@ html[data-big] .do{{font-size:19px}}
 <div class="wrap">
 <header>
   <h1>시연 대본 · SignBridge</h1>
-  <p class="meta">전체 4분 30초 · 말할 분량 약 3분 · <b>5분을 넘기면 시연 미진행으로 간주됩니다</b></p>
+  <p class="meta">전체 <b>4분 30초</b> · 말하는 시간 3분 52초 · 여유 38초 &nbsp;|&nbsp;
+  <b style="color:#c0392b">5분을 넘기면 시연 미진행으로 간주됩니다</b><br>
+  말이 길어지면 <b>4번 칸(에이전트·작동 원리)을 통째로 건너뛰세요</b> — 26초가 남습니다.
+  이번 촬영은 <b>카메라를 켜지 않습니다.</b> 화면을 돌며 어디에 무엇이 있는지만 설명합니다.</p>
   <nav>{nav}</nav>
 </header>
 

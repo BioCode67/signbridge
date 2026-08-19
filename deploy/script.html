@@ -29,6 +29,10 @@ h2 .n{background:var(--fg);color:var(--bg);border-radius:50%;width:27px;height:2
 h2 em{font-style:normal;color:var(--mut);font-size:14px;font-weight:500;margin-left:auto}
 h2 .st{font-style:normal;color:#e0641a;font-size:14px}
 .where{color:var(--mut);font-size:14px;margin:0 0 14px 36px}
+h2.skip{opacity:.72;border-top-style:dashed}
+h2.skip::after{content:'건너뛸 수 있음';font-size:11px;font-weight:700;color:#b45309;
+  background:#fef3c7;border-radius:99px;padding:3px 9px;margin-left:6px}
+html[data-dark] h2.skip::after{background:#3a2d10;color:#e3b862}
 .say{font-size:21px;font-weight:600;line-height:1.75;background:var(--say);
   border-left:6px solid var(--sayb);border-radius:0 10px 10px 0;padding:15px 18px;margin:12px 0}
 .say.end{font-size:25px;border-left-width:10px}
@@ -63,8 +67,11 @@ html[data-big] .do{font-size:19px}
 <div class="wrap">
 <header>
   <h1>시연 대본 · SignBridge</h1>
-  <p class="meta">전체 4분 30초 · 말할 분량 약 3분 · <b>5분을 넘기면 시연 미진행으로 간주됩니다</b></p>
-  <nav><a href="#s1"><b>1</b> 문제<span>0:00 – 0:30</span></a><a href="#s2"><b>2</b> 한국어를 수어로<span>0:30 – 1:30</span></a><a href="#s3"><b>3</b> 수어를 한국어와 소리로<span>1:30 – 2:45</span></a><a href="#s4"><b>4</b> 농인이 묻는 쪽이 된다<span>2:45 – 4:00</span></a><a href="#s5"><b>5</b> 창구 대화와 마무리<span>4:00 – 4:30</span></a></nav>
+  <p class="meta">전체 <b>4분 30초</b> · 말하는 시간 3분 52초 · 여유 38초 &nbsp;|&nbsp;
+  <b style="color:#c0392b">5분을 넘기면 시연 미진행으로 간주됩니다</b><br>
+  말이 길어지면 <b>4번 칸(에이전트·작동 원리)을 통째로 건너뛰세요</b> — 26초가 남습니다.
+  이번 촬영은 <b>카메라를 켜지 않습니다.</b> 화면을 돌며 어디에 무엇이 있는지만 설명합니다.</p>
+  <nav><a href="#s1"><b>1</b> 여는 말 · 무엇을 만들었나<span>0:00 – 0:35</span></a><a href="#s2"><b>2</b> 왜 · 수어 데모<span>0:35 – 1:05</span></a><a href="#s3"><b>3</b> 인식 · Q&amp;A<span>1:05 – 1:40</span></a><a href="#s4"><b>4</b> 에이전트 · 작동 원리<span>1:40 – 2:15</span></a><a href="#s5"><b>5</b> 실측 성과 · 한계<span>2:15 – 2:55</span></a><a href="#s6"><b>6</b> 당사자 화면 · 네 개의 탭<span>2:55 – 4:10</span></a><a href="#s7"><b>7</b> 마무리<span>4:10 – 4:30</span></a></nav>
 </header>
 
 <h3>읽는 법</h3>
@@ -74,71 +81,90 @@ html[data-big] .do{font-size:19px}
 화면 녹화 그대로 두고 <b>말로만</b> 설명하세요. 한 번에 쭉 찍는 편이 안전합니다.</div>
 
 <h3>녹화 전 확인</h3>
-<label><input type="checkbox"> 앱 오른쪽 위 [📥 오프라인] 을 눌러 [📴 준비됨] (초록) 까지 받았다</label><label><input type="checkbox"> [묻기] 탭에서 카메라 권한을 허용했다</label><label><input type="checkbox"> [대피소 어디?] 를 눌러 위치 권한을 허용했다 — 수백 미터짜리 답이 나오는지 확인</label><label><input type="checkbox"> [대화] 탭에서 답 카드를 눌러 스피커 소리를 확인했다</label><label><input type="checkbox"> 브라우저 확대 100% (Ctrl+0), 알림 끄기, F11 전체화면</label><label><input type="checkbox"> OBS — 녹화 형식 mkv · 데스크톱 오디오 켜짐 · 디스플레이 캡처 (창 캡처 아님)</label>
+<label><input type="checkbox"> 앱 오른쪽 위 [📥 오프라인] 을 눌러 [📴 준비됨] (초록) 까지 받았다</label><label><input type="checkbox"> [묻기] → [대피소 어디?] 를 눌러 위치 권한 허용, 수백 미터짜리 답이 나온다</label><label><input type="checkbox"> 카메라는 이번 촬영에서 켜지 않는다 — 권한 팝업이 안 뜨는지만 확인</label><label><input type="checkbox"> 브라우저 확대 100% (Ctrl+0), 알림 끄기, F11 전체화면</label><label><input type="checkbox"> OBS — 녹화 형식 mkv · 데스크톱 오디오 켜짐 · 디스플레이 캡처 (창 캡처 아님)</label><label><input type="checkbox"> 상단 메뉴를 눌러 각 칸으로 이동되는지 미리 한 번 훑어 봤다</label>
 
 
 <section id="s1">
-  <h2><span class="n">1</span> 문제
-      <em>0:00 – 0:30</em></h2>
-  <p class="where">소개 페이지 (첫 화면)</p>
-  <p class="do">▶ 소개 페이지를 열어 둔 상태에서 시작. 천천히 아래로 스크롤.</p>
-<p class="say">안녕하세요. 저희는 한국수어 양방향 번역 시스템 SignBridge를 만들고 있습니다.</p>
-<p class="say">재난문자는 한국어로만 옵니다. 그런데 한국수어는 한국어와 문법이 다른, 별개의 언어입니다. 농인에게 재난문자는 외국어로 온 경고문입니다.</p>
-<p class="say">지금부터 저희가 만든 것을 실제로 보여 드리겠습니다.</p>
+  <h2 class=""><span class="n">1</span> 여는 말 · 무엇을 만들었나
+      <em>0:00 – 0:35</em></h2>
+  <p class="where">소개 페이지 첫 화면 (#top)</p>
+  <p class="do">▶ 소개 페이지 첫 화면에서 시작</p>
+<p class="say">안녕하세요. 한국수어 양방향 번역 시스템 SignBridge입니다.</p>
+<p class="say">재난문자는 한국어로만 옵니다. 한국수어는 한국어와 문법이 다른 별개의 언어라, 농인에게 재난문자는 외국어로 온 경고문입니다.</p>
+<p class="say">기능이 많아 5분에 다 못 보여 드립니다. 화면을 차례로 넘기면서 어디에 무엇이 있는지를 중심으로 말씀드리겠습니다.</p>
 </section>
 
 <section id="s2">
-  <h2><span class="n">2</span> 한국어를 수어로
-      <em>0:30 – 1:30</em><i class="st">★★</i></h2>
-  <p class="where">앱 · 받기 탭</p>
-  <p class="do">▶ 오른쪽 위 금색 [수어 이용자 화면] 클릭 → [받기] 탭</p>
-<p class="say">재난문자가 들어오면 바로 수어로 바뀝니다. 지금 보시는 아바타가 문장을 그대로 수어로 옮기고 있습니다.</p>
-<p class="wait">⏸ 재생되는 것을 그대로 보여 준다 (약 10초, 말하지 않아도 됩니다)</p>
-<p class="say">동작 사전은 실제 농인 수어자의 영상에서 뽑았고, 만 이천 팔백서른세 개입니다.</p>
-<p class="do">▶ [행동요령] 배지 누르기</p>
-<p class="say">같은 재난 안내라도 행동요령은 목숨이 걸린 부분이라 따로 다룹니다. 학습 모델이 아니라 사전으로 보냅니다. 모델은 공지 말투로 배웠는데 행동요령은 명령 말투라서, 모델에 맡기면 엉뚱한 수어가 나갑니다.</p>
-<p class="say">그리고 이 모든 것이 서버 없이 이 브라우저 안에서 돌아갑니다.</p>
+  <h2 class=""><span class="n">2</span> 왜 · 수어 데모
+      <em>0:35 – 1:05</em><i class="st">★</i></h2>
+  <p class="where">#why → #demo</p>
+  <p class="do">▶ 상단 메뉴 [왜] 클릭 → 잠깐 보여 주고 [수어 데모] 클릭</p>
+<p class="say">첫 번째 칸은 왜 필요한가입니다. 재난 정보가 농인에게 더 늦게 도착하는 구조를 정리해 두었습니다.</p>
+<p class="say">두 번째 칸이 한국어를 수어로 바꾸는 부분입니다. 문장을 넣으면 아바타가 수어로 옮깁니다.</p>
+<p class="wait">⏸ 아바타가 움직이는 것을 잠깐 보여 준다 (5초 정도)</p>
+<p class="say">동작 사전은 실제 농인 수어자의 영상에서 뽑았고, 만 이천 팔백서른세 개입니다. 서버 없이 브라우저 안에서 돌아갑니다.</p>
 </section>
 
 <section id="s3">
-  <h2><span class="n">3</span> 수어를 한국어와 소리로
-      <em>1:30 – 2:45</em><i class="st">★★</i></h2>
-  <p class="where">소개 페이지 · 인식</p>
-  <p class="do">▶ 소개 페이지의 [인식] 섹션으로 이동 → 카메라 켜기</p>
-<p class="say">이번에는 반대 방향입니다. 카메라를 켜겠습니다.</p>
-<p class="say">손과 상반신에 점과 선이 찍히는 것이 보이실 겁니다. 카메라는 관절 좌표만 뽑습니다. 영상은 이 기기 밖으로 나가지 않습니다.</p>
-<p class="do">▶ 낱말을 하나씩, 사이를 1초쯤 끊어서 수어  (예: 머리 … 아프다)</p>
-<p class="say">낱말을 하나씩 인식해서 오른쪽에 쌓습니다.</p>
-<p class="do">▶ [🔊 소리로 듣기] 누르기</p>
-<p class="say">쌓인 낱말을 한국어 문장으로 잇고, 소리로 내보냅니다. 농인이 수어로 말하면 듣는 사람은 말로 듣습니다.</p>
-<p class="say">인식 모델은 만 삼천 오백일흔여섯 개의 낱말을 압니다. 처음 보는 수어자 열세 명에게서 첫 번째 후보 정확도 78.6퍼센트가 나왔습니다. 같은 사람이 학습과 평가에 섞이면 숫자가 부풀기 때문에, 수어자를 분리해서 쟀습니다.</p>
+  <h2 class=""><span class="n">3</span> 인식 · Q&amp;A
+      <em>1:05 – 1:40</em><i class="st">★</i></h2>
+  <p class="where">#live → #qa</p>
+  <p class="do">▶ [인식] 클릭 — 화면만 보여 주고 카메라는 켜지 않는다</p>
+<p class="say">세 번째 칸은 반대 방향입니다. 카메라로 수어를 읽어 한국어로 잇고 소리로 내보냅니다. 농인이 수어로 말하면 듣는 사람은 말로 듣습니다.</p>
+<p class="say">낱말 만 삼천 오백일흔여섯 개를 압니다. 처음 보는 수어자 열세 명에게서 정확도 78.6퍼센트가 나왔습니다. 수어자를 분리해서 쟀습니다.</p>
+<p class="do">▶ [Q&amp;A] 클릭</p>
+<p class="say">네 번째 칸은 물어보는 자리입니다. 궁금한 것을 넣으면 수어로 답합니다.</p>
 </section>
 
 <section id="s4">
-  <h2><span class="n">4</span> 농인이 묻는 쪽이 된다
-      <em>2:45 – 4:00</em><i class="st">★★★</i></h2>
-  <p class="where">앱 · 묻기 탭</p>
-  <p class="do">▶ [묻기] 탭 → 가운데 큰 📹 버튼</p>
-<p class="say">지금까지 이 앱에서 농인은 정보를 받기만 했습니다. 여기서는 농인이 묻습니다.</p>
-<p class="do">▶ 수어로  대피 … 어디<br>   (수어가 어려우면 화면의 [🏫 대피소 어디?] 버튼을 누른다 — 답은 똑같습니다)</p>
-<p class="say">대피소가 어디냐고 물었습니다.</p>
-<p class="wait">⏸ 답이 나오는 것을 보여 준다 — 방향 · 거리 · 걸리는 시간 · 지도 · 아바타 수어</p>
-<p class="say">방향과 거리, 걸리는 시간, 그리고 방향 지도로 답합니다. 아바타가 그 답을 다시 수어로 해 줍니다.</p>
-<p class="say">대피소 어디예요, 는 들리는 사람이면 지나가는 사람에게 물어 3초에 끝납니다. 농인에게는 그 3초가 통째로 막혀 있습니다.</p>
-<p class="do">▶ ★ 여기서 비행기 모드를 켠다 → [📹 또 묻기] → 다시 답이 나온다</p>
-<p class="say">지금 비행기 모드를 켰습니다. 인터넷이 끊긴 상태입니다.</p>
-<p class="say">그래도 그대로 답합니다. 지도 타일을 쓰지 않고, 인식 모델과 동작 사전을 기기 안에 두었기 때문입니다. 재난이 나면 회선이 먼저 끊깁니다. 재난 때가 곧 오프라인입니다.</p>
+  <h2 class="skip"><span class="n">4</span> 에이전트 · 작동 원리
+      <em>1:40 – 2:15</em></h2>
+  <p class="where">#agents → #how  ※ 시간이 모자라면 이 칸을 통째로 건너뛰세요</p>
+  <p class="do">▶ [에이전트] 클릭 → 그다음 [작동 원리] 클릭</p>
+<p class="say">다섯 번째와 여섯 번째 칸이 내부 구조입니다.</p>
+<p class="say">네 개의 에이전트가 이어서 일합니다. 재난 문자를 판단하고, 수어로 바꾸고, 질문에 답하고, 화면으로 내보냅니다.</p>
+<p class="say">번역은 세 단계로 되어 있습니다. 학습 모델이 먼저 시도하고, 안 되면 통계 사전이, 그것도 안 되면 규칙이 받습니다. 어느 것이 답했는지도 화면에 기록됩니다.</p>
 </section>
 
 <section id="s5">
-  <h2><span class="n">5</span> 창구 대화와 마무리
-      <em>4:00 – 4:30</em><i class="st">★</i></h2>
-  <p class="where">앱 · 대화 탭</p>
-  <p class="do">▶ [대화] 탭 → [🏥 병원]</p>
-<p class="say">마지막은 병원이나 주민센터 창구입니다.</p>
-<p class="do">▶ 직원 말 → 수어로 나오는 것, 농인의 답 카드 → 소리로 나가는 것을 보여 준다</p>
-<p class="say">직원이 말하면 수어로 바뀌고, 농인이 답하면 소리로 나갑니다.</p>
-<p class="say">저희가 지금까지 만든 것을 한 문장으로 말씀드리면 이렇습니다.</p>
+  <h2 class=""><span class="n">5</span> 실측 성과 · 한계
+      <em>2:15 – 2:55</em><i class="st">★★</i></h2>
+  <p class="where">#results → #limits</p>
+  <p class="do">▶ [실측 성과] 클릭</p>
+<p class="say">일곱 번째 칸은 실제로 잰 숫자입니다. 목표치는 넣지 않았습니다.</p>
+<p class="say">인식 78.2퍼센트, 번역 BLEU 27.1, 재난문자 낱말 표현률 96.1퍼센트, 행동요령 100퍼센트. 자동 검사 266개가 매번 전부 통과합니다.</p>
+<p class="do">▶ [한계] 클릭</p>
+<p class="say">여덟 번째 칸은 아직 안 되는 것입니다. 숨기지 않고 먼저 적었습니다.</p>
+<p class="say">지문자, 표정, 그리고 이어서 하는 수어입니다. 연속 수어 모델은 학습을 끝내고도 안 붙였습니다. 바꾸면 화장실이라는 낱말이 사라져서, 농인이 화장실을 물으면 영영 못 알아듣게 되기 때문입니다. 오류도 없이요.</p>
+</section>
+
+<section id="s6">
+  <h2 class=""><span class="n">6</span> 당사자 화면 · 네 개의 탭
+      <em>2:55 – 4:10</em><i class="st">★★★</i></h2>
+  <p class="where">#/app — 받기 · 묻기 · 대화 · 사전</p>
+  <p class="do">▶ 오른쪽 위 금색 [🤟 수어 이용자 화면] 클릭</p>
+<p class="say">여기부터가 농인이 실제로 쓰는 화면입니다. 탭이 네 개입니다.</p>
+<p class="do">▶ [받기] 탭</p>
+<p class="say">첫째, 받기. 재난문자가 들어오면 바로 수어로 나옵니다. 행동요령은 목숨이 걸린 안내라 학습 모델이 아니라 사전으로 보냅니다.</p>
+<p class="do">▶ [묻기] 탭 → [🏫 대피소 어디?] 버튼 누르기</p>
+<p class="say">둘째, 묻기. 지금까지 농인은 정보를 받기만 했습니다. 여기서는 농인이 묻습니다.</p>
+<p class="wait">⏸ 답이 나오는 것을 보여 준다 — 방향 · 거리 · 걸리는 시간 · 지도</p>
+<p class="say">방향과 거리, 걸리는 시간, 방향 지도로 답합니다. 장소는 전국 이만 팔천 곳, 그중 대피소가 만 사천 곳입니다.</p>
+<p class="say">수어로 물을 수도, 지금처럼 눌러서 물을 수도 있습니다. 수어를 배우는 중이거나 손을 다쳤을 때를 위해 둘 다 열어 두었습니다.</p>
+<p class="do">▶ ★ 여기서 비행기 모드를 켠다 → [📹 또 묻기] → 다시 답이 나온다</p>
+<p class="say">비행기 모드를 켰습니다. 인터넷이 끊겼는데도 그대로 답합니다. 지도 타일을 쓰지 않고 모델과 사전을 기기 안에 두었기 때문입니다. 재난 때가 곧 오프라인입니다.</p>
+<p class="do">▶ [대화] 탭 → [🏥 병원]</p>
+<p class="say">셋째, 대화. 병원이나 주민센터 창구입니다. 직원이 말하면 수어로 바뀌고, 농인이 답하면 소리로 나갑니다.</p>
+<p class="do">▶ [사전] 탭</p>
+<p class="say">넷째, 사전. 낱말을 찾아 수어를 확인합니다. 만 이천여 개입니다.</p>
+</section>
+
+<section id="s7">
+  <h2 class=""><span class="n">7</span> 마무리
+      <em>4:10 – 4:30</em></h2>
+  <p class="where">아무 화면에서나</p>
+  <p class="say">한국어를 수어로, 수어를 한국어와 소리로. 양쪽을 다 만들었고 회선이 끊긴 곳에서도 돌아갑니다.</p>
+<p class="say">남은 것은 이어서 하는 수어와 지문자, 그리고 9월 농인 당사자 평가입니다.</p>
 <p class="say end">한쪽만 되면 방송이고, 양쪽이 되어야 대화입니다.</p>
 <p class="say">감사합니다.</p>
 </section>
@@ -147,10 +173,10 @@ html[data-big] .do{font-size:19px}
 <table><tr><td>동작 사전</td><th>12,833개</th><td class="sub">실제 농인 수어자 영상에서</td></tr><tr><td>인식 낱말 수</td><th>13,576개</th><td class="sub">수어자 분리 학습</td></tr><tr><td>인식 정확도</td><th>78.2% / 78.6%</th><td class="sub">검증 / 처음 보는 수어자 13명 · 49,721표본</td></tr><tr><td>한국어→수어</td><th>BLEU-4 27.1</th><td class="sub">사람 번역가 정답 기준 · 검증 800문장</td></tr><tr><td>낱말 표현률</td><th>96.1% / 100%</th><td class="sub">재난문자 / 행동요령</td></tr><tr><td>장소 목록</td><th>28,125곳</th><td class="sub">전국 · 대피소 14,134곳 (OSM 참고용)</td></tr><tr><td>자동 검사</td><th>266개 통과</th><td class="sub">폰·태블릿·키오스크·오프라인</td></tr></table>
 
 <h3>말하면 안 되는 것 — 재지 않은 것</h3>
-<table><tr><td class="x">&quot;농인이 써 보니 좋다더라&quot;</td><td class="sub">당사자 평가는 9월입니다. 아직 안 쟀습니다</td></tr><tr><td class="x">&quot;실시간 문장 번역&quot;</td><td class="sub">지금은 낱말 단위입니다</td></tr><tr><td class="x">&quot;공식 지정 대피소&quot;</td><td class="sub">OSM 기반 참고용이고, 화면에도 그렇게 씁니다</td></tr></table>
+<table><tr><td class="x">&quot;농인이 써 보니 좋다더라&quot;</td><td class="sub">당사자 평가는 9월입니다. 아직 안 쟀습니다</td></tr><tr><td class="x">&quot;실시간 문장 번역&quot;</td><td class="sub">지금은 낱말 단위입니다</td></tr><tr><td class="x">&quot;공식 지정 대피소&quot;</td><td class="sub">OSM 기반 참고용이고, 화면에도 그렇게 씁니다</td></tr><tr><td class="x">카메라를 켜고 수어를 시도하는 것</td><td class="sub">이번 촬영에서는 하지 않기로 했습니다. 인식이 어긋나면 그 장면이 통째로 흔들립니다</td></tr></table>
 
 <h3>질문이 나오면</h3>
-<div class="qa"><p class="q">Q. 이어서 수어하면 왜 못 알아듣나요?</p><p class="say">연속 문장 인식 모델은 이미 학습을 끝냈습니다. 검증 오류율 0.218입니다. 그런데 아직 앱에 안 붙였습니다. 그 모델은 낱말을 8,147개 아는데 지금 붙어 있는 모델은 13,576개를 압니다. 바꿔 끼우면 화장실이라는 낱말이 사라져서, 화장실을 물으면 영영 못 알아듣게 됩니다. 오류도 안 나고요. 두 개를 같이 돌리면 풀리지만, 그게 정말 나은지는 농인이 이어서 한 수어를 받아 봐야 압니다. 9월에 재고 정하겠습니다.</p></div><div class="qa"><p class="q">Q. 농인의 답을 한국어로 바꾸는 건 AI인가요?</p><p class="say">거기만 규칙 기반입니다. 학습 모델도 만들어 재봤습니다. 재난문자에서는 사람 번역과 글자까지 같은 문장이 나올 정도였습니다. 그런데 일상어를 넣으면 머리 아프다를 오늘 아침 기온이 크게 오르고 있습니다로 바꿉니다. 재난 말뭉치로만 배웠기 때문입니다. 이건 직원이 소리로 듣는 문장이고, 농인은 자기 말이 어떻게 나갔는지 볼 수 없습니다. 그래서 안 붙였습니다. 뻣뻣해도 안 틀리는 쪽을 씁니다.</p></div><div class="qa"><p class="q">Q. 정확도 78%면 낮지 않나요?</p><p class="say">만 삼천 오백일흔여섯 개 중에서 고르는 문제입니다. 그리고 처음 보는 수어자 열세 명에게서도 78.6%가 나왔습니다. 검증 숫자와 같습니다.</p></div><div class="qa"><p class="q">Q. 대피소 목록은 공식인가요?</p><p class="say">아닙니다. 지금은 OpenStreetMap 기반이고 화면에도 참고용이라고 밝히고 있습니다. 공공데이터포털 인증키를 받으면 행정안전부 공식 지정 대피소로 바꿀 수 있습니다. 계산과 표시는 이미 완성돼 있고 데이터만 갈아 끼우면 됩니다.</p></div>
+<div class="qa"><p class="q">Q. 영상에서 카메라 인식을 왜 안 보여 주셨나요?</p><p class="say">인식 자체는 동작하고 숫자도 재어 두었습니다. 다만 촬영자가 농인이 아니라 수어 손모양이 정확하지 않아서, 인식이 어긋나는 장면이 기능의 문제로 보일 수 있다고 판단했습니다. 현장에서 원하시면 바로 시연해 드리겠습니다.</p></div><div class="qa"><p class="q">Q. 이어서 수어하면 왜 못 알아듣나요?</p><p class="say">연속 문장 인식 모델은 이미 학습을 끝냈습니다. 검증 오류율 0.218입니다. 그런데 아직 앱에 안 붙였습니다. 그 모델은 낱말을 8,147개 아는데 지금 붙어 있는 모델은 13,576개를 압니다. 바꿔 끼우면 화장실이라는 낱말이 사라져서, 화장실을 물으면 영영 못 알아듣게 됩니다. 오류도 안 나고요. 두 개를 같이 돌리면 풀리지만, 그게 정말 나은지는 농인이 이어서 한 수어를 받아 봐야 압니다. 9월에 재고 정하겠습니다.</p></div><div class="qa"><p class="q">Q. 농인의 답을 한국어로 바꾸는 건 AI인가요?</p><p class="say">거기만 규칙 기반입니다. 학습 모델도 만들어 재봤습니다. 재난문자에서는 사람 번역과 글자까지 같은 문장이 나올 정도였습니다. 그런데 일상어를 넣으면 머리 아프다를 오늘 아침 기온이 크게 오르고 있습니다로 바꿉니다. 재난 말뭉치로만 배웠기 때문입니다. 이건 직원이 소리로 듣는 문장이고, 농인은 자기 말이 어떻게 나갔는지 볼 수 없습니다. 그래서 안 붙였습니다. 뻣뻣해도 안 틀리는 쪽을 씁니다.</p></div><div class="qa"><p class="q">Q. 대피소 목록은 공식인가요?</p><p class="say">아닙니다. 지금은 OpenStreetMap 기반이고 화면에도 참고용이라고 밝히고 있습니다. 공공데이터포털 인증키를 받으면 행정안전부 공식 지정 대피소로 바꿀 수 있습니다. 계산과 표시는 이미 완성돼 있고 데이터만 갈아 끼우면 됩니다.</p></div>
 </div>
 
 <div class="tools">

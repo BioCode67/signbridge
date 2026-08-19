@@ -32,6 +32,17 @@ from ml.signbridge.vocab import normalize_gloss  # noqa: E402
 
 CONF_THRESHOLD = 0.1
 
+# 윈도우 금지 문자와 URL 조각 문자를 파일명에서 치환한다.
+# 실측(2026-08-19): `시:8시30분.json` 같은 콜론 파일 1,365개 때문에 윈도우에서
+# `git clone`이 checkout 단계에서 통째로 실패했다. `#`은 fetch URL에서 fragment로
+# 잘려 브라우저가 그 조각을 영영 못 받는다. 글로스 **키**는 그대로 두고
+# 파일명만 바꾼다 — 앱은 bank.json의 file 필드로만 파일을 찾는다.
+_WEB_UNSAFE = set('<>:"/\\|?*#')
+
+
+def websafe(fname: str) -> str:
+    return "".join("_" if c in _WEB_UNSAFE else c for c in fname)
+
 
 def compact(entry: dict) -> dict:
     """좌표 반올림 + 신뢰도 이진화. 구조는 SignData 그대로 둔다.
@@ -210,14 +221,16 @@ def main() -> None:
     # 증분이 기본이다. 어휘를 조금 늘릴 때마다 9,500개를 다시 쓰면 30분이 날아가고,
     # 그동안 public/data/glosses가 비어 앱이 통째로 멈춘다(rmtree 후 재작성 구간).
     existing = {f.name for f in gloss_dir.glob("*.json")}
-    keep = {bank[n]["file"] for n in chosen}
+    keep = {websafe(bank[n]["file"]) for n in chosen}
 
     web_index: dict[str, dict] = {}
     written = reused = 0
     for name in chosen:
         info = bank[name]
-        target = gloss_dir / info["file"]
-        if info["file"] in existing:
+        # 원본 사전(args.bank)은 원래 이름으로 읽고, 웹 출력은 안전한 이름으로 쓴다.
+        fname = websafe(info["file"])
+        target = gloss_dir / fname
+        if fname in existing:
             data = json.loads(target.read_text(encoding="utf-8"))
             reused += 1
         else:
@@ -230,7 +243,7 @@ def main() -> None:
             if written % 200 == 0:
                 print(f"  [web] 새로 쓴 조각 {written:,}", flush=True)
         web_index[name] = {
-            "file": info["file"],
+            "file": fname,
             "frames": data["num_frames"],
             "fps": data["fps"],
         }

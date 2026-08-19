@@ -93,9 +93,15 @@ def sane_3d(pose3: np.ndarray | None) -> bool:
 
 
 def safe_name(gloss: str) -> str:
-    """글로스를 파일명으로 — 한글 유지, 경로 위험 문자만 치환."""
+    """글로스를 파일명으로 — 한글 유지, 경로 위험 문자만 치환.
+
+    `:`과 `#`도 치환한다. 실측(2026-08-19): 콜론 파일명(`시:8시30분.json`)은
+    윈도우 파일시스템이 못 만들어 `git clone` checkout이 통째로 실패했고,
+    `#`은 브라우저 fetch URL에서 fragment로 잘린다. 이미 만들어 둔 사전과
+    이름이 달라지는 것은 export_web_bank의 websafe()가 흡수한다.
+    """
     text = unicodedata.normalize("NFC", gloss)
-    return re.sub(r"[^\w가-힣:#]+", "_", text)
+    return re.sub(r"[^\w가-힣]+", "_", text)
 
 
 def main() -> None:

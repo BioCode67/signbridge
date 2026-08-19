@@ -65,3 +65,8 @@ echo "다음: npm run build && python3 scripts/e2e_app.py"
 # 만들어지는 글로스를 재난문자·측정용 문장 여섯 갈래로 훑어 확인한다.
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_silent_skip.mjs
+
+# 사전을 다시 만들면 화면에 적힌 낱말 수·클래스 수가 낡는다. 오류도 안 나고
+# 화면도 멀쩡해서 **틀린 숫자를 그대로 발표하게 된다.** 원본과 대조한다.
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_site_numbers.mjs

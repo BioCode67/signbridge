@@ -451,3 +451,24 @@ def qa(req: QARequest):
     if len(answer) < 4:  # 생성 실패 시 최소 안내(프런트가 폴백도 함)
         answer = f"{req.disaster_type} 상황입니다. 안내에 따라 안전한 곳으로 이동하세요."
     return QAResponse(answer=answer, raw=raw)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 빌드된 사이트를 같은 주소로 함께 내보낸다.
+#
+# **왜 여기 붙이나.** 이 워크스페이스는 아웃바운드 443만 열려 있어 터널을 하나만
+# 세울 수 있다(`deploy/tunnel.sh`). 그동안 그 터널이 API만 가리켜서 **주소를 열면
+# `{"detail":"Not Found"}` 만 나왔다** — 사이트를 보여 줄 주소가 없었다.
+#
+# 마운트는 **모든 API 경로를 등록한 뒤**에 해야 한다. 그래야 `/qa`·`/t2g` 같은
+# 경로가 먼저 잡히고, 나머지만 정적 파일로 간다. 앱은 해시 라우팅(`#/app`)이라
+# 서버 쪽 rewrite가 필요 없다 — `index.html` 하나면 모든 화면이 열린다.
+#
+# `dist/`가 없으면(빌드 전) 조용히 건너뛴다. API만 쓰는 자리를 깨지 않기 위해서다.
+from pathlib import Path
+
+_DIST = Path(__file__).resolve().parent.parent / "dist"
+if _DIST.is_dir():
+    from fastapi.staticfiles import StaticFiles
+
+    app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="site")

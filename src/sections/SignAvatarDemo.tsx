@@ -504,7 +504,7 @@ export default function SignAvatarDemo() {
             </span>
             {/* 실제 재난문자 246건 전수 실측(사전 매칭 손실 포함) — 부풀림 없는 종단 수치 */}
             <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 font-semibold text-emerald-300">
-              동작 어휘 11,448종 · 실측 낱말 표현 재난문자 95.8% · 창구 대화 85.7%
+              동작 어휘 12,833종 · 실측 낱말 표현 재난문자 96.1% · 창구 대화 93.5%
             </span>
             <span className="rounded-full border border-white/10 bg-space-800 px-3 py-1">
               사전 수록 {load.sentences.length}문장 (AI Hub 원본 재생)

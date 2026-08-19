@@ -82,6 +82,18 @@ export default function SignInputPanel({ onSend, onClose }: Props) {
             <p className={`text-3xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-500'}`}>
               {confident && rec.current ? glossLabel(rec.current.label) : '…'}
             </p>
+            {/* 아직 아무것도 못 알아들었을 때 — **무엇을 하면 되는지** 보여준다.
+                묻기 화면과 같은 이유다. 카메라만 켜 두면 처음 쓰는 사람은
+                무엇을 해야 할지 모른 채 기다린다. 창구에서 답할 만한 것을
+                예시로 둔다 — 인식 클래스에 실존하는 낱말만 적는다. */}
+            {words.length === 0 && (
+              <p className="mx-auto max-w-xs break-keep rounded-2xl bg-black/60 px-4 py-2.5 text-base leading-relaxed text-slate-200">
+                손을 화면 가운데 두고 <b className="text-cyan-soft">한 낱말씩</b> 해 주세요
+                <br />
+                <span className="text-sm text-slate-400">예 · 맞다 · 아니다 · 머리 · 아프다 · 모르다</span>
+              </p>
+            )}
+
             {words.length > 0 && (
               <>
                 <RecognizedWords

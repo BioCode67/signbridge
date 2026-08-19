@@ -19,6 +19,22 @@ const mod = await import('../src/user/askIntent.ts')
 // 번호를 떼고 비교하므로 여기서도 같은 방식으로 맞춘다.
 const bare = new Set(meta.labels.map((l) => String(l).replace(/[0-9#]+$/, '')))
 
+// 화면 안내에 **예시로 적어 둔 낱말**도 함께 본다. 따라 했는데 안 잡히면
+// 사용자는 자기 수어가 틀렸다고 생각한다 — 실제로 '네'·'아니요'를 예시로
+// 적을 뻔했고, 둘 다 인식 클래스에 없었다.
+const hintFiles = ['src/user/SignInputPanel.tsx', 'src/user/AskMode.tsx']
+const hintWords = new Set()
+for (const f of hintFiles) {
+  let src = ''
+  try { src = readFileSync(f, 'utf8') } catch { continue }
+  for (const m of src.matchAll(/예\s·\s([^<\n]+)/g)) {
+    for (const w of m[1].split('·')) {
+      const t = w.trim().replace(/[”“"']/g, '')
+      if (t && /^[가-힣]+$/.test(t)) hintWords.add(t)
+    }
+  }
+}
+
 const groups = mod.INTENT_WORDS ?? null
 if (!groups) {
   console.log('✗ askIntent.ts가 INTENT_WORDS를 내보내지 않습니다')
@@ -36,6 +52,14 @@ for (const [name, words] of Object.entries(groups)) {
   console.log(`  ${mark} ${name} ${words.length - gone.length}/${words.length}` +
     (gone.length ? ` — 모델이 낼 수 없는 낱말: ${gone.join(' ')}` : ''))
 }
+
+const hintGone = [...hintWords].filter((w) => !bare.has(w))
+if (hintWords.size) {
+  console.log(hintGone.length
+    ? `  ✗ 화면 안내 예시 ${hintWords.size}개 중 인식 못 하는 낱말: ${hintGone.join(' ')}`
+    : `  ✓ 화면 안내 예시 ${hintWords.size}개 모두 인식 클래스에 있습니다`)
+}
+missing += hintGone.length
 
 console.log(missing
   ? `\n[의도] ${total}개 중 ${missing}개가 인식 클래스에 없습니다 — 그 뜻으로는 영영 안 알아듣습니다`

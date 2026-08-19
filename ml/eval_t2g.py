@@ -81,9 +81,9 @@ def kendall_order(preds: list[list[str]], golds: list[list[str]]) -> float:
 
 
 @torch.no_grad()
-def greedy(model: SmallT2G, sv: Vocab, tv: Vocab, text: str, dev: str,
+def greedy(model: SmallT2G, sv: Vocab, tv: Vocab, src_toks: list[str], dev: str,
            max_src: int, max_tgt: int) -> list[str]:
-    ids = sv.encode(syllables(text))[:max_src]
+    ids = sv.encode(src_toks)[:max_src]
     if not ids:
         return []
     src = torch.tensor([ids], device=dev)
@@ -106,6 +106,10 @@ def main() -> int:
     ap.add_argument("--data", type=Path, nargs="+", required=True)
     ap.add_argument("--limit", type=int, default=800)
     ap.add_argument("--dump", type=Path, default=Path("scripts/t2g_eval_set.json"))
+    # 방향. gloss2text는 **글로스열 → 한국어**라 입력·출력이 뒤집힌다.
+    # 이 경우 출력이 음절이므로 BLEU도 음절 단위가 된다(낱말 단위가 아니다).
+    ap.add_argument("--direction", choices=["text2gloss", "gloss2text"],
+                    default="text2gloss")
     a = ap.parse_args()
 
     ck = torch.load(a.checkpoint / "best.pt", map_location="cpu", weights_only=False)
@@ -129,19 +133,24 @@ def main() -> int:
     val = pairs[:n_val][: a.limit]
     print(f"[eval] 검증 문장 {len(val):,}")
 
+    g2t = a.direction == "gloss2text"
     preds, golds, rows = [], [], []
-    for text, gold in val:
-        pred = greedy(model, sv, tv, text, dev, cfg["max_src"], cfg["max_tgt"])
+    for text, gloss in val:
+        src = gloss if g2t else syllables(text)
+        gold = syllables(text) if g2t else gloss
+        pred = greedy(model, sv, tv, src, dev, cfg["max_src"], cfg["max_tgt"])
         preds.append(pred)
         golds.append(gold)
-        rows.append({"text": text, "gold": gold, "nn": pred})
+        rows.append({"text": text, "gold": gold, "nn": pred,
+                     **({"src": gloss} if g2t else {})})
 
     bleu = corpus_bleu(preds, golds)
     prec, rec, f1 = gloss_f1(preds, golds)
     tau = kendall_order(preds, golds)
-    print(f"\n[eval] 학습 모델 (t2gs)")
-    print(f"  BLEU-4      {bleu:.1f}")
-    print(f"  글로스 F1   {f1:.1f}  (정밀도 {prec:.1f} · 재현율 {rec:.1f})")
+    unit = "음절" if g2t else "글로스"
+    print(f"\n[eval] 학습 모델 ({a.direction})")
+    print(f"  BLEU-4      {bleu:.1f}  ({unit} 단위)")
+    print(f"  {unit} F1     {f1:.1f}  (정밀도 {prec:.1f} · 재현율 {rec:.1f})")
     print(f"  어순 상관   {tau:.1f}")
     print(f"  평균 길이   예측 {sum(len(p) for p in preds) / len(preds):.1f} / "
           f"정답 {sum(len(g) for g in golds) / len(golds):.1f}")
@@ -152,9 +161,14 @@ def main() -> int:
           "scripts/eval_dict_on.mjs")
     print("\n[eval] 보기 (앞 3개)")
     for r in rows[:3]:
-        print(f"  원문: {r['text'][:60]}")
-        print(f"  사람: {' '.join(r['gold'][:14])}")
-        print(f"  모델: {' '.join(r['nn'][:14])}")
+        if g2t:
+            print(f"  글로스: {' '.join(r['src'][:14])}")
+            print(f"  사람  : {''.join(r['gold'])[:60]}")
+            print(f"  모델  : {''.join(r['nn'])[:60]}")
+        else:
+            print(f"  원문: {r['text'][:60]}")
+            print(f"  사람: {' '.join(r['gold'][:14])}")
+            print(f"  모델: {' '.join(r['nn'][:14])}")
     return 0
 
 

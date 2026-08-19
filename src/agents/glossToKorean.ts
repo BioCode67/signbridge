@@ -36,6 +36,34 @@ export function polite(stem: string): string {
   const [cho, jung, jong] = parts
   const vowel = JUNG[jung]
   if (stem.endsWith('하')) return `${stem.slice(0, -1)}해요`
+
+  // **불규칙 몇 개는 손으로 못박는다.** 규칙대로 굴리면 스피커에서
+  // "고맙아요"·"아녀요"가 나간다 — 창구에서 농인의 말이 서툴게 들린다.
+  // 자주 쓰는 것만 넣는다(지어내지 않는다).
+  const FIXED: Record<string, string> = {
+    아니: '아니에요',
+    고맙: '고마워요',
+    반갑: '반가워요',
+    춥: '추워요',
+    덥: '더워요',
+    맵: '매워요',
+    무섭: '무서워요',
+    아프: '아파요',
+    낫: '나아요',
+    붓: '부어요',
+    걷: '걸어요',
+    듣: '들어요',
+    묻: '물어요',
+    돕: '도와요',
+    있: '있어요',
+    없: '없어요',
+    괜찮: '괜찮아요',
+    모르: '몰라요',
+    부르: '불러요',
+    빠르: '빨라요',
+  }
+  if (FIXED[stem]) return FIXED[stem]
+
   if (jong) {
     // 받침이 있으면 합쳐지지 않는다: 먹 + 어요 → 먹어요
     return stem + (BRIGHT.has(vowel) ? '아요' : '어요')
@@ -59,6 +87,18 @@ function connective(stem: string): string {
 
 const isVerb = (lemma: string) => lemma.length >= 2 && lemma.endsWith('다')
 
+/** 의문사는 "요"가 아니라 "예요/이에요"로 맺는다 — "이름 무엇요"는 말이 안 된다. */
+const QUESTION: Record<string, string> = {
+  무엇: '뭐예요',
+  어디: '어디예요',
+  언제: '언제예요',
+  누구: '누구예요',
+  얼마: '얼마예요',
+  몇: '몇이에요',
+  왜: '왜요',
+  어떻게: '어떻게 해요',
+}
+
 /**
  * 글로스열을 읽어 줄 만한 한국어로 만든다.
  *
@@ -76,8 +116,16 @@ export function glossesToKorean(glosses: string[]): string {
     const stem = lemma.slice(0, -1)
     return i === lastVerb ? polite(stem) : connective(stem)
   })
-  // 용언이 하나도 없으면 낱말 나열이다 — "요"를 붙여 말끝을 맺어 준다.
-  if (lastVerb < 0) return `${words.join(' ')}요`
+  // 용언이 하나도 없으면 낱말 나열이다 — 말끝을 맺어 준다.
+  // **마지막이 의문사면 물음으로 맺는다**("이름 무엇요" → "이름 뭐예요?").
+  if (lastVerb < 0) {
+    const last = lemmas[lemmas.length - 1]
+    if (QUESTION[last]) {
+      const head = words.slice(0, -1).join(' ')
+      return head ? `${head} ${QUESTION[last]}?` : `${QUESTION[last]}?`
+    }
+    return `${words.join(' ')}요`
+  }
   // '하다'는 앞 명사에 붙여 쓴다: "계산 해요" → "계산해요".
   const joined: string[] = []
   for (let i = 0; i < words.length; i++) {

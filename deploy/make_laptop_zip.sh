@@ -15,8 +15,25 @@ cd "$(dirname "$0")/.."
 [ -f dist/index.html ] || { echo "dist가 없습니다. 먼저 npm run build"; exit 1; }
 
 # 서버.ps1 — 파이썬이 없는 윈도우에서 쓰는 대비책. 윈도우 기본 PowerShell만 쓴다.
-cp deploy/laptop/시작하기_윈도우.bat deploy/laptop/시작하기_맥.command \
-   deploy/laptop/읽어주세요.txt deploy/laptop/서버.ps1 dist/
+# ── 인코딩을 받는 쪽(윈도우) 기준으로 바꿔서 넣는다.  2026-08-19에 실제로 깨졌다.
+#
+# cmd.exe 는 .bat 을 **ANSI 코드페이지**(한국어 윈도우면 CP949)로 읽는다. UTF-8로
+# 저장한 .bat 은 한글 줄이 깨진 채 *명령으로 해석되어* 오류가 쏟아진다.
+# 파일 안에 `chcp 65001`을 넣는 것으로는 안 된다 — 코드페이지를 중간에 바꾸면
+# cmd 가 파일을 읽던 바이트 위치를 어긋나게 잡아 그 뒤 줄이 통째로 망가진다.
+# 그래서 **CP949 + CRLF** 로 변환해서 넣고, .bat 안에는 chcp 를 두지 않는다.
+#
+# Windows PowerShell 5.1 은 .ps1 에 BOM 이 없으면 역시 ANSI 로 읽는다 → **BOM 을 붙인다.**
+# 맥 .command 는 UTF-8 그대로 둔다(맥은 UTF-8 이 기본이다).
+cp deploy/laptop/시작하기_맥.command deploy/laptop/읽어주세요.txt dist/
+sed 's/$/\r/' deploy/laptop/시작하기_윈도우.bat | iconv -f UTF-8 -t CP949 > dist/시작하기_윈도우.bat
+printf '\xEF\xBB\xBF' > dist/서버.ps1
+sed 's/$/\r/' deploy/laptop/서버.ps1 >> dist/서버.ps1
+
+# 넣기 전에 되돌려 읽어 본다 — 변환이 조용히 실패하면 발표 당일에 발견하게 된다
+iconv -f CP949 -t UTF-8 dist/시작하기_윈도우.bat | grep -q 'SignBridge 를 시작합니다' \
+  || { echo "[laptop] .bat CP949 변환 실패"; exit 1; }
+grep -q 'chcp' dist/시작하기_윈도우.bat && { echo "[laptop] .bat 에 chcp 가 남아 있다"; exit 1; }
 # 대본도 함께 넣는다 — 촬영하면서 읽을 것이라 같은 폴더에 있어야 편하다
 cp ~/deploy/script.html dist/ 2>/dev/null || true
 chmod +x dist/시작하기_맥.command

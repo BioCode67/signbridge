@@ -70,11 +70,17 @@ for (const g of keys.slice(0, EXTENDED_TOP)) {
 //      그대로 받으러 가면 404가 나고 "준비됨"인데 정작 인식 모델은 없다. 재귀로 훑는다.
 //   2) 아바타는 여섯 종이 들어 있지만 앱은 **기본 하나만** 쓴다. 전부 받으면 7MB를
 //      헛되이 쓰므로, 쓰는 것만 싣는다(사용자가 바꾸면 그때 받으면 된다).
-const usedAvatar = (
-  readFileSync('src/sections/sign/avatars.ts', 'utf8').match(
-    /DEFAULT_MODEL_URL = `\$\{BASE\}models\/([^`]+)`/,
-  )?.[1] ?? 'real-avaturn.glb'
-)
+//   3) 아바타가 **둘**이다. 소개 페이지는 `DEFAULT_MODEL_URL`, 당사자 앱은
+//      `APP_MODEL_URL`을 쓴다. 예전에는 DEFAULT만 실었는데, 앱 아바타를 바꾸자
+//      **비행기 모드에서 아바타가 아예 안 떴다** — 시연의 하이라이트가 죽는다.
+//      화면은 멀쩡하고 오류도 안 난다. 둘 다 싣는다.
+const avatarSrc = readFileSync('src/sections/sign/avatars.ts', 'utf8')
+const pick = (name, fallback) =>
+  avatarSrc.match(new RegExp(name + ' = `\\$\\{BASE\\}models\\/([^`]+)`'))?.[1] ?? fallback
+const usedAvatars = [
+  pick('DEFAULT_MODEL_URL', 'real-avaturn.glb'),
+  pick('APP_MODEL_URL', 'real-avaturn.glb'),
+].filter((v, i, a) => a.indexOf(v) === i)
 const walk = (rel) => {
   let entries = []
   try {
@@ -88,7 +94,7 @@ const walk = (rel) => {
     else {
       // 쓰지 않는 아바타(.glb/.bin)는 건너뛴다 — 텍스처는 공유라 그대로 싣는다.
       const isAvatarBody = /\.glb(\.bin)?$/.test(e.name)
-      if (isAvatarBody && !e.name.startsWith(usedAvatar)) continue
+      if (isAvatarBody && !usedAvatars.some((a) => e.name.startsWith(a))) continue
       extended.add(`./${child}`)
     }
   }

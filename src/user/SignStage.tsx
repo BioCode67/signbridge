@@ -5,7 +5,7 @@
 // 같은 앱 안에서 아바타가 있는 곳마다 다르게 보이면 사용자가 매번 다시 배운다.
 import { lazy, Suspense } from 'react'
 import { glossLabel } from '../agents/glossLabel'
-import { AVATARS } from '../sections/sign/avatars'
+import { APP_MODEL_URL } from '../sections/sign/avatars'
 import type { SignPlayer } from './useSignPlayer'
 
 const Avatar3D = lazy(() => import('../sections/sign/Avatar3D'))
@@ -55,7 +55,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
             onKeyDown={(e) => e.key === ' ' && data.num_frames > 1 && setPlaying((v) => !v)}
             className="h-full w-full cursor-pointer"
           >
-            <Avatar3D data={data} frame={frame} animate modelUrl={AVATARS[0].url} />
+            <Avatar3D data={data} frame={frame} animate modelUrl={APP_MODEL_URL} />
             {!playing && data.num_frames > 1 && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
                 <span className="rounded-full bg-space-900/80 px-8 py-6 text-5xl">▶</span>

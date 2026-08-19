@@ -11,6 +11,14 @@ const BASE = import.meta.env.BASE_URL
 
 export const DEFAULT_MODEL_URL = `${BASE}models/real-avaturn.glb`
 
+/** 당사자 화면(받기·묻기·대화)이 쓰는 아바타.
+ *
+ *  소개 페이지는 고를 수 있게 두지만 **앱은 하나로 고정한다** — 사용자가 매번
+ *  고르게 할 자리가 아니고, 아바타가 화면마다 다르면 같은 앱을 다시 배우게 된다.
+ *  예전에는 `AVATARS[0]`으로 박혀 있어서 목록 순서를 바꾸면 앱 아바타가
+ *  같이 바뀌었다 — 이름으로 가리켜 그 연결을 끊는다. */
+export const APP_MODEL_URL = `${BASE}models/real-david.glb`
+
 export interface AvatarOption {
   id: string
   label: string

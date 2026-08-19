@@ -404,9 +404,56 @@ export default function AskMode({ notice, onImmersive }: Props) {
           <p className="text-center text-2xl font-extrabold leading-snug text-slate-50">
             {answer.headline}
           </p>
-          <p className="mt-1 text-center text-base text-slate-500">
-            “{intentKo(answer.intent)}”로 알아들었어요
-          </p>
+          {answer.problem !== 'no-intent' && (
+            <p className="mt-1 text-center text-base text-slate-500">
+              “{intentKo(answer.intent)}”로 알아들었어요
+            </p>
+          )}
+
+          {/* ── 못 알아들었을 때 — **막다른 길로 두지 않는다.**
+              예전에는 "다시 해 주세요"만 띄웠다. 무엇이 잘못됐는지 알 수 없어
+              같은 실수를 반복하게 된다. 알아들은 낱말을 보여 주면 "아, 손이
+              안 잡혔구나" 또는 "다른 낱말로 읽혔구나"를 본인이 안다.
+              그리고 **여기서 바로 답을 받을 수 있는 길**을 함께 둔다. */}
+          {answer.problem === 'no-intent' && (
+            <div className="mt-3">
+              {rec.transcript.length > 0 ? (
+                <>
+                  <p className="text-center text-sm text-slate-400">이렇게 알아들었어요</p>
+                  <div className="mt-2 flex flex-wrap justify-center gap-1.5">
+                    {rec.transcript.map((g, i) => (
+                      <span
+                        key={`${g}-${i}`}
+                        className="rounded-lg bg-white/10 px-3 py-1.5 text-base font-bold text-slate-200"
+                      >
+                        {glossLabel(g)}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-center text-sm text-slate-400">
+                  손이 화면에 잡히지 않았어요 — 손을 카메라 가운데로 올려 주세요
+                </p>
+              )}
+
+              <p className="mt-4 text-center text-sm text-slate-400">
+                이 중에서 바로 물어볼 수도 있어요
+              </p>
+              <div className="mt-2 flex flex-wrap justify-center gap-2">
+                {(['shelter', 'hospital', 'pharmacy', 'toilet'] as PlaceKind[]).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => void answerNow({ kind: 'where', place: k })}
+                    className="min-h-[44px] rounded-full border border-cyan-glow/40 bg-cyan-glow/10 px-4 py-2 text-base font-bold text-cyan-soft active:scale-95"
+                  >
+                    {KIND_KO[k].icon} {KIND_KO[k].label} 어디?
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {answer.target && (
             <>

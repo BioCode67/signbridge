@@ -37,7 +37,9 @@ while true; do
 
   # 주소가 찍힐 때까지 최대 60초 기다린다.
   for _ in $(seq 1 20); do
-    URL="$(grep -oE 'https://[a-z0-9-]+\.free\.pinggy\.net' "$RAW" | head -1)"
+    # pinggy가 도메인을 바꿨다(2026-08-19). `*.free.pinggy.net` 만 보다가 새로 발급된
+    # `*.run.pinggy-free.link` 를 놓쳐 "주소 획득 실패"로 빈손이 됐다. 둘 다 본다.
+    URL="$(grep -oE 'https://[a-z0-9-]+\.(free\.pinggy\.net|run\.pinggy-free\.link)' "$RAW" | head -1)"
     [ -n "${URL:-}" ] && break
     sleep 3
   done

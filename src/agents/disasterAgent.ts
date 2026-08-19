@@ -55,8 +55,16 @@ export class RuleDisasterAgent implements DisasterAgent {
     ]
     const { type, hits, score } = scoreType(tokens)
     const severity = scoreSeverity(tokens)
-    // 신뢰도: 매칭된 키워드 수 기반(포화).
-    const confidence = Math.min(1, score / 3)
+    // 신뢰도 — **눈금을 뜻에 맞춘다.**
+    //
+    // 예전에는 `score / 3`이라 키워드 셋이 맞아야 100%였다. 그래서
+    // "호우경보 발효. 하천변 저지대 침수 위험."처럼 누가 봐도 호우인 문장이
+    // `호우경보` 하나만 걸려 **33%**로 표시됐다. 화면에 그 숫자가 뜨면
+    // 시스템이 헷갈리고 있다는 뜻으로 읽힌다 — 실제로는 확실한데.
+    //
+    // 재난문자는 갈래를 가리키는 낱말이 보통 한둘이다. 정확히 맞는 낱말
+    // 하나는 약한 근거가 아니다. 다만 하나도 못 맞히면(기타) 낮게 둔다.
+    const confidence = score >= 3 ? 0.95 : score === 2 ? 0.85 : score === 1 ? 0.7 : 0.2
     const region = input.geo?.region ? ` (${input.geo.region})` : ''
     const summary =
       type === '기타'

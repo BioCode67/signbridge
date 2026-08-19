@@ -468,7 +468,16 @@ def qa(req: QARequest):
 from pathlib import Path
 
 _DIST = Path(__file__).resolve().parent.parent / "dist"
+_DEPLOY = Path.home() / "deploy"
+
 if _DIST.is_dir():
     from fastapi.staticfiles import StaticFiles
+
+    # 배포 꾸러미를 **브라우저 링크로** 내려받게 한다.
+    # 워크스페이스 파일 브라우저에서 188MB를 찾아 받는 것보다 훨씬 쉽고,
+    # 다른 자리(발표장 노트북)에서도 주소만 있으면 받을 수 있다.
+    # `/` 마운트보다 **먼저** 걸어야 한다 — 나중이면 정적 사이트가 다 먹는다.
+    if _DEPLOY.is_dir():
+        app.mount("/download", StaticFiles(directory=str(_DEPLOY)), name="download")
 
     app.mount("/", StaticFiles(directory=str(_DIST), html=True), name="site")

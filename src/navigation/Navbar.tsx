@@ -3,12 +3,15 @@ import { AnimatePresence, motion } from 'framer-motion'
 import Button from '../ui/Button'
 
 const LINKS = [
-  { label: '왜 필요한가', href: '#why' },
+// 항목이 여덟 개다. 이름이 길면 1280px에서 두 줄로 접히며 로고를 파고든다
+// (실측). 뜻이 통하는 선에서 짧게 줄여 한 줄을 지킨다.
+  { label: '왜', href: '#why' },
   { label: '수어 데모', href: '#demo' },
-  { label: '실시간 인식', href: '#live' },
-  { label: '양방향 Q&A', href: '#qa' },
-  { label: '4-에이전트', href: '#agents' },
+  { label: '인식', href: '#live' },
+  { label: 'Q&A', href: '#qa' },
+  { label: '에이전트', href: '#agents' },
   { label: '작동 원리', href: '#how' },
+  { label: '실측 성과', href: '#results' },
   { label: '기대효과', href: '#impact' },
 ]
 
@@ -57,7 +60,7 @@ export default function Navbar() {
       }`}
     >
       <nav className="mx-auto flex max-w-content items-center justify-between px-6 py-4 lg:px-12">
-        <a href="#top" className="flex items-center gap-2 text-lg font-bold tracking-tight">
+        <a href="#top" className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight">
           <span className="grid h-7 w-7 place-items-center rounded-lg bg-cyan-glow/15 text-cyan-soft">
             ◗
           </span>
@@ -66,8 +69,10 @@ export default function Navbar() {
           </span>
         </a>
 
-        {/* Desktop links */}
-        <div className="hidden items-center gap-8 md:flex">
+        {/* Desktop links — 항목이 여덟 개라 1440px에서도 빠듯하다.
+            간격을 화면 폭에 따라 벌리고, **줄바꿈을 막아** 로고와 겹치지 않게 한다
+            (실측: gap-8 고정이면 "왜 필요한가"가 두 줄로 접히며 로고를 파고들었다). */}
+        <div className="hidden items-center gap-4 md:flex lg:gap-5 xl:gap-6">
           {LINKS.map((l) => {
             const isActive = active === l.href.slice(1)
             return (
@@ -75,7 +80,7 @@ export default function Navbar() {
                 key={l.href}
                 href={l.href}
                 aria-current={isActive ? 'true' : undefined}
-                className={`relative text-sm font-medium transition-colors hover:text-cyan-soft ${
+                className={`relative whitespace-nowrap text-[13px] font-medium transition-colors hover:text-cyan-soft lg:text-sm ${
                   isActive ? 'text-cyan-soft' : 'text-slate-300'
                 }`}
               >

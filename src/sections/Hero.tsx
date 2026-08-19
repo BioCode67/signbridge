@@ -106,9 +106,11 @@ export default function Hero() {
             className="mt-12 grid max-w-lg grid-cols-3 gap-4 border-t border-white/10 pt-6"
           >
             {[
+              // **문제 하나, 성과 둘.** 왜 필요한지를 먼저 두고, 바로 옆에 재어 본
+              // 숫자를 붙인다 — 문제만 있으면 기획서, 숫자만 있으면 무슨 소린지 모른다.
               { v: '약 44만 명', l: '국내 등록 청각장애인 (복지부 2024)' },
-              { v: '수어방송 5%', l: '자막 100% 대비 편성 비율' },
-              { v: '1초 이내', l: '목표 종단 지연 (KOREN)' },
+              { v: '수어 12,833개', l: '실제 농인 수어자 영상에서 만든 동작' },
+              { v: '인식 78.2%', l: 'top-1 · 13,576 클래스 (수어자 분리)' },
             ].map((s) => (
               <div key={s.l}>
                 <dt className="text-xl font-extrabold tracking-tight text-cyan-soft sm:text-2xl">

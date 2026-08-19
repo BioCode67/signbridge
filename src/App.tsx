@@ -8,6 +8,7 @@ import QnADemo from './sections/QnADemo'
 import AgentConsole from './sections/AgentConsole'
 import HowItWorks from './sections/HowItWorks'
 import ImpactSection from './sections/ImpactSection'
+import ResultsSection from './sections/ResultsSection'
 import Footer from './sections/Footer'
 
 // 실시간 인식은 MediaPipe·TF.js 번들이 무거우므로 지연 로드(초기 페인트 보호).
@@ -61,6 +62,7 @@ export default function App() {
           <QnADemo />
           <AgentConsole />
           <HowItWorks />
+          <ResultsSection />
           <ImpactSection />
         </main>
         <Footer />

@@ -379,7 +379,21 @@ export default function AskMode({ notice, onImmersive }: Props) {
           </div>
         )}
 
-        {asking && running && (
+        {/* 손이 화면에 없으면 **낱말을 내지 않는다.** 손이 없으면 특징 벡터가 매번
+            같아져서 모델이 같은 낱말을 자신 있게 낸다(실측: 얼굴만 잡힌 판에서
+            무슨 동작을 하든 `지시`). 사용자는 "안 된다"가 아니라 "엉뚱하게
+            알아듣는다"로 느낀다 — 그때는 낱말 대신 할 일을 알려 준다. */}
+        {asking && running && !rec.handsSeen && (
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 to-transparent px-3 pb-4 pt-12 text-center">
+            <p className="text-3xl font-extrabold text-amber-300">✋ 손이 안 보여요</p>
+            <p className="mx-auto mt-2 max-w-sm break-keep rounded-2xl bg-black/60 px-4 py-2.5 text-base leading-relaxed text-slate-200">
+              조금 뒤로 물러나서 <b className="text-white">양손이 화면 안</b>에 들어오게 해 주세요.
+              손을 가슴 높이로 들면 잘 잡혀요.
+            </p>
+          </div>
+        )}
+
+        {asking && running && rec.handsSeen && (
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 to-transparent px-3 pb-3 pt-12 text-center">
             <p className={`text-4xl font-extrabold ${confident ? 'text-cyan-soft text-glow' : 'text-slate-600'}`}>
               {confident && rec.current ? glossLabel(rec.current.label) : '…'}

@@ -12,6 +12,15 @@ import { CONFIDENCE_THRESHOLD } from './labels'
 const BUFFER_CAP = 48 // 최근 프레임 최대 보관 수
 const INFER_MS = 250 // 추론 주기
 const MIN_FRAMES = 12 // 최소 누적 프레임(이보다 적으면 추론 보류)
+
+/** 손이 보인 프레임 비율이 이 값보다 낮으면 **추론하지 않는다.**
+ *
+ *  특징 벡터의 마지막 두 값은 손 존재 플래그다. 손이 하나도 안 잡히면 벡터가
+ *  프레임마다 **거의 똑같아져서**, 모델은 그 벡터에 맞는 클래스 하나를 매번
+ *  자신 있게 낸다. 실측에서 카메라에 얼굴만 들어온 판에서 무슨 동작을 하든
+ *  `지시`만 나왔다 — 사용자는 "인식이 안 된다"가 아니라 "엉뚱하게 알아듣는다"로
+ *  느낀다. 손이 없으면 **답을 내지 않는 편이 옳다.** */
+const HAND_MIN_RATIO = 0.25
 const STABLE_HITS = 2 // 같은 라벨이 연속 N회면 자막 확정
 
 export type ModelStatus = 'idle' | 'loading' | 'ready' | 'custom' | 'error'
@@ -30,6 +39,8 @@ export interface UseRecognizerResult {
   /** i번째 낱말을 후보 중 하나로 바꾼다 */
   replaceWord(index: number, label: string): void
   clearTranscript: () => void
+  /** 손이 화면에 잡히고 있는가(false면 추론을 멈춘 상태) */
+  handsSeen: boolean
   pushFrame: (features: Float32Array | null) => void
   /** 링버퍼에서 최근 윈도우를 리샘플해 반환(스튜디오 녹화 캡처용). */
   captureWindow: () => Float32Array | null
@@ -78,6 +89,8 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
   // ONNX 추론은 비동기다. 이전 추론이 끝나기 전에 또 넣으면 큐가 밀려 지연이 쌓인다.
   const inFlightRef = useRef(false)
   const [modelStatus, setModelStatus] = useState<ModelStatus>('idle')
+  /** 손이 화면에 잡히고 있는가 — 화면이 "손을 보여 주세요"라고 안내할 근거 */
+  const [handsSeen, setHandsSeen] = useState(true)
   const [current, setCurrent] = useState<Prediction | null>(null)
   const [transcript, setTranscript] = useState<string[]>([])
   /** 확정된 낱말마다의 상위 후보 — 사용자가 골라 고칠 수 있게. */
@@ -189,6 +202,21 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
     const id = window.setInterval(() => {
       const buf = bufRef.current
       if (buf.length < MIN_FRAMES) return
+
+      // 손이 보인 프레임 비율 — 특징 벡터 끝 두 칸이 좌·우 손 존재 플래그다.
+      let withHand = 0
+      for (const f of buf) {
+        if (f[FEATURE_DIM - 2] > 0 || f[FEATURE_DIM - 1] > 0) withHand += 1
+      }
+      const ratio = withHand / buf.length
+      setHandsSeen(ratio >= HAND_MIN_RATIO)
+      if (ratio < HAND_MIN_RATIO) {
+        // 손이 없으면 **추론하지 않는다.** 하면 매번 같은 낱말을 자신 있게 낸다.
+        setCurrent(null)
+        pendingRef.current = { label: '', hits: 0 }
+        return
+      }
+
       const seq = resampleSequence(buf, SEQ_LEN)
       if (seq.length !== SEQ_LEN * FEATURE_DIM) return
 
@@ -237,6 +265,7 @@ export function useRecognizer(enabled: boolean): UseRecognizerResult {
 
   return {
     modelStatus,
+    handsSeen,
     current,
     transcript,
     transcriptAlts,

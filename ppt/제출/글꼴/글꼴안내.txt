@@ -1,0 +1,12 @@
+발표자료에 쓰인 글꼴
+=====================================
+
+  나눔스퀘어 (NanumSquare)  — 네이버 나눔글꼴, 무료 배포 가능
+
+  NanumSquareR.ttf    Regular
+  NanumSquareB.ttf    Bold
+  NanumSquareEB.ttf   ExtraBold
+
+제출 안내문 "발표자료에 별도 글꼴이 사용된 경우, 사용한 글꼴 파일도 함께 제출"에
+따라 동봉합니다. 발표 PC에 이 글꼴이 없으면 세 파일을 설치한 뒤 여시거나,
+함께 제출한 PDF로 발표하시면 화면이 그대로 나옵니다.

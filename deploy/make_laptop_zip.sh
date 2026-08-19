@@ -33,7 +33,9 @@ sed 's/$/\r/' deploy/laptop/서버.ps1 >> dist/서버.ps1
 # 넣기 전에 되돌려 읽어 본다 — 변환이 조용히 실패하면 발표 당일에 발견하게 된다
 iconv -f CP949 -t UTF-8 dist/시작하기_윈도우.bat | grep -q 'SignBridge 를 시작합니다' \
   || { echo "[laptop] .bat CP949 변환 실패"; exit 1; }
-grep -q 'chcp' dist/시작하기_윈도우.bat && { echo "[laptop] .bat 에 chcp 가 남아 있다"; exit 1; }
+# rem 설명문에도 'chcp'라는 낱말이 나온다 — **명령으로 쓰인 줄**만 본다
+iconv -f CP949 -t UTF-8 dist/시작하기_윈도우.bat | grep -qiE '^[[:space:]]*chcp[[:space:]]' \
+  && { echo "[laptop] .bat 에 chcp 명령이 남아 있다"; exit 1; }
 # 대본도 함께 넣는다 — 촬영하면서 읽을 것이라 같은 폴더에 있어야 편하다
 cp ~/deploy/script.html dist/ 2>/dev/null || true
 chmod +x dist/시작하기_맥.command

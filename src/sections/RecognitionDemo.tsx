@@ -353,42 +353,59 @@ export default function RecognitionDemo() {
                 인식된 낱말을 한국어 문장으로 잇고, 그대로 소리로 내보낸다.
                 농인이 수어로 말하면 **듣는 사람은 소리로 듣는다** — 창구에서
                 실제로 필요한 것이 이것이다. */}
-            {rec.transcript.length > 0 && (
-              <div className="rounded-2xl border border-cyan-glow/25 bg-cyan-glow/5 p-4">
-                <p className="text-[11px] font-bold uppercase tracking-widest text-cyan-soft/80">
-                  수어 → 한국어 → 소리
-                </p>
+            {/* **항상 보인다.** 수어를 해야 나타나면, 보는 사람은 무엇이 일어날지
+                모른 채 기다리게 된다. 빈 상태에서도 세 칸을 보여 주어 흐름이
+                먼저 읽히게 한다 — 시연에서 이 차이가 크다. */}
+            <div className="rounded-2xl border border-cyan-glow/25 bg-cyan-glow/5 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-cyan-soft/80">
+                수어 → 한국어 → 소리
+              </p>
 
-                <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  {rec.transcript.map((g, i) => (
+              <div className="mt-3 flex min-h-[30px] flex-wrap items-center gap-1.5">
+                {rec.transcript.length > 0 ? (
+                  rec.transcript.map((g, i) => (
                     <span
                       key={`${g}-${i}`}
                       className="rounded-lg bg-white/10 px-2.5 py-1 text-xs font-bold text-slate-100"
                     >
                       {glossLabel(g)}
                     </span>
-                  ))}
-                </div>
-
-                <p className="mt-3 break-keep text-lg font-extrabold leading-snug text-white">
-                  “{glossesToKorean(rec.transcript)}”
-                </p>
-
-                <button
-                  type="button"
-                  disabled={!tts.supported || tts.speaking}
-                  onClick={() => tts.speak(glossesToKorean(rec.transcript))}
-                  className="mt-3 w-full rounded-xl border border-cyan-glow/40 bg-cyan-glow/10 px-4 py-2.5 text-sm font-bold text-cyan-soft transition-colors hover:bg-cyan-glow/20 disabled:opacity-40"
-                >
-                  {tts.speaking ? '🔊 말하는 중…' : '🔊 소리로 듣기'}
-                </button>
-                {!tts.supported && (
-                  <p className="mt-2 text-xs text-slate-500">
-                    이 브라우저는 음성 출력을 지원하지 않습니다 (크롬·엣지 권장).
-                  </p>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-500">
+                    ① 카메라 앞에서 수어를 하면 알아들은 낱말이 여기 쌓입니다
+                  </span>
                 )}
               </div>
-            )}
+
+              <p
+                className={`mt-3 break-keep text-lg font-extrabold leading-snug ${
+                  rec.transcript.length > 0 ? 'text-white' : 'text-slate-600'
+                }`}
+              >
+                {rec.transcript.length > 0
+                  ? `“${glossesToKorean(rec.transcript)}”`
+                  : '② 한국어 문장으로 이어집니다'}
+              </p>
+
+              <button
+                type="button"
+                disabled={!tts.supported || tts.speaking || rec.transcript.length === 0}
+                onClick={() => tts.speak(glossesToKorean(rec.transcript))}
+                className="mt-3 w-full rounded-xl border border-cyan-glow/40 bg-cyan-glow/10 px-4 py-2.5 text-sm font-bold text-cyan-soft transition-colors hover:bg-cyan-glow/20 disabled:opacity-40"
+              >
+                {tts.speaking
+                  ? '🔊 말하는 중…'
+                  : rec.transcript.length > 0
+                    ? '🔊 소리로 듣기'
+                    : '③ 🔊 소리로 내보냅니다'}
+              </button>
+              {!tts.supported && (
+                <p className="mt-2 text-xs text-slate-500">
+                  이 브라우저는 음성 출력을 지원하지 않습니다 (크롬·엣지 권장).
+                </p>
+              )}
+            </div>
 
             {/* 양방향 왕복 — 인식된 수어를 질문으로 삼아 답을 만들고,
                 그 답을 아바타가 다시 수어로 표현한다. 농인↔시스템 대화의 완결이다. */}

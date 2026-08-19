@@ -256,8 +256,18 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.get_by_role("button", name="💬 대화").click()
     await pg.wait_for_timeout(500)
     # 응급 정보 카드 — 응급실에서 말 대신 보여주는 정보. 입구가 사라지면 안 된다.
-    rep.check(await pg.get_by_role("button", name=re.compile("🆔 내 정보")).count() > 0,
-              "대화: 내 정보 입구")
+    #
+    # **기다렸다가 본다.** count() 한 번으로 보면 화면이 아직 안 그려졌을 때
+    # 없다고 판정한다 — 실측에서 다른 검사가 같이 돌아 느려진 판에서만
+    # 이 항목이 실패했고, 따로 열어 보면 멀쩡했다. 부하에 따라 결과가 바뀌는
+    # 검사는 있으나 마나다.
+    info_btn = pg.get_by_role("button", name=re.compile("🆔 내 정보")).first
+    try:
+        await info_btn.wait_for(state="visible", timeout=15000)
+        info_ok = True
+    except Exception:
+        info_ok = False
+    rep.check(info_ok, "대화: 내 정보 입구")
     await pg.get_by_role("button", name="🏥 병원").click()
     await pg.wait_for_timeout(500)
     # 직원 안내 — 창구에서 가장 먼저 보이는 화면이다. 사라지면 직원이 쓸 줄 모른다.

@@ -193,10 +193,10 @@ export default function RecognitionDemo() {
           eyebrow="실시간 인식 · Live"
           title={
             <>
-              웹캠 수어를 <span className="text-cyan-soft text-glow">실시간 자막</span>으로
+              수어를 <span className="text-cyan-soft text-glow">한국어와 소리</span>로
             </>
           }
-          description="MediaPipe Holistic이 상반신·양손 관절을 추출하고, AI Hub 16만 클립으로 학습한 트랜스포머(어휘 8,147종)가 수어 단어를 실시간 인식해 자막으로 띄웁니다. 인식된 수어로 질문하면 아바타가 수어로 응답합니다. 영상은 브라우저 안에서만 처리되며 어디로도 전송되지 않습니다."
+          description="카메라 앞에서 수어를 하면 낱말을 알아듣고, 한국어 문장으로 이어 소리로 내보냅니다 — 듣는 사람은 말로 듣습니다. MediaPipe가 상반신·양손 관절을 뽑고, AI Hub 16만 클립으로 학습한 트랜스포머(어휘 13,576종)가 낱말을 고릅니다. 영상은 브라우저 안에서만 처리되며 어디로도 전송되지 않습니다."
         />
 
         <div className="mt-12 grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">

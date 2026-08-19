@@ -1,0 +1,33 @@
+현장 사진 넣는 법
+=====================================
+
+이 폴더에 사진 9장을 아래 이름으로 넣으세요. (지금은 9장 모두 들어가 있습니다)
+
+  08.jpg   14쪽 · 경산시장애인종합복지관 건물
+  09.jpg   14쪽 · 대구광역시청각언어장애인복지관 건물
+
+  01.jpg   14쪽 · 수어 이용자에게 직접 시연
+  02.jpg   14쪽 · 질의응답 화면 확인
+  03.jpg   14쪽 · 함께 조작하며 관찰
+
+  04.jpg   15쪽 · 아바타 수어 확인
+  05.jpg   15쪽 · 화면 조작 안내
+  07.jpg   15쪽 · 에이전트 구조 설명
+  06.jpg   15쪽 · 기대효과 공유
+
+※ .jpg / .jpeg / .png 다 됩니다.
+※ 가로/세로 아무 비율이나 괜찮습니다 — 가운데를 기준으로 알아서 잘라 맞춥니다.
+※ 사진 아래 설명 문구를 바꾸려면 ppt/build_ppt.py 의 photo_slot(...) 마지막 인자를 고치세요.
+
+바꾼 뒤 다시 만들기 (app 폴더에서):
+
+  python3 ppt/build_charts.py     # 그래프 (숫자가 바뀌었을 때만)
+  python3 ppt/build_ppt.py        # 발표자료
+
+미리보기 PDF·이미지까지 다시 만들려면:
+
+  LD_LIBRARY_PATH=/usr/lib/libreoffice/program soffice --headless --convert-to pdf \
+      --outdir ppt "ppt/중간평가 발표자료_SignBridge.pptx"
+  pdftoppm -jpeg -r 70 "ppt/중간평가 발표자료_SignBridge.pdf" ppt/preview/p
+
+사진이 없으면 회색 자리표시자가 들어갑니다(발표 전에 반드시 채우세요).

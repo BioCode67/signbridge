@@ -1,12 +1,18 @@
 발표자료에 쓰인 글꼴
 =====================================
 
-  나눔스퀘어 (NanumSquare)  — 네이버 나눔글꼴, 무료 배포 가능
+  Pretendard (프리텐다드)  — SIL Open Font License 1.1, 자유 배포 가능
+  https://github.com/orioncactus/pretendard
 
-  NanumSquareR.ttf    Regular
-  NanumSquareB.ttf    Bold
-  NanumSquareEB.ttf   ExtraBold
+  Pretendard-Regular.ttf   본문
+  Pretendard-Bold.ttf      제목·강조
 
-제출 안내문 "발표자료에 별도 글꼴이 사용된 경우, 사용한 글꼴 파일도 함께 제출"에
-따라 동봉합니다. 발표 PC에 이 글꼴이 없으면 세 파일을 설치한 뒤 여시거나,
-함께 제출한 PDF로 발표하시면 화면이 그대로 나옵니다.
+제출 안내문의 "발표자료에 별도 글꼴이 사용된 경우, 사용한 글꼴 파일도 함께
+제출" 조항에 따라 동봉합니다.
+
+발표 PC에서 여는 법
+  1) 두 ttf 파일을 선택 → 마우스 오른쪽 → [설치]
+  2) 그 뒤에 pptx를 엽니다
+
+글꼴을 설치하지 않고 pptx를 열면 다른 글꼴로 대체되어 줄이 밀립니다.
+설치가 어려우면 함께 제출한 PDF로 발표하시면 화면이 그대로 나옵니다.

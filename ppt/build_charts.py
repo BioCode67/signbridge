@@ -13,7 +13,13 @@ from pathlib import Path
 
 import matplotlib
 matplotlib.use("Agg")
+import matplotlib.font_manager as fm
 import matplotlib.pyplot as plt
+
+# 사용자 글꼴 폴더는 matplotlib이 자동으로 훑지 않는다 — 직접 등록해야
+# 슬라이드와 같은 글꼴로 그려진다(안 하면 조용히 기본 글꼴로 떨어진다).
+for _f in sorted(Path.home().glob(".local/share/fonts/**/Pretendard-*.ttf")):
+    fm.fontManager.addfont(str(_f))
 
 OUT = Path("ppt/assets")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -29,7 +35,7 @@ GRID  = "#E7ECF1"
 DPI   = 220
 
 plt.rcParams.update({
-    "font.family": "NanumSquare",
+    "font.family": "Pretendard",
     "axes.unicode_minus": False,
     "figure.facecolor": "white",
     "axes.facecolor": "white",

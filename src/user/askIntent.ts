@@ -63,6 +63,11 @@ export const INTENT_WORDS: Record<string, string[]> = {
   '도움': HELP_WORDS,
 }
 
+/** 같은 갈래를 가리키는 낱말이 더 있을 때 더해 주는 값.
+ *  0.4면 1순위 낱말 둘("지금"+"무엇")이 1.4가 되어 문턱 1.3을 넘고,
+ *  하나만으로는 1.0이라 넘지 못한다 — 한 낱말로 단정하지 않기 위한 값이다. */
+const EXTRA_WEIGHT = 0.4
+
 /** 순위별 가중치 — 1순위는 그대로, 뒤로 갈수록 절반씩. 5순위까지만 본다. */
 const RANK_WEIGHT = [1, 0.5, 0.3, 0.2, 0.15]
 
@@ -143,12 +148,31 @@ export function detectIntent(words: string[], alts: string[][] = []): IntentResu
   }
 
   // ── 상황 질문 ─────────────────────────────────────────────
+  //
+  // **낱말이 여러 개면 더 확실하다.** 예전에는 `Math.max`만 써서 "지금"과 "무엇"을
+  // 함께 해도 점수가 하나였고, 재난 질문에서 가장 흔한 이 조합이 문턱에 걸렸다
+  // (실측: ['지금','무엇'] → 못 알아들음). 같은 갈래를 가리키는 낱말이 더 있으면
+  // 조금씩 더한다 — 한 낱말만으로는 여전히 부족하다("지금"만으로는 안 된다).
+  const support = (list: string[]) => {
+    let best = 0
+    let extra = 0
+    for (const c of cands) {
+      const h = hit(c, list)
+      if (h <= 0) continue
+      if (h > best) {
+        extra += best > 0 ? 1 : 0
+        best = h
+      } else {
+        extra += 1
+      }
+    }
+    return best + EXTRA_WEIGHT * extra
+  }
+
   let whatsup = 0
   let disaster = 0
-  for (const c of cands) {
-    whatsup = Math.max(whatsup, hit(c, WHATSUP_WORDS))
-    disaster = Math.max(disaster, hit(c, DISASTER_WORDS))
-  }
+  whatsup = support(WHATSUP_WORDS)
+  disaster = support(DISASTER_WORDS)
   if (whatsup + disaster >= THRESHOLD) {
     for (const c of cands) {
       note(c, hit(c, WHATSUP_WORDS), WHATSUP_WORDS)
@@ -158,16 +182,14 @@ export function detectIntent(words: string[], alts: string[][] = []): IntentResu
   }
 
   // ── 방법 질문 ─────────────────────────────────────────────
-  let howto = 0
-  for (const c of cands) howto = Math.max(howto, hit(c, HOWTO_WORDS))
+  const howto = support(HOWTO_WORDS)
   if (howto + Math.max(whatsup, disaster) >= THRESHOLD) {
     for (const c of cands) note(c, hit(c, HOWTO_WORDS), HOWTO_WORDS)
     return { intent: { kind: 'howto' }, score: howto + disaster, matched }
   }
 
   // ── 도움 요청 ─────────────────────────────────────────────
-  let help = 0
-  for (const c of cands) help = Math.max(help, hit(c, HELP_WORDS))
+  const help = support(HELP_WORDS)
   if (help >= 1) {
     for (const c of cands) note(c, hit(c, HELP_WORDS), HELP_WORDS)
     return { intent: { kind: 'help' }, score: help, matched }

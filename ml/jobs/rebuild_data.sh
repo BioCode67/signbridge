@@ -70,3 +70,7 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 # 화면도 멀쩡해서 **틀린 숫자를 그대로 발표하게 된다.** 원본과 대조한다.
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_site_numbers.mjs
+
+# 사전을 다시 만들면 글로스 이름이 그대로 파일명이 된다. 웹에서는 아무 문자나
+# 되지만 **윈도우는 `:`를 못 쓴다** — 노트북용 zip이 안 풀린다(2026-08-19 실측).
+node scripts/check_filenames.mjs

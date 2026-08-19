@@ -39,6 +39,7 @@ bash ml/jobs/rebuild_data.sh            # 동작 사전 → 번역 사전 → �
 python3 ml/tools/check_app_glosses.py   # (위 스크립트에 포함) 개별 실행도 가능
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_site_numbers.mjs     # 화면에 적힌 숫자가 원본과 같은가
+node scripts/check_filenames.mjs        # 윈도우에서 압축이 풀리는 이름인가
 ```
 
 **순서가 중요하다.** 번역 사전·어순표는 동작 사전을 보고 만들어진다. 동작 사전만 다시

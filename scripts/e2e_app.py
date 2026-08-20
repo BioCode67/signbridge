@@ -428,9 +428,16 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
             # 아바타가 답을 수어로 재생하는가.
             # **화면에 계측점이 여러 개 있다**(받기 무대가 숨어 있어도 DOM에 남는다).
             # 첫 번째만 보면 0을 읽는다 — 가장 큰 값을 본다.
-            fr = await pg.evaluate(
-                "() => Math.max(0, ...[...document.querySelectorAll('[data-sign-frames]')]"
-                ".map(e => Number(e.getAttribute('data-sign-frames')) || 0))")
+            # **바로 읽지 않는다.** 답 문장이 뜬 뒤에도 아바타 합성은 비동기라
+            # 몇 초 더 걸린다. 즉시 세면 0을 읽는다(2026-08-20에 그랬다).
+            fr = 0
+            for _ in range(20):
+                fr = await pg.evaluate(
+                    "() => Math.max(0, ...[...document.querySelectorAll('[data-sign-frames]')]"
+                    ".map(e => Number(e.getAttribute('data-sign-frames')) || 0))")
+                if int(fr) > 1:
+                    break
+                await pg.wait_for_timeout(1000)
             rep.check(int(fr) > 1, "묻기: 답을 수어로 재생", f"{fr}프레임")
         # 다음 검사를 위해 **처음부터 다시 연다.**
         # "또 묻기"로 돌아가면 화면 상태가 뒤 검사가 기대하는 것과 달라

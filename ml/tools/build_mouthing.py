@@ -155,7 +155,7 @@ def main() -> int:
         return any(0xAC00 <= ord(ch) <= 0xD7A3 for ch in w)
 
     table = {}
-    dropped_num = dropped_place = 0
+    dropped_num = dropped_place = dropped_time = dropped_weak = 0
     for g, c in pair.items():
         w, n = c.most_common(1)[0]
         if n < a.min_count:
@@ -168,6 +168,25 @@ def main() -> int:
         lemma = re.sub(r"[0-9#]+$", "", g)
         if w in places and lemma not in places:
             dropped_place += 1
+            continue
+        # **시각·날짜는 표에 넣지 않는다.** 주석자가 `시:3시50분 → 3시50분`처럼
+        # 숫자를 그대로 적어 두어 입모양을 만들 수 없고(한글은 `시`·`분`뿐),
+        # 잡음도 섞여 있다(`시:21시00분 → 아홉시`·`시:13시 → 한시`).
+        # 앱은 국어 수 읽기 규칙(`readableGloss`)으로 옮기는 편이 정확하다.
+        if g.startswith(("시:", "날짜:")):
+            dropped_time += 1
+            continue
+        # **이름과 다른 마우징은 더 엄격히 본다.**
+        #
+        # 마우징이 글로스 이름과 같으면(`강1→강`) 틀릴 여지가 없다. 다른 것은
+        # 진짜 마우징 변이(`운전1→차`·`눈내리다1→눈`)일 수도, 통계 잡음
+        # (`지시1#→앞`·`키우다→곳`·`인터넷→중`)일 수도 있다. 표본으로 보니
+        # 반반이었다. **잡음이면 입이 엉뚱한 낱말을 말한다** — 이름을 그대로
+        # 쓰는 되돌림(실측 73.8% 정확)보다 나쁘다. 그래서 다른 값은
+        # 5회 이상 · 우세율 60% 이상일 때만 받는다.
+        total = sum(c.values())
+        if w != lemma and (n < 5 or n / total < 0.6):
+            dropped_weak += 1
             continue
         table[g] = w
     # **표제어 열쇠도 함께 싣는다.** 표는 `오늘1`처럼 이형태 번호가 붙은 이름으로
@@ -186,7 +205,8 @@ def main() -> int:
 
     print(f"[마우징] 파일 {len(files)} · 글로스 구간 {ng:,} · 마우징 구간 {nm:,}")
     print(f"[마우징] 짝지어진 글로스 {len(pair):,}종 → {a.min_count}회 이상 {len(table):,}종"
-          f" (한글 아님 {dropped_num} · 지명 오염 {dropped_place} 제외)")
+          f" (한글 아님 {dropped_num} · 지명 {dropped_place} · 시각·날짜 {dropped_time}"
+          f" · 근거 약함 {dropped_weak} 제외)")
     if pair:
         ex = sorted(pair.items(), key=lambda kv: -sum(kv[1].values()))[:10]
         print("  상위:", " · ".join(f"{g}→{c.most_common(1)[0][0]}({sum(c.values())})" for g, c in ex))

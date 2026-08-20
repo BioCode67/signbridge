@@ -170,6 +170,13 @@ function monthWord(m: number): string {
  *     시:2시5분    → 두시오분
  *     날짜:6월23일 → 유월이십삼일
  */
+/** 단위·기호 글로스의 한국어 읽기. 재난문자에 `3m`·`30mm`·`35℃`가 늘 나온다. */
+const UNIT_WORD: Record<string, string> = {
+  m: '미터', mm: '밀리미터', cm: '센티미터', km: '킬로미터', kg: '킬로그램',
+  L: '리터', l: '리터', '%': '퍼센트', '℃': '도', C: '도', h: '시간', s: '초',
+  '?': '무엇', '-': '마이너스', '.': '점', '/': '나누기',
+}
+
 export function readableGloss(gloss: string): string | null {
   // **꼴이 정해진 것부터 본다.** 숫자를 먼저 떼면 `시:9시`가 `시시`가 되어
   // 그대로 낱말처럼 통과한다(2026-08-20에 실제로 그렇게 넣었다가 검사가 잡았다).
@@ -187,6 +194,7 @@ export function readableGloss(gloss: string): string | null {
   if (date) return monthWord(Number(date[1])) + sinoNumber(Number(date[2])) + '일'
   // 숫자만 있는 글로스(`463`)도 한자어로 읽는다 — 네 자리까지.
   if (/^\d{1,4}$/.test(gloss)) return sinoNumber(Number(gloss))
+  if (UNIT_WORD[gloss]) return UNIT_WORD[gloss]
   // 이형태 번호는 **가운데에도 들어간다**(`자동차2밀리다`). 전부 떼고 본다.
   const lemma = gloss.replace(/[0-9#:@]/g, '')
   // 여덟 음절까지 — `광주광역시청`·`세종특별자치시` 같은 이름도 입으로 낸다.

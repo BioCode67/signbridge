@@ -239,6 +239,19 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     else:
         rep.lines.append("    · 행동요령 버튼이 이번 문자에는 없어 건너뜀")
 
+    # ── 손 깊이·손가락 벌림이 **실제로 걸렸는가**
+    #
+    # 둘 다 없어도 아바타는 멀쩡히 손을 흔든다 — 굽힘만으로도 움직이니까.
+    # 그래서 화면으로는 못 잡는다. 실제로 두 번 다 조용히 죽어 있었다:
+    #   · 손 깊이(hand_z) — 조각에는 실렸는데 문장 합성이 안 옮겼다(2026-08-20)
+    #   · 손가락 벌림   — `keypoints3d`가 있을 때만 켜지는데 웹 조각에는 그 키가
+    #                    아예 없어 **한 번도 켜진 적이 없었다**(2026-08-20)
+    hz = await pg.evaluate(
+        "() => document.querySelector('[data-sign-handz]')?.getAttribute('data-sign-handz')")
+    rep.check(hz == "1", "손 깊이(hand_z)가 문장까지 도달", f"data-sign-handz={hz}")
+    spread = await pg.evaluate("() => +(document.body.getAttribute('data-sign-spread') || 0)")
+    rep.check(spread >= 4, "손가락 벌림이 적용됨", f"손가락 {spread}개")
+
     # ── 화면 밖으로 밀린 요소가 없는가(폰에서 탭이 잘리던 회귀)
     overflow = await pg.evaluate(
         "() => { const d=document.documentElement;"

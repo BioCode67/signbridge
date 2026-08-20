@@ -46,7 +46,18 @@ function headMotion(gloss: string): 'nod' | 'shake' | undefined {
   if (headTable.nod[l]) return 'nod'
   return undefined
 }
-const BLEND_FRAMES = 6
+/** 조각과 조각 사이에 끼워 넣는 이음매 프레임 수(30fps 기준).
+ *
+ *  **실제 수어자를 재서 정했다.** AI Hub 수어스크립트 문장 19,759개에서 이어진
+ *  글로스 176,198쌍의 틈을 쟀더니 중앙값 **0.252초 = 7.6프레임**이었다
+ *  (p25 0.122초 · p75 0.774초 · 겹치는 경우 0%). 6프레임(0.2초)은 사람보다
+ *  20% 빨랐다. 중앙값에 맞춰 8로 둔다.
+ *
+ *  p75가 23프레임까지 벌어지는 것은 **구 경계**로 보인다 — 문장 안에서도 쉬는
+ *  자리가 있다는 뜻이다. 지금은 모든 이음매를 같은 길이로 둔다. 구 경계를
+ *  길게 두는 것이 더 자연스러운지는 **재 본 적이 없어** 손대지 않았다
+ *  (9월 당사자 평가에서 물어볼 목록에 넣었다). */
+const BLEND_FRAMES = 8
 /** 표준 화면 좌표 — 기존 sign_N.json과 같은 픽셀계로 맞춘다. */
 const CANVAS_CENTER: [number, number] = [960, 540]
 const CANVAS_SHOULDER = 260

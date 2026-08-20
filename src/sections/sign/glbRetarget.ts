@@ -8,6 +8,8 @@
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
 import { segDir, segDir3D, segDir3Dreal, restLen, smoothInto } from './retarget'
+// 손모양 정의는 handShape.ts 한 곳에만 둔다 — 검사 스크립트가 같은 함수를 쓴다.
+import { FINGERS, HAND_SEGS, FLEX_SHARE, curlOf } from './handShape'
 
 const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
@@ -17,14 +19,6 @@ const SMOOTH = 0.46, SMOOTH_FINGER = 0.26
 const ARM_MAX = 2.7
 
 // Map our logical bone keys → RPM/Mixamo bone-name suffix.
-const FINGERS = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']
-const HAND_SEGS: Record<string, [number, number][]> = {
-  Thumb: [[1, 2], [2, 3], [3, 4]],
-  Index: [[5, 6], [6, 7], [7, 8]],
-  Middle: [[9, 10], [10, 11], [11, 12]],
-  Ring: [[13, 14], [14, 15], [15, 16]],
-  Pinky: [[17, 18], [18, 19], [19, 20]],
-}
 
 interface BoneInfo {
   bone: THREE.Object3D
@@ -36,7 +30,13 @@ interface BoneInfo {
   restLat?: number // rest lateral angle of this finger in the hand plane (rad)
 }
 const FINGER_FLEX_MAX = 1.5 // cap per-joint curl (~86°)
-const FINGER_SPREAD_MAX = 0.42 // cap MCP lateral spread (~24°)
+const FINGER_SPREAD_MAX = 0.42 // 네 손가락 MCP 벌림 한계 (~24°)
+// 엄지는 실제로 더 크게 벌어진다(대립 자세). 다만 잘못 놓이면 가장 눈에 띄므로
+// 해부학 범위보다 좁게 잡는다.
+const THUMB_SPREAD_MAX = 0.55 // ~32°
+/** 잰 벌림을 얼마나 믿을까. 실측 신호비(낱말 사이 σ ÷ 떨림 σ)가 2.5~3.2였고,
+ *  s²/(s²+n²)이 0.87~0.91로 나왔다. 그 아래쪽을 쓴다. */
+const SPREAD_TRUST = 0.88
 
 export interface GLBRig {
   get(key: string): BoneInfo | undefined
@@ -147,7 +147,10 @@ export function prepareGLBRig(root: THREE.Object3D): GLBRig {
         info.flex = flexWorld.applyQuaternion(bwInv).normalize()
         // Spread (abduction) only at the knuckle (k=1) of the four fingers —
         // the palm-normal axis in bone-local + this finger's rest lateral angle.
-        if (k === 1 && fg !== 'Thumb') {
+        // 벌림 축은 손가락 뿌리 마디(k=1)에만. **엄지도 포함한다** — 엄지가
+        // 손바닥을 가로지르는지 옆으로 벌어지는지가 손모양을 가르는 자리인데,
+        // 굽힘만으로는 표현되지 않는다.
+        if (k === 1) {
           info.abduct = normalWorld.clone().applyQuaternion(bwInv).normalize()
           info.restLat = Math.atan2(restWorld.dot(sideWorld), restWorld.dot(fwdWorld))
         }
@@ -169,6 +172,7 @@ const _tp = new THREE.Vector3()
 const _q = new THREE.Quaternion()
 const _qc = new THREE.Quaternion()
 const _fq = new THREE.Quaternion()
+const _dz = new THREE.Vector3()
 const _bq = new THREE.Quaternion()
 const _sq = new THREE.Quaternion()
 // keypoint-derived hand frame (for finger spread), reused per hand
@@ -182,12 +186,21 @@ const _kNormal = new THREE.Vector3()
  * the avatar hand frame is built, so lateral angles are directly comparable.
  * Returns false if the needed joints are missing/degenerate.
  */
-function buildKpHandFrame(h: number[]): boolean {
-  const wx = h[0], wy = h[1], wz = h[2]
-  const mx = h[27], my = h[28], mz = h[29] // middle MCP (joint 9)
-  const ix = h[15], iy = h[16], iz = h[17] // index MCP (joint 5)
-  const px = h[51], py = h[52], pz = h[53] // pinky MCP (joint 17)
-  if ((mx === 0 && my === 0 && mz === 0) || (ix === 0 && iy === 0 && iz === 0) || (px === 0 && py === 0 && pz === 0)) {
+/** 손바닥 평면(앞·옆·법선)을 키포인트에서 세운다 — 손가락 **벌림**을 재려면 필요하다.
+ *
+ *  **깊이는 `hand_z`에서 온다.** 예전에는 키포인트의 세 번째 값을 z로 읽었는데,
+ *  웹 조각에서 그 자리는 전부 1.0인 자리표시자다. 그래서 손바닥 평면이 늘 화면과
+ *  나란해지고, 손이 화면을 향하지 않는 순간 벌림이 엉뚱하게 잡혔다.
+ *  게다가 이 함수를 부르는 조건이 `keypoints3d`였는데 웹 조각에는 그 키가 없어
+ *  **벌림이 모든 낱말에서 한 번도 켜진 적이 없었다**(2026-08-20 확인). */
+function buildKpHandFrame(h: number[], hz: number[] | null): boolean {
+  const z = (j: number) => (hz ? hz[j] : 0)
+  const wx = h[0], wy = h[1], wz = z(0)
+  const mx = h[27], my = h[28], mz = z(9) // middle MCP (joint 9)
+  const ix = h[15], iy = h[16], iz = z(5) // index MCP (joint 5)
+  const px = h[51], py = h[52], pz = z(17) // pinky MCP (joint 17)
+  // 손목은 기준점이라 z가 0인 것이 정상이다 — x·y로만 미검출을 판정한다.
+  if ((mx === 0 && my === 0) || (ix === 0 && iy === 0) || (px === 0 && py === 0)) {
     return false
   }
   _kFwd.set(mx - wx, my - wy, mz - wz)
@@ -322,7 +335,16 @@ export function setBlinkGLB(rig: GLBRig, amount: number) {
 }
 
 /** Apply a keypoint frame to a GLB humanoid rig. */
+/** 마지막 프레임에서 **벌림이 실제로 적용된 손가락 수**.
+ *
+ *  계측점이다. 벌림은 예전에 `keypoints3d`가 있을 때만 켜지도록 되어 있었는데
+ *  웹 조각에는 그 키가 없어 **한 번도 켜진 적이 없었다** — 그런데도 화면은
+ *  멀쩡해 보였다(손가락이 굽기는 하니까). 같은 실패를 다시 겪지 않으려고
+ *  숫자로 내보낸다. `SignStage`가 `data-sign-spread`로 화면에 붙인다. */
+export let lastSpreadCount = 0
+
 export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
+  let spreadUsed = 0
   const f = Math.max(0, Math.min(frame, data.num_frames - 1))
   const use3d = !!data.keypoints3d
   const k = data.keypoints3d ?? data.keypoints
@@ -372,6 +394,18 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     return d
   }
 
+  /** 손 키포인트 두 점의 방향 — 깊이(`hand_z`)까지 써서 잰다.
+   *  손바닥 평면과 같은 기준이라 벌림 각도가 손 방향에 흔들리지 않는다. */
+  const dirWithZ = (h: number[], hz: number[] | null, a: number, b: number) => {
+    if (!hz) return null
+    const dx = h[b * 3] - h[a * 3]
+    const dy = h[b * 3 + 1] - h[a * 3 + 1]
+    const dz = hz[b] - hz[a]
+    const L = Math.sqrt(dx * dx + dy * dy + dz * dz)
+    if (L < 1e-6) return null
+    return _dz.set(dx / L, dy / L, dz / L)
+  }
+
   // arms (shoulder→elbow), then palm-accurate hand, then fingers off the hand.
   for (const [Side, side, hand, sh, el, wr] of [
     ['Right', 'right', hr, RSH, REL, RWR],
@@ -384,9 +418,10 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     const handWorld = new THREE.Quaternion()
     aimHand(rig, side, foreWorld, h ? handDir(h, 0, 9) : null, h ? handDir(h, 5, 17) : null, handWorld)
     if (!h) continue
-    // Build a keypoint-derived hand frame (3D only) so we can measure each
-    // finger's lateral SPREAD, not just its curl.
-    const spreadOK = use3d && buildKpHandFrame(h)
+    // 손바닥 평면을 세워 손가락 **벌림**까지 잰다. 깊이(`hand_z`)가 있어야
+    // 평면이 제대로 서므로, 깊이가 없는 조각에서는 굽힘만 쓴다.
+    const hzFrame = handZ(side === 'right' ? 'hand_right' : 'hand_left')
+    const spreadOK = !!hzFrame && buildKpHandFrame(h, hzFrame)
     // ── 손가락: **손가락당 굽힘 하나**를 재고, 마디에 해부학 비율로 나눠 준다.
     //
     //  왜 마디별로 재지 않나. 손 키포인트에는 **깊이가 없다** — 세 번째 값이 전부
@@ -407,30 +442,6 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     //  측정이 믿을 만할 때(마디가 충분히 길 때)는 그 비로 나누고, 아니면
     //  해부학 기본비로 나눈다. 어느 쪽이든 **사람 손에서 나올 수 있는 자세만**
     //  만들어진다 — 손이 꺾이거나 뒤틀리는 자세는 원리상 나오지 않는다.
-    const FLEX_SHARE: Record<string, number[]> = {
-      // 마디별 최대 굽힘(라디안). 엄지는 다른 손가락보다 덜 굽는다.
-      Thumb: [0.62, 0.95, 0.55],
-      Index: [1.30, 1.45, 0.85],
-      Middle: [1.32, 1.48, 0.88],
-      Ring: [1.30, 1.45, 0.85],
-      Pinky: [1.22, 1.40, 0.82],
-    }
-    /** 비율 → 굽힘(0~1). 1.0이면 곧게, 0.35 이하면 완전히 쥔 것으로 본다. */
-    /** 비율 → 굽힘(0~1). 1.0이면 곧게, 0.35 이하면 완전히 쥔 것으로 본다.
-     *
-     *  **바닥값을 둔다.** 측정된 굽힘이 0이면 손가락이 자로 잰 듯 곧게 펴진다.
-     *  사람 손은 쉴 때도 그렇지 않다 — 마디마다 조금씩 굽어 있다. 실측에서
-     *  쉬는 손(비우세손)의 굽힘이 0.02~0.11로 나와, 아바타가 손을 **쫙 편 채로**
-     *  들고 있었다. 손가락 하나하나는 맞는데 손 전체가 어색해 보이던 원인이다.
-     *
-     *  바닥값 0.12는 사람이 힘을 뺀 손의 굽힘에 가깝다. 완전히 편 손모양
-     *  (`사` = 네 손가락 펴기)도 실제로는 이만큼 굽어 있으므로 손해가 아니다. */
-    const CURL_REST = 0.12
-    const curlOf = (ratio: number) => {
-      const c = (1 - ratio) / 0.65
-      const clamped = c < 0 ? 0 : c > 1 ? 1 : c
-      return CURL_REST + (1 - CURL_REST) * clamped
-    }
     const px = (i: number) => h[i * 3]
     const py = (i: number) => h[i * 3 + 1]
     // 깊이가 있으면 **3D 거리**로 잰다. 손가락이 카메라를 향해 굽어도 길이가
@@ -491,11 +502,19 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
         _fq.setFromAxisAngle(info.flex, -ang) // 손바닥 쪽으로만 굽는다
 
         let spread = 0
-        if (spreadOK && k === 0 && fg !== 'Thumb' && info.abduct && info.restLat != null) {
-          const cur0 = handDir(h, segs[0][0], segs[0][1])
+        if (spreadOK && k === 0 && info.abduct && info.restLat != null) {
+          // 벌림은 **손바닥 평면 안의 각도**다. 손바닥 평면을 hand_z로 세웠으므로
+          // 손가락 방향도 같은 깊이로 재야 한다 — 2D 방향을 3D 기준에 대면
+          // 손이 화면을 향하지 않는 순간 각도가 어긋난다.
+          const cur0 = dirWithZ(h, hzFrame, segs[0][0], segs[0][1]) ?? handDir(h, segs[0][0], segs[0][1])
           if (cur0) {
             const curLat = Math.atan2(cur0.dot(_kSide), cur0.dot(_kFwd))
-            spread = Math.max(-FINGER_SPREAD_MAX, Math.min(FINGER_SPREAD_MAX, curLat - info.restLat))
+            const cap = fg === 'Thumb' ? THUMB_SPREAD_MAX : FINGER_SPREAD_MAX
+            // 잰 값을 그대로 쓰지 않고 **줄여서** 쓴다. 실측한 떨림(2차차분 5~11°)과
+            // 낱말 사이 차이(12~29°)로 계산한 신호 비중이 0.87~0.91이었다.
+            const raw0 = (curLat - info.restLat) * SPREAD_TRUST
+            spread = Math.max(-cap, Math.min(cap, raw0))
+            if (spread !== 0) spreadUsed += 1
           }
         }
         if (spread !== 0 && info.abduct) {
@@ -511,6 +530,7 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
   }
   // Mouth/expression intentionally not driven from data — keypoint-derived
   // mouth looked unnatural; only the periodic eye-blink (in Avatar3D) remains.
+  lastSpreadCount = spreadUsed
 }
 
 const scratchPose: number[] = []

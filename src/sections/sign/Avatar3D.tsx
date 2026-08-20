@@ -5,7 +5,7 @@ import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
 import { applyPoseToVRM, restPoseVRM, prepareVRMRig } from './retarget'
-import { prepareGLBRig, applyPoseToGLB, setBlinkGLB, type GLBRig } from './glbRetarget'
+import { prepareGLBRig, applyPoseToGLB, setBlinkGLB, lastSpreadCount, type GLBRig } from './glbRetarget'
 import { DEFAULT_MODEL_URL } from './avatars'
 
 /** Frame any humanoid so its head sits at a canonical height + upper body fills the stage. */
@@ -49,6 +49,8 @@ interface VRMModelProps {
 function VRMModel({ url, data, frame, animate }: VRMModelProps) {
   const gltf = useGLTF(url, true, true, extendWithVRM)
   const vrm = (gltf.userData as { vrm?: VRM }).vrm
+  // 벌림이 걸린 손가락 수의 **최댓값** — 프레임마다 0이 될 수 있어 봉우리로 본다.
+  const spreadPeak = useRef(0)
   const rigRef = useRef<GLBRig | null>(null)
   /** 고개의 원래 자세 — 고개 동작을 절대값으로 주기 위해 한 번만 기억한다. */
   const headRestRef = useRef<THREE.Euler | null>(null)
@@ -93,7 +95,15 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
     }
     const rig = rigRef.current
     if (rig) {
-      if (animate && data) applyPoseToGLB(rig, data, frame)
+      if (animate && data) {
+        applyPoseToGLB(rig, data, frame)
+        // 손가락 벌림이 실제로 걸렸는지 화면에 내보낸다 — 한동안 배선이
+        // 끊긴 채로도 화면은 멀쩡해 보였다(굽힘은 걸렸으니까).
+        if (spreadPeak.current < lastSpreadCount) {
+          spreadPeak.current = lastSpreadCount
+          document.body.setAttribute('data-sign-spread', String(lastSpreadCount))
+        }
+      }
       const phase = t % 4.2
       const blink = phase > 4.05 ? Math.sin(((phase - 4.05) / 0.15) * Math.PI) : 0
       setBlinkGLB(rig, blink)

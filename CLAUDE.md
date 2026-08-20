@@ -226,6 +226,19 @@ z 배율은 1.0이 최적(x·y와 같은 단위다).
     뿌리→끝 직선거리 ÷ 마디 합 = 줄자 비율. 투영에 강해서 깊이가 없어도 살아남는다.
     그 하나를 해부학 비율로 마디에 나눈다 — 사람 손 자세만 나온다.
 
+**손모양 정의는 `src/sections/sign/handShape.ts` 한 곳에만 있다.** 재생
+(`glbRetarget.ts`)과 검사가 같은 함수를 쓴다. 두 벌로 두면 features.py ↔
+landmarks.ts와 같은 부류의 실패가 된다.
+
+```bash
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_handshape.mjs    # 원본 대비 유지 · 손가락 따로 움직임 · 낱말끼리 갈림
+```
+
+**손가락 벌림은 `hand_z`가 있어야 켜진다.** 예전에는 `keypoints3d`가 조건이었는데
+웹 조각에 그 키가 없어 **한 번도 켜진 적이 없었다**(2026-08-20). 계측점
+`data-sign-spread`가 0이 아니어야 한다 — e2e가 잰다.
+
 **아바타를 바꾸려면 리깅부터 본다.** `real-avaturn`은 손가락 3마디(뼈 30개),
 `real-david`·`real-avatarsdk`는 4마디(40개)다. `glbRetarget.ts`는 3마디 기준이라
 4마디 리그에서는 손이 주걱처럼 뭉개진다. 얼굴로 고르면 안 된다.

@@ -537,10 +537,8 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     if await visible(talk, 10000):
         await talk.first.click()
         await pg.wait_for_timeout(1200)
-        place = pg.get_by_role("button", name=re.compile("병원"))
-        if await visible(place, 10000):
-            await place.first.click()
-            await pg.wait_for_timeout(1500)
+        # **장소를 고르기 전** 화면에 있다(`if (!place)`). 병원을 먼저 누르면
+        # 그 화면을 지나쳐 버려 버튼을 못 찾는다(2026-08-20에 그랬다).
         sos_btn = pg.get_by_role("button", name=re.compile("긴급 도움"))
         if await visible(sos_btn, 10000):
             rep.check(True, "긴급: 입구가 있다")
@@ -554,10 +552,13 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
             body = await pg.inner_text("body")
             rep.check("위치" in body or "좌표" in body or "소리로" in body,
                       "긴급: 위치·소리 안내가 있음")
-            await pg.get_by_role("button", name=re.compile("닫기")).first.click()
-            await pg.wait_for_timeout(800)
+            # **"닫기"로 잡히는 버튼이 둘이다** — 머리줄의 오프라인 안내에도 있다.
+            # `.first`를 누르면 엉뚱한 것을 닫고 긴급 화면은 그대로 남는다.
+            await pg.get_by_role("button", name=re.compile("✕ 닫기")).last.click()
+            await pg.wait_for_timeout(1000)
             gone = not await pg.get_by_text(re.compile("화면을 탭하면 다음 문구")).count()
             rep.check(gone, "긴급: 닫으면 화면이 사라짐")
+            rep.check(await visible(sos_btn, 8000), "긴급: 닫으면 대화로 돌아옴")
         else:
             rep.check(False, "긴급: 입구가 있다")
 

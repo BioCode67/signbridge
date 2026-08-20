@@ -7,7 +7,7 @@
 파일 브라우저에서 **`~/deploy/signbridge-full.bundle`** (207MB) 을 내려받습니다.
 바탕화면처럼 찾기 쉬운 곳에 두세요.
 
-> 이 파일 하나에 **커밋 325개 전부**가 들어 있습니다. 코드·문서·판단 기록까지 전부.
+> 이 파일 하나에 **커밋 360개 전부**가 들어 있습니다. 코드·문서·판단 기록까지 전부.
 
 ## 2. 터미널(윈도우는 Git Bash)을 열고
 
@@ -58,7 +58,7 @@ git push origin claude/sign-language-translation-system-a0mzqi
 
 https://github.com/BioCode67/signbridge/tree/claude/sign-language-translation-system-a0mzqi
 
-커밋 325개가 보이면 끝입니다.
+커밋 360개가 보이면 끝입니다.
 
 ---
 

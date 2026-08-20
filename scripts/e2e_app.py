@@ -358,6 +358,28 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     spoken = await pg.evaluate("window.__spoken")
     rep.check("어제부터 머리가 아파요" in spoken, "대화: 직접 쓴 말 → 소리로")
 
+    # ── 낱말 카드 — **수어 클립이 없는 낱말을 글자로라도 띄우는가.**
+    #
+    # 처방전·부작용·등본·창구는 수어 클립 자체가 없다. 그때 앱은 그 낱말을
+    # 큰 글씨 카드로 띄워 정보 손실만은 막는다. 이 장치가 끊기면 아바타는
+    # 나머지를 멀쩡히 재생하고 자막도 그대로라서 **화면만 봐서는 알 수 없다** —
+    # 농인은 그 낱말이 있었다는 사실조차 모른다(2026-08-20까지 검사가 없었다).
+    await pg.get_by_placeholder("하고 싶은 말을 쓰세요").fill("처방전 보여 주세요")
+    sign_btn = pg.get_by_role("button", name=re.compile("수어로 보여"))
+    if not await sign_btn.count():
+        sign_btn = pg.get_by_role("button", name=re.compile("수어"))
+    if await sign_btn.count():
+        await sign_btn.first.click()
+        cards = 0
+        for _ in range(15):
+            await pg.wait_for_timeout(1000)
+            cards = await pg.evaluate(
+                "() => Math.max(0, ...[...document.querySelectorAll('[data-sign-cards]')]"
+                ".map(e => Number(e.getAttribute('data-sign-cards')) || 0))")
+            if int(cards) > 0:
+                break
+        rep.check(int(cards) > 0, "대화: 수어로 못 내는 낱말이 카드로 뜸", f"{cards}장")
+
     # ── 묻기: 수어로 물어 위치 기반 답을 받는 화면
     #
     # 카메라 앞 실제 수어는 자동으로 재현할 수 없다(가짜 카메라는 빈 영상이다).

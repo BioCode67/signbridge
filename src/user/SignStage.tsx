@@ -41,6 +41,10 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
       // 손 깊이가 실제로 실렸는가 — 없으면 손가락이 2D로만 계산된다.
       // 조각엔 있는데 합성에서 빠지는 일이 실제로 있었다(2026-08-20).
       data-sign-handz={data?.hand_z ? '1' : '0'}
+      // 낱말 카드 수 — 동작으로 표현 못 한 낱말을 **글자로라도** 띄웠는가.
+      // 이게 0인데 번역에서 빠진 낱말이 있으면 **정보가 조용히 사라진 것**이다.
+      // 화면만 봐서는 알 수 없다 — 아바타는 나머지를 멀쩡히 재생하기 때문이다.
+      data-sign-cards={data?.gloss_missing?.length ?? 0}
     >
       <Suspense
         fallback={

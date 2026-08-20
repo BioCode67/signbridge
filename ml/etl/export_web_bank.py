@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import unicodedata
 import shutil
 import sys
 from collections import Counter
@@ -252,15 +253,37 @@ def main() -> None:
 
     # 증분이 기본이다. 어휘를 조금 늘릴 때마다 9,500개를 다시 쓰면 30분이 날아가고,
     # 그동안 public/data/glosses가 비어 앱이 통째로 멈춘다(rmtree 후 재작성 구간).
+    # 웹으로 나가는 파일명은 **여기서 안전하게 만든다.**
+    #
+    # 원본 bank의 `file`에는 `날짜:10월10일.json`처럼 `:`가 들어 있다. 리눅스·웹에서는
+    # 아무 문제가 없지만 **윈도우는 파일명에 `:`를 못 쓴다** — 노트북용 zip을 풀면
+    # "0x80070057 매개 변수가 틀립니다"로 멈춘다(2026-08-19 실측, 1,365개).
+    # 원본을 고치는 것은 학습 파이프라인까지 건드리는 일이라, **내보내는 자리에서**
+    # 막는다. 여기만 통과하면 웹·zip 어디로 나가도 안전하다.
+    _BAD = re.compile(r'[\\/:*?"<>|#]')
+
+    def web_name(gloss: str, src: str) -> str:
+        if not _BAD.search(src):
+            return src
+        base = unicodedata.normalize("NFC", gloss)
+        return re.sub(r"[^\w가-힣]+", "_", base) + ".json"
+
+    web_file = {n: web_name(n, bank[n]["file"]) for n in chosen}
+    # 바뀐 이름끼리 겹치면 동작이 덮어써진다 — 겹치면 아예 멈춘다.
+    _dup = [f for f in web_file.values() if list(web_file.values()).count(f) > 1]
+    if _dup:
+        raise SystemExit(f"[web] 파일명 충돌 {len(set(_dup))}건: {sorted(set(_dup))[:5]}")
+
     existing = {f.name for f in gloss_dir.glob("*.json")}
-    keep = {bank[n]["file"] for n in chosen}
+    keep = set(web_file.values())
 
     web_index: dict[str, dict] = {}
     written = reused = 0
     for name in chosen:
         info = bank[name]
-        target = gloss_dir / info["file"]
-        if info["file"] in existing:
+        out_name = web_file[name]
+        target = gloss_dir / out_name
+        if out_name in existing:
             data = json.loads(target.read_text(encoding="utf-8"))
             reused += 1
         else:
@@ -273,7 +296,7 @@ def main() -> None:
             if written % 200 == 0:
                 print(f"  [web] 새로 쓴 조각 {written:,}", flush=True)
         web_index[name] = {
-            "file": info["file"],
+            "file": out_name,
             "frames": data["num_frames"],
             "fps": data["fps"],
         }

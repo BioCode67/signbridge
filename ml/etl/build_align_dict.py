@@ -683,7 +683,16 @@ def conjugations(stem_word: str) -> list[str]:
         else:
             continue
         past += [stem_past + "어요", stem_past + "습니다", stem_past + "다", stem_past + "는데",
-                 stem_past + "나요", stem_past + "습니까", stem_past + "어서", stem_past + "지만"]
+                 stem_past + "나요", stem_past + "습니까", stem_past + "어서", stem_past + "지만",
+                 # 2026-08-20 일상 홀드아웃 실측에서 빠진 꼴들.
+                 #   왔네요 · 갔는지 · 쉬었다 · 봤어 · 왔고 · 갔으면
+                 # 어간(오다·가다·쉬다)은 사전에 있는데 이 어미가 없어서
+                 # 통째로 빠지고 그 자리를 공기 통계 잡음이 채웠다.
+                 stem_past, stem_past + "네요", stem_past + "는지", stem_past + "던",
+                 stem_past + "고", stem_past + "으면", stem_past + "어", stem_past + "지",
+                 stem_past + "군요", stem_past + "거든요", stem_past + "잖아요",
+                 stem_past + "던데요", stem_past + "더라고요", stem_past + "겠",
+                 stem_past + "을까요", stem_past + "는지요"]
     forms += past
     return forms
 

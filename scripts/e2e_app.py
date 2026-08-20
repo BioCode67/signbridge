@@ -425,16 +425,18 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
                 # 목표 선의 길이가 0이면 **중앙에 붙어 있다** — 방향이 계산되지 않은 것
                 rep.check(m["hasLine"] and m["len"] > 5, "묻기: 목표가 중앙이 아님",
                           f"선 길이 {m['len']:.0f}px")
-            # 아바타가 답을 수어로 재생하는가
+            # 아바타가 답을 수어로 재생하는가.
+            # **화면에 계측점이 여러 개 있다**(받기 무대가 숨어 있어도 DOM에 남는다).
+            # 첫 번째만 보면 0을 읽는다 — 가장 큰 값을 본다.
             fr = await pg.evaluate(
-                "() => document.querySelector('[data-sign-frames]')"
-                "?.getAttribute('data-sign-frames') ?? '0'")
+                "() => Math.max(0, ...[...document.querySelectorAll('[data-sign-frames]')]"
+                ".map(e => Number(e.getAttribute('data-sign-frames')) || 0))")
             rep.check(int(fr) > 1, "묻기: 답을 수어로 재생", f"{fr}프레임")
-        # 다음 검사를 위해 시작 화면으로 되돌린다
-        again = pg.get_by_role("button", name=re.compile("또 묻기"))
-        if await again.count():
-            await again.first.click()
-            await pg.wait_for_timeout(800)
+        # 다음 검사를 위해 **처음부터 다시 연다.**
+        # "또 묻기"로 돌아가면 화면 상태가 뒤 검사가 기대하는 것과 달라
+        # 그 뒤가 전부 무너진다(2026-08-20에 겪었다).
+        await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
+        await pg.wait_for_timeout(2500)
     else:
         rep.check(False, "묻기: 눌러서 묻는 버튼")
     # 촬영 화면 진입은 **폰에서만** 본다. 카메라를 켜면 MediaPipe와 인식 모델을
@@ -634,8 +636,10 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
     await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
 
     # 필수 세트를 조용히 받아 둘 때까지 기다린다(첫 방문 뒤 자동으로 받는다).
+    # **손 깊이를 실으면서 필수 세트가 14.7MB → 18.7MB로 커졌다.** 60초로는
+    # 부하가 걸린 판에서 모자란다 — 못 받은 것과 늦은 것을 구분해야 한다.
     level = None
-    for _ in range(60):
+    for _ in range(150):
         await pg.wait_for_timeout(1000)
         level = await pg.evaluate("localStorage.getItem('sb-offline')")
         if level:

@@ -168,14 +168,26 @@ export default function AskMode({ notice, onImmersive }: Props) {
       }
     }
     const list = nearest(nearby.places, coords.lat, coords.lon, kind, 3)
-    if (list.length === 0) {
+    // **너무 먼 곳을 "가까운 곳"이라고 답하지 않는다.**
+    //
+    // 목록이 비었을 때만 "없다"를 내면, 100km 떨어진 지하철역도 그대로 안내한다
+    // (실측: 전국 격자에서 지하철 최근접 중앙 56km · 최대 193km). 재난 상황에서
+    // 걸어갈 수 없는 곳을 가리키는 것은 안내가 아니라 위험이다.
+    // 15km는 걸어서 못 가는 거리이고, 실제 도시에서는 대피소가 수백 미터에 있다.
+    const TOO_FAR_M = 15_000
+    const reachable = list.filter((p) => p.distance <= TOO_FAR_M)
+    if (reachable.length === 0) {
+      const far = list[0]
       return {
-        intent, headline: `가까운 ${ko.label}을 찾지 못했어요`,
+        intent,
+        headline: far
+          ? `가까운 ${ko.label}이 없어요 (제일 가까운 곳도 ${Math.round(far.distance / 1000)}km)`
+          : `가까운 ${ko.label}을 찾지 못했어요`,
         sign: `${ko.gloss} 없다`, problem: 'none-found',
       }
     }
-    const t = list[0]
-    return { intent, headline: answerHeadline(t), sign: answerSentence(t), target: t, others: list }
+    const t = reachable[0]
+    return { intent, headline: answerHeadline(t), sign: answerSentence(t), target: t, others: reachable }
   }, [nearby, coords, notice])
 
   /** 의도 하나로 곧장 답한다 — 예시 버튼과 수어 인식이 같은 길을 쓴다. */

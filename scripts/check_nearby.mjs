@@ -153,5 +153,27 @@ for (const [lat, lon] of SPOTS) {
 ok(unplayable === 0, `답변 ${seen.size}종의 글로스가 모두 재생 가능`,
   examples.join(' · '))
 
+// ── 너무 먼 곳을 "가까운 곳"이라고 답하지 않는가.
+//
+// 목록이 비었을 때만 "없다"를 내면, 100km 떨어진 지하철역도 그대로 안내한다.
+// 실측: 전국 격자에서 지하철 최근접 중앙 56km · 최대 193km. 재난 상황에서
+// 걸어갈 수 없는 곳을 가리키는 것은 안내가 아니라 위험이다.
+const FAR = { lat: 37.05, lon: 128.75 }   // 강원 산간 — 지하철이 없다
+for (const kind of allKinds) {
+  const top = nearest(data.places, FAR.lat, FAR.lon, kind, 1)
+  if (!top.length) continue
+  const d = top[0].distance
+  if (d > 15000) {
+    ok(true, `산간에서 ${kind}는 ${Math.round(d / 1000)}km — 앱이 "없다"로 답해야 하는 거리`)
+  }
+}
+// 도시에서는 반드시 걸어갈 수 있어야 한다
+for (const [name, la, lo] of [['서울시청', 37.5665, 126.9780], ['부산시청', 35.1796, 129.0756],
+                              ['광주시청', 35.1595, 126.8526]]) {
+  const t = nearest(data.places, la, lo, 'shelter', 1)[0]
+  ok(t && t.distance <= 3000, `${name}에서 대피소가 3km 이내`,
+     t ? `${Math.round(t.distance)}m · ${t.name}` : '없음')
+}
+
 console.log(failed ? `\n길찾기 검사 실패 ${failed}건` : '\n길찾기 검사 ✓ 전부 통과')
 process.exit(failed ? 1 : 0)

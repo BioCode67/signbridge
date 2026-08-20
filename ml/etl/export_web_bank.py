@@ -45,6 +45,13 @@ from ml.signbridge.vocab import normalize_gloss  # noqa: E402
 
 CONF_THRESHOLD = 0.1
 
+# 윈도우 금지 문자와 URL 조각 문자를 파일명에서 치환한다.
+# 실측(2026-08-19): `시:8시30분.json` 같은 콜론 파일 1,365개 때문에 윈도우에서
+# `git clone`이 checkout 단계에서 통째로 실패했다. `#`은 fetch URL에서 fragment로
+# 잘려 브라우저가 그 조각을 영영 못 받는다. 글로스 **키**는 그대로 두고
+# 파일명만 바꾼다 — 앱은 bank.json의 file 필드로만 파일을 찾는다.
+
+
 
 def compact(entry: dict) -> dict:
     """좌표 반올림 + 신뢰도 이진화. 구조는 SignData 그대로 둔다.

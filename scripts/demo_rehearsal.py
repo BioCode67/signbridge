@@ -137,6 +137,16 @@ async def main() -> int:
             assert frames > 20, f"재생 프레임 {frames}개 — 합성이 실패했습니다"
 
         await r.step("장면2", "아바타가 실제로 움직인다", played)
+
+        # 재생 화면이 전체를 덮은 채로 두면 다음 버튼이 전부 가려진다.
+        # 사람은 재생이 끝나기를 기다리지만, 리허설은 닫고 넘어간다.
+        async def close_play() -> None:
+            await tap(pg.get_by_text("화면을 누르면 닫혀요"))
+            await pg.wait_for_timeout(500)
+            left = await pg.get_by_text("화면을 누르면 닫혀요").count()
+            assert left == 0, "재생 화면이 닫히지 않았습니다"
+
+        await r.step("장면2", "재생 화면을 닫는다", close_play)
         async def to_my_cards() -> None:
             await tap(pg.get_by_role("button", name="🤟 내 답 카드"))
             await pg.wait_for_timeout(400)

@@ -158,13 +158,17 @@ ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   etl/               aihub_disaster · aihub_sl · prepare · merge_index · extract_mediapipe
   tools/             feature_parity(필수 검증) · check_app_glosses(앱↔사전 정합) · schema_report
                      suspect_align(고빈도 오역 후보 검토) · build_nearby(주변 장소 데이터)
+                     fetch_place_names.sh(행정구역 지명 — 지명 오염 차단, 키 불필요)
+                     fetch_osm_kr.sh(전국 장소) · fix_gloss_filenames(윈도우 안전 이름)
   data/daily_vocab.txt  창구 생활 어휘 — 빈도로 잘리면 안 되는 낱말 목록
 scripts/e2e_app.py     폰·태블릿·키오스크 3종 실조작 검증
 scripts/shots.py       화면 사진만 찍는다 — "동작하는가"가 아니라 "보기 좋은가"를 사람이 볼 때
 scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠진 낱말)
 scripts/check_translation_cases.mjs  오역 회귀 검사(사례 40건)
 scripts/check_intent.mjs   수어 낱말 묶음 → 의도 판정 검사(오검출 포함 27건)
-scripts/check_nearby.mjs   길찾기 계산 — 거리·방위·어림수·답변 문장
+scripts/check_nearby.mjs   길찾기 계산 — 거리·방위·어림수·답변 문장·너무 먼 곳 차단
+scripts/check_landing.py   소개 페이지 — 섹션 10개·Q&A·에이전트가 실제로 채워지는가
+scripts/check_filenames.mjs 윈도우에서 압축이 풀리는 이름인가
 scripts/demo_rehearsal.py  시연 대본 조작을 그대로 눌러 보는 리허설
   jobs/              check_workspace · train_* · pbs_extract
                      rebuild_data.sh(웹 데이터 전부 재생성) · deploy_model.sh(모델 교체)

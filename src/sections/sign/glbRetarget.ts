@@ -333,8 +333,31 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
 
   const poseDir = (a: number, b: number, key: string) =>
     use3d ? segDir3Dreal(pose, a, b) : segDir3D(pose, a, b, restLen(data, data.keypoints.pose, a, b, key))
-  const handDir = (h: number[] | undefined | null, a: number, b: number) =>
-    !h ? null : use3d ? segDir3Dreal(h, a, b) : segDir(h, a, b, 0.4)
+  // 손 크기(손목→중지 MCP)를 재 둔다. 손가락 마디 길이를 이 값에 견줘 판단한다.
+  const handScale = (h: number[] | undefined | null): number => {
+    if (!h || h.length < 30) return 0
+    const dx = h[27] - h[0], dy = h[28] - h[1]
+    return Math.hypot(dx, dy)
+  }
+  /** 방향을 못 믿을 만큼 짧은 마디는 **버린다**(null).
+   *
+   *  손 키포인트에는 깊이가 없다 — 세 번째 값이 전부 정확히 1.0인 자리표시자다
+   *  (2026-08-20에 글로스 파일 8,421값을 세어 확인). 그래서 손가락 방향은 사실상
+   *  2D 투영이고, 손가락이 카메라 쪽을 향하면 투영 길이가 1~3픽셀로 줄어든다.
+   *  그 상태의 방향은 거의 잡음인데, 그대로 각도로 바꾸면 마디가 엉뚱하게 꺾인다.
+   *  짧으면 null을 돌려주고, 호출부는 **직전 자세를 유지**한다(움찔거림 없이 멈춘다). */
+  const MIN_SEG_RATIO = 0.13
+  const handDir = (h: number[] | undefined | null, a: number, b: number) => {
+    if (!h) return null
+    const d = use3d ? segDir3Dreal(h, a, b) : segDir(h, a, b, 0.4)
+    if (!d) return null
+    const sc = handScale(h)
+    if (sc > 0) {
+      const dx = h[b * 3] - h[a * 3], dy = h[b * 3 + 1] - h[a * 3 + 1]
+      if (Math.hypot(dx, dy) < sc * MIN_SEG_RATIO) return null
+    }
+    return d
+  }
 
   // arms (shoulder→elbow), then palm-accurate hand, then fingers off the hand.
   for (const [Side, side, hand, sh, el, wr] of [

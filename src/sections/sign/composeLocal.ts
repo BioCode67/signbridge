@@ -62,12 +62,28 @@ export interface BankEntry {
 }
 export type BankIndex = Record<string, BankEntry>
 
-type Piece = { pose: number[][]; hand_left: number[][]; hand_right: number[][] }
+type Piece = {
+  pose: number[][]
+  hand_left: number[][]
+  hand_right: number[][]
+  /** 손 깊이(z) — 조각에 있으면 함께 옮긴다.
+   *
+   *  **없으면 합성 문장에는 깊이가 하나도 안 남는다.** 조각 하나를 그대로
+   *  재생하는 사전 탭에서만 깊이가 살고, 정작 받기·묻기의 문장은 2D로만
+   *  돌아간다(2026-08-20에 이 상태였다). 이음매 보간도 함께 해 줘야
+   *  조각이 바뀔 때 손가락이 튀지 않는다. */
+  hz_left?: number[][]
+  hz_right?: number[][]
+}
 
 function normalizePiece(entry: SignData): Piece {
   const src = entry.keypoints
   const frames = src.pose.length
   const out: Piece = { pose: [], hand_left: [], hand_right: [] }
+  // 깊이는 어깨 폭으로 함께 정규화한다 — x·y와 같은 자로 재야 3D 거리가 맞다.
+  const hz = entry.hand_z
+  const zl: number[][] | undefined = hz?.hand_left ? [] : undefined
+  const zr: number[][] | undefined = hz?.hand_right ? [] : undefined
 
   for (let f = 0; f < frames; f++) {
     const pose = src.pose[f]
@@ -96,6 +112,30 @@ function normalizePiece(entry: SignData): Piece {
     out.pose.push(remap(pose))
     out.hand_left.push(remap(src.hand_left[f] ?? []))
     out.hand_right.push(remap(src.hand_right[f] ?? []))
+    // 깊이도 같은 배율로 — 손목 기준 상대값이라 평행이동은 필요 없다.
+    const zscale = (row: number[] | undefined): number[] =>
+      (row ?? []).map((v) => (v === 0 ? 0 : (v / width) * CANVAS_SHOULDER))
+    if (zl) zl.push(zscale(hz?.hand_left?.[f]))
+    if (zr) zr.push(zscale(hz?.hand_right?.[f]))
+  }
+  if (zl) out.hz_left = zl
+  if (zr) out.hz_right = zr
+  return out
+}
+
+/** 깊이 한 줄(점 21개)을 두 조각 사이에서 보간. 좌표 보간과 같은 곡선을 쓴다. */
+function blendZ(a: number[], b: number[], steps: number): number[][] {
+  const out: number[][] = []
+  for (let s = 1; s <= steps; s++) {
+    const t = (1 - Math.cos((s / (steps + 1)) * Math.PI)) / 2
+    const row: number[] = []
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const av = a[i] ?? 0
+      const bv = b[i] ?? 0
+      // 한쪽이 미검출(0)이면 보간하지 않고 0으로 둔다 — 없는 깊이를 지어내지 않는다.
+      row.push(av === 0 || bv === 0 ? 0 : av + (bv - av) * t)
+    }
+    out.push(row)
   }
   return out
 }
@@ -182,10 +222,24 @@ export async function composeGlosses(
     if (pieces.length > 0) {
       const prev = pieces[pieces.length - 1]
       const last = prev.pose.length - 1
+      // 깊이도 함께 잇는다. 한쪽 조각에만 깊이가 있으면 **없는 쪽을 0으로** 채워
+      // 부드럽게 사라지게 한다 — 갑자기 3D↔2D로 바뀌면 손가락이 튄다.
+      const zlPrev = prev.hz_left?.[last]
+      const zlNext = piece.hz_left?.[0]
+      const zrPrev = prev.hz_right?.[last]
+      const zrNext = piece.hz_right?.[0]
+      const zeros = (n: number) => new Array(n).fill(0)
+      const bridge = (a: number[] | undefined, b: number[] | undefined) => {
+        if (!a && !b) return undefined
+        const n = (a ?? b ?? []).length
+        return blendZ(a ?? zeros(n), b ?? zeros(n), BLEND_FRAMES)
+      }
       pieces.push({
         pose: blend(prev.pose[last], piece.pose[0], BLEND_FRAMES),
         hand_left: blend(prev.hand_left[last], piece.hand_left[0], BLEND_FRAMES),
         hand_right: blend(prev.hand_right[last], piece.hand_right[0], BLEND_FRAMES),
+        hz_left: bridge(zlPrev, zlNext),
+        hz_right: bridge(zrPrev, zrNext),
       })
       cursor += BLEND_FRAMES
     }
@@ -198,11 +252,20 @@ export async function composeGlosses(
 
   if (pieces.length === 0) return null
 
-  const merged: Piece = { pose: [], hand_left: [], hand_right: [] }
+  const merged: Piece = { pose: [], hand_left: [], hand_right: [], hz_left: [], hz_right: [] }
+  let anyZ = false
   for (const p of pieces) {
     merged.pose.push(...p.pose)
     merged.hand_left.push(...p.hand_left)
     merged.hand_right.push(...p.hand_right)
+    // 깊이가 없는 조각은 0으로 채운다 — 프레임 수가 어긋나면 엉뚱한 프레임의
+    // 깊이를 쓰게 되어 손가락이 제멋대로 굽는다.
+    const zeroRow = () => new Array(21).fill(0)
+    for (let i = 0; i < p.pose.length; i++) {
+      merged.hz_left!.push(p.hz_left?.[i] ?? zeroRow())
+      merged.hz_right!.push(p.hz_right?.[i] ?? zeroRow())
+    }
+    if (p.hz_left || p.hz_right) anyZ = true
   }
 
   return {
@@ -210,7 +273,10 @@ export async function composeGlosses(
     fps: BANK_FPS,
     num_frames: merged.pose.length,
     gloss_sequence: timeline,
-    keypoints: merged,
+    keypoints: { pose: merged.pose, hand_left: merged.hand_left, hand_right: merged.hand_right },
+    // 조각 중 하나라도 깊이가 있으면 싣는다. 없는 조각 자리는 0이라 그 구간만
+    // 2D로 돌아간다 — 문장 전체가 3D냐 2D냐로 갈리지 않는다.
+    ...(anyZ ? { hand_z: { hand_left: merged.hz_left, hand_right: merged.hz_right } } : {}),
     gloss_missing: missing,
     fetchMs: tBuild0 - tFetch0,
     buildMs: performance.now() - tBuild0,

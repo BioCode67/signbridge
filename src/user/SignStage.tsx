@@ -38,6 +38,9 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
       data-sign-backend={player.backend}
       // 고개 동작이 몇 낱말에 붙었는지 — 배선이 끊기면 0이 된다(역시 화면상 차이 없음).
       data-sign-head={data?.gloss_sequence.filter((g) => g.head).length ?? 0}
+      // 손 깊이가 실제로 실렸는가 — 없으면 손가락이 2D로만 계산된다.
+      // 조각엔 있는데 합성에서 빠지는 일이 실제로 있었다(2026-08-20).
+      data-sign-handz={data?.hand_z ? '1' : '0'}
     >
       <Suspense
         fallback={

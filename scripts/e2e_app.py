@@ -132,6 +132,21 @@ class Report:
         print(f"[{time.monotonic() - self.t0:6.0f}s]{line}", flush=True)
 
 
+
+async def visible(loc, timeout: int = 12000) -> bool:
+    """요소가 보일 때까지 기다린다 — **고정 대기 뒤에 count()를 세지 않는다.**
+
+    `wait_for_timeout(600)` 뒤에 `count()`를 세면, 부하가 걸린 판에서 아직 안
+    그려진 화면을 "없다"로 읽는다. 실제로 2026-08-19~20에 묻기 검사 네 항목이
+    함께 실패했다가 단독으로 돌리면 늘 통과했다. **부하에 따라 답이 바뀌는 검사는
+    못 믿는다** — 없으면 없다고, 늦으면 기다렸다가 답해야 한다.
+    """
+    try:
+        await loc.first.wait_for(state="visible", timeout=timeout)
+        return True
+    except Exception:
+        return False
+
 async def stage_state(pg) -> dict:
     el = pg.locator("[data-sign-frames]").first
     return await el.evaluate(
@@ -205,7 +220,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         await guide.first.click(timeout=15000)
         await pg.wait_for_timeout(500)
         steps = pg.locator("button", has_text="세요")
-        rep.check(await steps.count() > 0, "받기: 행동요령 문장 목록")
+        rep.check(await visible(steps), "받기: 행동요령 문장 목록")
         prev = await pg.locator("[data-sign-frames]").first.evaluate("e=>e.dataset.signFrames")
         await steps.first.click()
         played = False
@@ -271,7 +286,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.get_by_role("button", name="🏥 병원").click()
     await pg.wait_for_timeout(500)
     # 직원 안내 — 창구에서 가장 먼저 보이는 화면이다. 사라지면 직원이 쓸 줄 모른다.
-    rep.check(await pg.get_by_text("저는 소리를 듣지 못합니다").count() > 0, "대화: 직원 안내 표시")
+    rep.check(await visible(pg.get_by_text("저는 소리를 듣지 못합니다")), "대화: 직원 안내 표시")
     await pg.get_by_text("화면을 누르면 시작합니다").click()
     await pg.wait_for_timeout(500)
 
@@ -284,7 +299,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
             talk = st
     rep.check(talk["frames"] > 20, "대화: 직원 질문 → 수어 재생",
               f"{talk['frames']}프레임 · 단어 {talk['glosses']}개")
-    rep.check(await pg.locator("text=어디가 아픕니까?").count() > 0, "대화: 기록에 남음")
+    rep.check(await visible(pg.locator("text=어디가 아픕니까?")), "대화: 기록에 남음")
 
     # 답 카드 — 차례 토글로 내 카드를 펼친 뒤 짚는다
     await pg.get_by_role("button", name="🤟 내 답 카드").click()
@@ -293,7 +308,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.wait_for_timeout(400)
     spoken = await pg.evaluate("window.__spoken")
     rep.check("머리" in spoken, "대화: 답 카드 → 소리로 전달", str(spoken[-2:]))
-    rep.check(await pg.get_by_text("소리로 전달했어요").count() > 0, "대화: 전달 확인 문구")
+    rep.check(await visible(pg.get_by_text("소리로 전달했어요")), "대화: 전달 확인 문구")
     # 답은 상대에게 보여주는 전체화면으로 뜬다 — 눌러 닫고 대화로 돌아온다.
     await pg.get_by_text("화면을 누르면 닫혀요").click()
     await pg.wait_for_timeout(300)
@@ -312,10 +327,10 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.get_by_role("button", name="← 장소").click()
     await pg.wait_for_timeout(400)
     # 장소 화면으로 나오면 접혔던 탭·헤더가 다시 나타난다
-    rep.check(await pg.get_by_role("button", name="💬 대화").count() > 0, "대화: 나오면 탭이 돌아옴")
+    rep.check(await visible(pg.get_by_role("button", name="💬 대화")), "대화: 나오면 탭이 돌아옴")
     await pg.get_by_role("button", name=re.compile("📜 지난 대화")).click()
     await pg.wait_for_timeout(400)
-    rep.check(await pg.locator("text=어디가 아픕니까?").count() > 0, "대화: 저장한 대화 다시 보기")
+    rep.check(await visible(pg.locator("text=어디가 아픕니까?")), "대화: 저장한 대화 다시 보기")
     await pg.get_by_role("button", name="← 뒤로").click()
     await pg.wait_for_timeout(300)
     await pg.get_by_role("button", name="🏥 병원").click()
@@ -327,7 +342,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
 
     # ── 자유 입력 → 소리
     # 수어로 답하기 입구가 있는가 — 모어로 말하는 유일한 길이라 사라지면 안 된다
-    rep.check(await pg.get_by_role("button", name="🤟 수어로 답하기").count() > 0,
+    rep.check(await visible(pg.get_by_role("button", name="🤟 수어로 답하기")),
               "대화: 수어로 답하기 입구")
     await pg.get_by_role("button", name="⌨ 글로 쓰기").click()
     await pg.wait_for_timeout(300)
@@ -351,12 +366,11 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.get_by_role("button", name="← 장소").click()
     await pg.wait_for_timeout(500)
     await pg.get_by_role("button", name="📹 묻기").click()
-    await pg.wait_for_timeout(600)
-    rep.check(await pg.get_by_text("수어로 물어보세요").count() > 0, "묻기: 시작 화면")
-    rep.check(await pg.get_by_role("button", name="수어로 묻기").count() > 0, "묻기: 시작 버튼")
+    rep.check(await visible(pg.get_by_text("수어로 물어보세요")), "묻기: 시작 화면")
+    rep.check(await visible(pg.get_by_role("button", name="수어로 묻기")), "묻기: 시작 버튼")
     # **시작 화면에서는 탭이 남아 있어야 한다.** 접어 버리면 다른 화면으로 나갈 길이
     # 없어 사용자가 갇힌다(실측: 묻기에 들어가면 탭 막대가 통째로 사라져 있었다).
-    rep.check(await pg.get_by_role("button", name="💬 대화").count() > 0,
+    rep.check(await visible(pg.get_by_role("button", name="💬 대화")),
               "묻기: 시작 화면에서 탭이 살아 있음")
     # 장소 목록 — 오프라인에서도 답하려면 이 파일이 기기에 있어야 한다
     nearby = await pg.evaluate(
@@ -370,14 +384,14 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
               if nearby else "nearby.json 없음")
     # 목록이 공식 지정이 아니면 화면이 그 사실을 말해야 한다 — 대피소는 특히.
     if nearby and not nearby["official"]:
-        rep.check(await pg.get_by_text("참고용").count() > 0, "묻기: 출처가 참고용임을 표시")
+        rep.check(await visible(pg.get_by_text("참고용")), "묻기: 출처가 참고용임을 표시")
     # 촬영 화면 진입은 **폰에서만** 본다. 카메라를 켜면 MediaPipe와 인식 모델을
     # 함께 내려받아 소프트웨어 렌더링으로 몇 분이 걸린다 — 기기마다 되풀이할 이유가
     # 없다(화면 구성은 세 기기가 같은 컴포넌트다).
     if name == "폰":
         await pg.get_by_role("button", name="수어로 묻기").click()
         await pg.wait_for_timeout(2500)
-        rep.check(await pg.get_by_role("button", name="💬 답 받기").count() > 0,
+        rep.check(await visible(pg.get_by_role("button", name="💬 답 받기")),
                   "묻기: 촬영 화면 진입")
         # **화면이 실제로 자리를 차지하는가.** 버튼이 있는지만 보면 부모에서 높이를
         # 못 받아 카메라 칸이 0px로 찌부러진 것을 놓친다 — 실측에서 버튼만 화면
@@ -421,12 +435,12 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # 검색 결과로 돌아오는 데만 두 번을 더 눌러야 한다(실측 사진에서 그랬다).
     await pg.get_by_role("button", name="📖 사전").click()
     await pg.wait_for_timeout(700)
-    rep.check(await pg.get_by_text("낱말을 누르면 수어로 보여드려요").count() > 0,
+    rep.check(await visible(pg.get_by_text("낱말을 누르면 수어로 보여드려요")),
               "사전: 첫 화면에 시작 낱말")
     # 시작 낱말 '병원'은 DICT_STARTERS에 **반드시 있다.** 없으면 화면이 바뀐 것이니
     # 조용히 건너뛰지 말고 실패로 본다.
     starter = pg.get_by_role("button", name="병원", exact=True)
-    rep.check(await starter.count() > 0, "사전: 시작 낱말 '병원'이 있음")
+    rep.check(await visible(starter), "사전: 시작 낱말 '병원'이 있음")
     if await starter.count():
         await starter.first.click()
         played = False
@@ -438,7 +452,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
                 break
         rep.check(played, "사전: 낱말을 누르면 수어로 재생")
         # 탭이 그대로여야 한다 — 사전 안에서 보여주는 것이 요점이다
-        rep.check(await pg.get_by_placeholder("🔍 단어 찾기").count() > 0,
+        rep.check(await visible(pg.get_by_placeholder("🔍 단어 찾기")),
                   "사전: 재생해도 사전 화면에 머무름")
 
     # ── 손가락으로 누를 수 있는 크기인가(모바일 접근성 최소 44px)
@@ -468,7 +482,7 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     await pg.goto(f"http://127.0.0.1:{port}/#/app?kiosk=1", wait_until="domcontentloaded")
     await pg.wait_for_timeout(2000)
     await pg.wait_for_timeout(1500)
-    rep.check(await pg.get_by_text("어디에 계신가요?").count() > 0, "키오스크: 대화 화면으로 시작")
+    rep.check(await visible(pg.get_by_text("어디에 계신가요?")), "키오스크: 대화 화면으로 시작")
     rep.check(await pg.get_by_role("link", name="✕").count() == 0, "키오스크: 닫기 버튼 숨김")
 
     # ── **앞사람 대화가 남지 않는가.** 로비·창구에 세워 두는 기기는 여러 사람이
@@ -483,7 +497,7 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     await pg.wait_for_timeout(1500)
     # 장소 목록의 '병원'도 반드시 있다(places.ts 고정 목록).
     hospital = pg.get_by_role("button", name="🏥 병원")
-    rep.check(await hospital.count() > 0, "키오스크: 장소 목록에 병원이 있음")
+    rep.check(await visible(hospital), "키오스크: 장소 목록에 병원이 있음")
     if await hospital.count():
         await hospital.first.click()
         await pg.wait_for_timeout(800)
@@ -542,7 +556,7 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
     await ctx.set_offline(True)
     await pg.reload(wait_until="domcontentloaded")
     await pg.wait_for_timeout(2500)
-    rep.check(await pg.get_by_text("SignBridge").count() > 0, "오프라인: 앱이 열림")
+    rep.check(await visible(pg.get_by_text("SignBridge")), "오프라인: 앱이 열림")
 
     await pg.get_by_role("button", name="💬 대화").click()
     await pg.wait_for_timeout(600)
@@ -560,7 +574,7 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
     rep.check(best["frames"] > 20, "오프라인: 창구 문구가 수어로 재생",
               f"{best['frames']}프레임 · 단어 {best['glosses']}개")
     # 인터넷이 없으면 마이크는 원리상 안 된다 — 그 사실과 대안을 화면이 말해야 한다.
-    rep.check(await pg.get_by_text("인터넷이 없어요").count() > 0, "오프라인: 마이크 대안 안내")
+    rep.check(await visible(pg.get_by_text("인터넷이 없어요")), "오프라인: 마이크 대안 안내")
 
     # ── **묻기도 오프라인에서 살아 있어야 한다.** "재난 때가 곧 오프라인"이라
     # 적어 두고 정작 창구 화면만 재고 있었다. 대피소를 물어야 하는 순간이 바로
@@ -587,7 +601,7 @@ async def run_offline(browser, keep: bool, rep: Report, port: int) -> None:
             " return d.places.length; } catch { return 0; } }"
         )
         rep.check(places > 0, "오프라인: 주변 장소 목록이 캐시에서 열림", f"{places}곳")
-        rep.check(await pg.get_by_text("참고용").count() > 0,
+        rep.check(await visible(pg.get_by_text("참고용")),
                   "오프라인: 출처가 참고용임을 그대로 표시")
 
     if keep or rep.fails:

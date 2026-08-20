@@ -66,20 +66,22 @@ def main() -> int:
                 enough = info["h"] > 200 and (sid == "top" or info["len"] > 40)
                 ok(f"섹션 #{sid}", enough, f"높이 {info['h']}px · 글자 {info['len']}")
 
-            # 2) Q&A — 질문을 누르면 아바타가 재생되는가
+            # 2) Q&A — 질문을 누르면 답과 글로스가 채워지는가.
+            #    이 칸에는 아바타가 없다(답변과 글로스를 글자로 보여 준다).
+            #    아바타 재생은 위쪽 `#demo` 칸과 당사자 화면이 담당한다.
             pg.evaluate("document.querySelector('#qa')?.scrollIntoView({block:'center'})")
             pg.wait_for_timeout(1800)
             btns = pg.query_selector_all("#qa button")
-            if not btns:
-                ok("Q&A: 질문 버튼", False, "#qa 안에 버튼이 없다")
-            else:
-                ok("Q&A: 질문 버튼", True, f"{len(btns)}개")
+            ok("Q&A: 질문 버튼", bool(btns), f"{len(btns)}개")
+            if btns:
+                before = pg.evaluate("() => document.querySelector('#qa')?.innerText ?? ''")
                 btns[-1].click()
-                pg.wait_for_timeout(7000)
-                fr = pg.evaluate(
-                    "() => document.querySelector('#qa [data-sign-frames]')"
-                    "?.getAttribute('data-sign-frames') ?? '0'")
-                ok("Q&A: 답을 수어로 재생", int(fr) > 1, f"{fr}프레임")
+                pg.wait_for_timeout(4000)
+                after = pg.evaluate("() => document.querySelector('#qa')?.innerText ?? ''")
+                grew = len(after.strip()) > len(before.strip()) + 20
+                ok("Q&A: 질문을 누르면 답이 채워짐", grew,
+                   f"글자 {len(before.strip())}→{len(after.strip())}")
+                ok("Q&A: 수어 글로스가 함께 나옴", "글로스" in after or "수어" in after)
 
             # 3) 에이전트 콘솔이 내용을 채우는가
             pg.evaluate("document.querySelector('#agents')?.scrollIntoView({block:'center'})")

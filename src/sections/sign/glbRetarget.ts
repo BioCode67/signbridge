@@ -374,34 +374,101 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     // Build a keypoint-derived hand frame (3D only) so we can measure each
     // finger's lateral SPREAD, not just its curl.
     const spreadOK = use3d && buildKpHandFrame(h)
-    // Curl-based fingers: per joint, curl by the measured bend angle around the
-    // fixed knuckle axis (zero twist → no distortion). At the knuckle we ALSO
-    // add a clamped lateral spread so open/spread hand-shapes read correctly.
+    // ── 손가락: **손가락당 굽힘 하나**를 재고, 마디에 해부학 비율로 나눠 준다.
+    //
+    //  왜 마디별로 재지 않나. 손 키포인트에는 **깊이가 없다** — 세 번째 값이 전부
+    //  1.0인 자리표시자다(2026-08-20 확인). 그래서 마디 방향은 2D 투영뿐인데,
+    //  손가락이 카메라 쪽으로 굽으면 투영이 짧아져 **굽었는데 곧게 보인다.**
+    //  마디마다 각도를 뽑으면 그 오차가 세 번 곱해져 손이 뒤틀린다.
+    //
+    //  대신 **줄자 비율**을 쓴다. 손가락을 따라간 길이(마디 합)와 뿌리→끝 직선
+    //  거리의 비다.
+    //
+    //      곧게 편 손가락   직선 ≈ 마디 합        → 비율 ≈ 1
+    //      완전히 쥔 손가락 직선 ≪ 마디 합        → 비율 ≈ 0.3
+    //
+    //  이 비율은 **투영에 강하다** — 손가락이 카메라를 향하면 분자와 분모가 함께
+    //  줄어들어 비율이 거의 그대로다. 깊이가 없어도 굽힘 정도는 살아남는다.
+    //
+    //  나눠 주는 비율(MCP:PIP:DIP)은 사람 손의 실제 움직임을 따른다. 마디별
+    //  측정이 믿을 만할 때(마디가 충분히 길 때)는 그 비로 나누고, 아니면
+    //  해부학 기본비로 나눈다. 어느 쪽이든 **사람 손에서 나올 수 있는 자세만**
+    //  만들어진다 — 손이 꺾이거나 뒤틀리는 자세는 원리상 나오지 않는다.
+    const FLEX_SHARE: Record<string, number[]> = {
+      // 마디별 최대 굽힘(라디안). 엄지는 다른 손가락보다 덜 굽는다.
+      Thumb: [0.62, 0.95, 0.55],
+      Index: [1.30, 1.45, 0.85],
+      Middle: [1.32, 1.48, 0.88],
+      Ring: [1.30, 1.45, 0.85],
+      Pinky: [1.22, 1.40, 0.82],
+    }
+    /** 비율 → 굽힘(0~1). 1.0이면 곧게, 0.35 이하면 완전히 쥔 것으로 본다. */
+    const curlOf = (ratio: number) => {
+      const c = (1 - ratio) / 0.65
+      return c < 0 ? 0 : c > 1 ? 1 : c
+    }
+    const px = (i: number) => h[i * 3]
+    const py = (i: number) => h[i * 3 + 1]
+    const dist2 = (i: number, j: number) => Math.hypot(px(j) - px(i), py(j) - py(i))
+
     for (const fg of FINGERS) {
       const segs = HAND_SEGS[fg]
-      let prev = handDir(h, 0, segs[0][0]) // metacarpal reference (wrist→first joint)
+      const root = segs[0][0]
+      const tip = segs[2][1]
+      // 마디 합과 직선 거리. 하나라도 0점(미검출)이면 이 손가락은 건드리지 않는다.
+      let chain = 0
+      let bad = false
+      for (const [a, b] of segs) {
+        if ((px(a) === 0 && py(a) === 0) || (px(b) === 0 && py(b) === 0)) { bad = true; break }
+        chain += dist2(a, b)
+      }
+      if (bad || chain <= 1e-3) continue
+      const ratio = dist2(root, tip) / chain
+      const curl = curlOf(ratio)
+
+      // 마디별 측정이 믿을 만하면 그 비로 나눈다(손모양을 더 살린다).
+      const raw: number[] = []
+      let prev = handDir(h, 0, root)
+      let usable = 0
       for (let k = 0; k < 3; k++) {
         const [a, b] = segs[k]
         const cur = handDir(h, a, b)
+        if (cur && prev) {
+          raw.push(Math.acos(Math.max(-1, Math.min(1, prev.dot(cur)))))
+          usable += 1
+        } else raw.push(-1)
+        if (cur) prev = cur
+      }
+      const rawSum = raw.reduce((t, v) => t + (v > 0 ? v : 0), 0)
+      const share = FLEX_SHARE[fg]
+      const useRaw = usable >= 2 && rawSum > 0.15
+
+      for (let k = 0; k < 3; k++) {
         const info = rig.get(`${Side}Hand${fg}${k + 1}`)
-        if (info && info.flex && cur && prev) {
-          const ang = Math.min(FINGER_FLEX_MAX, Math.acos(Math.max(-1, Math.min(1, prev.dot(cur)))))
-          _fq.setFromAxisAngle(info.flex, -ang) // curl toward the palm
-          let spread = 0
-          if (spreadOK && k === 0 && fg !== 'Thumb' && info.abduct && info.restLat != null) {
-            const curLat = Math.atan2(cur.dot(_kSide), cur.dot(_kFwd))
+        if (!info || !info.flex) continue
+        // 이 마디가 받을 몫 — 측정이 믿을 만하면 측정 비, 아니면 해부학 비.
+        const w = useRaw && raw[k] > 0
+          ? raw[k] / rawSum
+          : share[k] / (share[0] + share[1] + share[2])
+        const ang = Math.min(FINGER_FLEX_MAX, curl * (share[0] + share[1] + share[2]) * w)
+        _fq.setFromAxisAngle(info.flex, -ang) // 손바닥 쪽으로만 굽는다
+
+        let spread = 0
+        if (spreadOK && k === 0 && fg !== 'Thumb' && info.abduct && info.restLat != null) {
+          const cur0 = handDir(h, segs[0][0], segs[0][1])
+          if (cur0) {
+            const curLat = Math.atan2(cur0.dot(_kSide), cur0.dot(_kFwd))
             spread = Math.max(-FINGER_SPREAD_MAX, Math.min(FINGER_SPREAD_MAX, curLat - info.restLat))
           }
-          if (spread !== 0 && info.abduct) {
-            _sq.setFromAxisAngle(info.abduct, spread)
-            _bq.copy(info.bind).multiply(_sq).multiply(_fq)
-          } else {
-            _bq.copy(info.bind).multiply(_fq)
-          }
-          if (Number.isFinite(_bq.x + _bq.y + _bq.z + _bq.w)) info.smooth.slerp(_bq, SMOOTH_FINGER)
-          info.bone.quaternion.copy(info.smooth)
         }
-        if (cur) prev = cur
+        if (spread !== 0 && info.abduct) {
+          _sq.setFromAxisAngle(info.abduct, spread)
+          _bq.copy(info.bind).multiply(_sq).multiply(_fq)
+        } else {
+          _bq.copy(info.bind).multiply(_fq)
+        }
+        if (Number.isFinite(_bq.x + _bq.y + _bq.z + _bq.w)) info.smooth.slerp(_bq, SMOOTH_FINGER)
+        info.bone.quaternion.copy(info.smooth)
       }
     }
   }

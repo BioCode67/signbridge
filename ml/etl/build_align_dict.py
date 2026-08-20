@@ -105,6 +105,45 @@ _SEED_TAILS = {
 # 재난문자 머리말 `[기관명]` — 내용이 아니라 보낸 곳 표시다.
 _SENDER_RE = re.compile(r"^\s*\[[^\]]{1,20}\]\s*")
 
+# 행정구역 이름 — **지명 오염을 막는 데 쓴다.**
+#
+# 재난문자에는 지역명이 늘 붙어 있어, 공기 통계만 보면 지명이 아무 낱말에나
+# 달라붙는다: `계곡물 → 도청`, `시민여러분 → 당진1`, `의료진 → 순창2`.
+# 화면에서는 아바타가 멀쩡히 지명 수어를 하므로 눈으로는 못 잡는다.
+#
+# OSM 행정구역(relation)에서만 뽑았다 — `place` 노드까지 넣으면 `검사`·`시장`
+# 같은 흔한 낱말이 섞여 멀쩡한 매핑까지 지운다(실측: 오탐 24.3% → 0.06%).
+#   받는 법: bash ml/tools/fetch_place_names.sh > /tmp/p.json
+_PLACE_FILE = Path(__file__).resolve().parents[2] / "ml/data/place_names.txt"
+PLACE_NAMES: set[str] = set()
+if _PLACE_FILE.exists():
+    PLACE_NAMES = {w.strip() for w in _PLACE_FILE.read_text(encoding="utf-8").split() if w.strip()}
+
+
+def _drop_place_noise(word: str, cands: list[str]) -> list[str]:
+    """첫 후보가 **지명인데 낱말은 지명이 아닌** 자리를 바로잡는다.
+
+    ① 뒤 후보 중 낱말과 글자가 겹치는 것이 있으면 그것을 앞으로
+       (`전주천 → 미산` 이었는데 뒤에 `전주`가 있었다)
+    ② 없으면 지명 후보를 버린다. 남는 게 없으면 **빈 목록**을 돌려준다 —
+       틀린 수어를 내보내느니 표현하지 않는 편이 낫다.
+    """
+    if not PLACE_NAMES or not cands:
+        return cands
+    head = normalize_gloss(cands[0]) if cands else ""
+    head = re.sub(r"[0-9#]+$", "", head)
+    if head not in PLACE_NAMES:
+        return cands
+    if word in PLACE_NAMES or re.sub(r"[0-9#]+$", "", word) in PLACE_NAMES:
+        return cands            # 낱말 자체가 지명이면 맞는 것이다
+    if set(word) & set(head):
+        return cands            # 글자가 겹치면 활용형일 수 있다
+    better = next((g for g in cands[1:]
+                   if set(word) & set(re.sub(r"[0-9#]+$", "", str(g)))), None)
+    if better:
+        return [better] + [g for g in cands if g != better]
+    return [g for g in cands[1:] if re.sub(r"[0-9#]+$", "", str(g)) not in PLACE_NAMES]
+
 SEED_OVERRIDES = {
     # ── 2026-08-20 실측 오역 교정.
     # 재난문자에는 지역명이 늘 붙어 있어 아무 낱말에나 지명이 달라붙는다
@@ -867,6 +906,9 @@ def main() -> None:
             exact = lemma_best.get(word[:-1] + "다")  # 마시기 → 마시다
         if exact:
             cands = [exact] + [g for g in cands if g != exact]
+        cands = _drop_place_noise(word, cands)
+        if not cands:
+            continue
         table[word] = cands[: args.top]
 
     # 공기 통계에 안 잡혔더라도 표제어가 곧 낱말인 글로스는 사전에 넣는다 —

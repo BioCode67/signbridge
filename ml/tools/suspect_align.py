@@ -93,6 +93,11 @@ def main() -> None:
     #   · 행정구역 꼬리(시·군·구·동·읍·면·리·로·길·도)로 끝나는 두 글자 이상 글로스.
     # 낱말 자체가 그 지명을 품고 있으면(`강동구 → 강동2`) 정상이므로 표시하지 않는다.
     place: set[str] = set()
+    # OSM 행정구역 이름 — 2026-08-20에 받아 뒀다(`ml/tools/fetch_place_names.sh`).
+    # 지문자 목록은 서울 위주라, 전국 행정구역을 함께 보면 지방 지명도 잡힌다.
+    osm = Path(__file__).resolve().parents[2] / "ml/data/place_names.txt"
+    if osm.exists():
+        place |= {w.strip() for w in osm.read_text(encoding="utf-8").split() if len(w.strip()) >= 2}
     fs_root = Path.home() / "sbdata/sl-crowd"
     if fs_root.exists():
         for path in fs_root.rglob("*_morpheme.json"):

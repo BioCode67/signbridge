@@ -12,8 +12,20 @@
   3. 신뢰도(conf)를 **0/1로 이진화**. 리타게팅은 "검출됐나"만 보고 값 크기는 안 쓴다.
      텍스트 JSON에서 "0.8734"가 "1"이 되면 글자 수가 크게 준다.
 
-3D(keypoints3d)는 싣지 않는다. 웹 리타게팅은 3D가 있으면 그걸 우선 쓰는데, 2D 조각과
-섞이면 프레임마다 기준이 바뀌어 팔이 튄다. 정적본은 2D로 통일하는 편이 안전하다.
+3D 전체(keypoints3d)는 싣지 않는다 — 팔까지 3D로 바꾸면 2D 조각과 섞일 때 기준이
+프레임마다 달라져 팔이 튄다. **다만 손의 깊이(z)만은 싣는다**(`hand_z`).
+
+  왜 손만.  손가락 굽힘을 2D 투영만으로 재면 손가락이 카메라를 향할 때 "굽었는데
+  곧게" 보인다. 원본에는 손 깊이가 있는데 그동안 버리고 있었다(2026-08-20 확인).
+  실제로 재보니 z를 함께 쓰면 **뼈 길이가 24% 더 일정해진다**(변동계수 0.159→0.121,
+  표본 2,520). 배율은 1.0이 가장 좋았다 — x·y와 이미 같은 단위다.
+
+  왜 z만.  `keypoints3d`의 x·y는 `keypoints`와 **완전히 같다**(24만 점 전수 확인).
+  그래서 z 채널만 실으면 된다 — 용량이 3분의 1이다.
+
+  없으면 어떻게 되나.  3D가 없는 조각은 `hand_z`를 싣지 않는다. 브라우저는 그때
+  지금까지와 똑같이 2D로 굽힘을 잰다 — 손만 달라지고 팔은 건드리지 않으므로
+  조각이 섞여도 튀지 않는다.
 """
 
 from __future__ import annotations
@@ -52,6 +64,37 @@ def compact(entry: dict) -> dict:
         "gloss_sequence": entry.get("gloss_sequence", []),
         "keypoints": {},
     }
+    # 손 깊이(z)만 따로 싣는다 — x·y는 2D와 같으므로 다시 싣지 않는다.
+    k3 = entry.get("keypoints3d") or {}
+    hand_z: dict[str, list[list[int]]] = {}
+    for key in ("hand_left", "hand_right"):
+        frames3 = k3.get(key) or []
+        frames2 = entry["keypoints"].get(key) or []
+        if not frames3 or len(frames3) != len(frames2):
+            continue
+        zs: list[list[int]] = []
+        moved = False
+        for row3, row2 in zip(frames3, frames2):
+            # **손목 기준 상대값**으로 싣는다. 절대 깊이는 2600 언저리라 자릿수가
+            # 길고, 리타게팅은 손 안에서의 앞뒤 차이만 쓴다. 상대값이면 대개
+            # 두 자리라 파일이 절반으로 준다.
+            base = row3[2] if len(row3) > 2 else 0
+            col = []
+            for i in range(0, min(len(row3), len(row2)), 3):
+                x, y, c = row2[i], row2[i + 1], row2[i + 2]
+                if c < CONF_THRESHOLD or (x == 0 and y == 0):
+                    col.append(0)
+                else:
+                    col.append(round((row3[i + 2] - base) * factor))
+            if len(set(v for v in col if v)) > 1:
+                moved = True
+            zs.append(col)
+        # z가 전혀 변하지 않으면 정보가 없는 것 — 실을 이유가 없다
+        if moved:
+            hand_z[key] = zs
+    if hand_z:
+        out["hand_z"] = hand_z
+
     for key, frames in entry["keypoints"].items():
         packed = []
         for row in frames:

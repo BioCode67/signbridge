@@ -161,6 +161,11 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         is_mobile=mobile, has_touch=mobile,
         # 서비스워커가 붙으면 이전 배포본이 캐시에서 나온다 — 지금 만든 것을 봐야 한다.
         service_workers="block",
+        # 위치를 준다. 없으면 `묻기`의 **답변 화면과 방향 지도가 통째로 검사 밖**에
+        # 남는다 — 계산이 맞는지는 check_nearby.mjs가 재지만, 그림이 실제로
+        # 그려지는지는 아무도 재지 않았다(2026-08-20에 알았다). 서울시청 좌표.
+        geolocation={"latitude": 37.5665, "longitude": 126.9780},
+        permissions=["geolocation"],
     )
     await ctx.add_init_script(TTS_STUB)
     pg = await ctx.new_page()
@@ -283,6 +288,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     except Exception:
         info_ok = False
     rep.check(info_ok, "대화: 내 정보 입구")
+
     await pg.get_by_role("button", name="🏥 병원").click()
     await pg.wait_for_timeout(500)
     # 직원 안내 — 창구에서 가장 먼저 보이는 화면이다. 사라지면 직원이 쓸 줄 모른다.
@@ -385,6 +391,52 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # 목록이 공식 지정이 아니면 화면이 그 사실을 말해야 한다 — 대피소는 특히.
     if nearby and not nearby["official"]:
         rep.check(await visible(pg.get_by_text("참고용")), "묻기: 출처가 참고용임을 표시")
+
+    # ── 답변 화면과 방향 지도. **눌러서 묻는 길**로 확인한다(카메라 없이 된다).
+    # 여기까지 오지 않으면 방향 지도가 그려지는지 아무도 모른다. 화살표도 숫자도
+    # 다 뜨는데 엉뚱한 쪽을 가리키는 실패가 이 앱에 실제로 있었다.
+    shelter = pg.get_by_role("button", name=re.compile("대피소 어디"))
+    if await visible(shelter, 8000):
+        await shelter.first.click()
+        # 답이 만들어지고 아바타가 붙을 때까지 기다린다
+        got = await visible(pg.get_by_text(re.compile(r"(미터|킬로미터)")), 20000)
+        rep.check(got, "묻기: 눌러서 물으면 답이 나온다")
+        if got:
+            body = await pg.inner_text("body")
+            rep.check(any(d in body for d in ("북", "남", "동", "서")), "묻기: 방위가 표시된다")
+            # 방향 지도 — 나침반 글자와 목표 표시가 **그려져** 있어야 한다.
+            m = await pg.evaluate("""() => {
+              const svg = [...document.querySelectorAll('svg')]
+                .find(s => (s.getAttribute('aria-label') || '').includes('쪽'))
+              if (!svg) return null
+              const r = svg.getBoundingClientRect()
+              const txt = [...svg.querySelectorAll('text')].map(t => t.textContent)
+              const line = svg.querySelector('line')
+              return { w: Math.round(r.width), labels: txt,
+                       hasLine: !!line,
+                       len: line ? Math.hypot(line.x2.baseVal.value - line.x1.baseVal.value,
+                                              line.y2.baseVal.value - line.y1.baseVal.value) : 0 }
+            }""")
+            rep.check(bool(m) and m["w"] > 100, "묻기: 방향 지도가 그려짐",
+                      f"{m['w']}px" if m else "svg 없음")
+            if m:
+                rep.check(all(k in m["labels"] for k in ("북", "동", "남", "서")),
+                          "묻기: 나침반 네 방위", str(m["labels"])[:40])
+                # 목표 선의 길이가 0이면 **중앙에 붙어 있다** — 방향이 계산되지 않은 것
+                rep.check(m["hasLine"] and m["len"] > 5, "묻기: 목표가 중앙이 아님",
+                          f"선 길이 {m['len']:.0f}px")
+            # 아바타가 답을 수어로 재생하는가
+            fr = await pg.evaluate(
+                "() => document.querySelector('[data-sign-frames]')"
+                "?.getAttribute('data-sign-frames') ?? '0'")
+            rep.check(int(fr) > 1, "묻기: 답을 수어로 재생", f"{fr}프레임")
+        # 다음 검사를 위해 시작 화면으로 되돌린다
+        again = pg.get_by_role("button", name=re.compile("또 묻기"))
+        if await again.count():
+            await again.first.click()
+            await pg.wait_for_timeout(800)
+    else:
+        rep.check(False, "묻기: 눌러서 묻는 버튼")
     # 촬영 화면 진입은 **폰에서만** 본다. 카메라를 켜면 MediaPipe와 인식 모델을
     # 함께 내려받아 소프트웨어 렌더링으로 몇 분이 걸린다 — 기기마다 되풀이할 이유가
     # 없다(화면 구성은 세 기기가 같은 컴포넌트다).
@@ -462,6 +514,43 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         ".map(b=>b.textContent.trim().slice(0,10))"
     )
     rep.check(len(small) == 0, "버튼 높이 36px 이상", f"작은 버튼 {small[:4]}" if small else "")
+
+    # 🆘 긴급 화면 — **지금까지 아무도 재지 않던 자리다.**
+    # 농인이 말이 안 통하는 응급 상황에서 상대에게 보여 주는 화면이다.
+    # 조용히 비어 있으면 정작 그때 아무것도 못 보여 준다.
+    #
+    # **맨 뒤에서 독립적으로 한다.** 처음에는 대화 흐름 중간에 끼워 넣었는데,
+    # 닫고 나온 자리가 뒤 검사가 기대하는 화면과 달라 그 뒤가 전부 무너졌다
+    # (2026-08-20). 검사가 검사를 깨뜨리면 무엇이 진짜 고장인지 알 수 없다.
+    await pg.goto(f"http://127.0.0.1:{port}/#/app", wait_until="domcontentloaded")
+    await pg.wait_for_timeout(2500)
+    talk = pg.get_by_role("button", name=re.compile("대화"))
+    if await visible(talk, 10000):
+        await talk.first.click()
+        await pg.wait_for_timeout(1200)
+        place = pg.get_by_role("button", name=re.compile("병원"))
+        if await visible(place, 10000):
+            await place.first.click()
+            await pg.wait_for_timeout(1500)
+        sos_btn = pg.get_by_role("button", name=re.compile("긴급 도움"))
+        if await visible(sos_btn, 10000):
+            rep.check(True, "긴급: 입구가 있다")
+            await sos_btn.first.click()
+            rep.check(await visible(pg.get_by_text(re.compile("청각장애인"))),
+                      "긴급: 첫 문구 — 청각장애인임을 알림")
+            await pg.get_by_text("화면을 탭하면 다음 문구").first.click()
+            await pg.wait_for_timeout(400)
+            rep.check(await visible(pg.get_by_text(re.compile("119"))),
+                      "긴급: 탭하면 119 신고 문구")
+            body = await pg.inner_text("body")
+            rep.check("위치" in body or "좌표" in body or "소리로" in body,
+                      "긴급: 위치·소리 안내가 있음")
+            await pg.get_by_role("button", name=re.compile("닫기")).first.click()
+            await pg.wait_for_timeout(800)
+            gone = not await pg.get_by_text(re.compile("화면을 탭하면 다음 문구")).count()
+            rep.check(gone, "긴급: 닫으면 화면이 사라짐")
+        else:
+            rep.check(False, "긴급: 입구가 있다")
 
     real_errors = [e for e in errors if "vibrate" not in e]
     rep.check(not real_errors, "콘솔 오류 없음", str(real_errors[:2]))

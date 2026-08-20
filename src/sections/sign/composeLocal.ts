@@ -8,6 +8,7 @@
 // 조각마다 촬영한 사람·거리·화면 위치가 다르다. 그대로 이으면 단어가 바뀔 때마다
 // 아바타가 순간이동한다. 그래서 각 조각을 **어깨중점 원점 · 어깨너비 스케일**로 옮긴 뒤
 // 공통 화면 좌표로 되돌리고, 조각 사이에 몇 프레임을 보간해 잇는다.
+import { readableGloss } from './mouthing'
 import type { SignData } from './signTypes'
 
 const BANK_FPS = 30
@@ -55,9 +56,6 @@ function loadMouthTable(base: string): Promise<void> {
   return mouthLoading
 }
 
-/** 순한글 낱말인가 — 숫자·기호·`시:9시`·`날짜:6월23일` 같은 이름은 뺀다. */
-const PLAIN_KOREAN = /^[가-힣]{1,5}$/
-
 function mouthOf(gloss: string): string | undefined {
   const lemma = headLemma(gloss)
   const hit = mouthTable?.[gloss] ?? mouthTable?.[lemma]
@@ -74,7 +72,8 @@ function mouthOf(gloss: string): string | undefined {
   //
   // 뜻이 어긋날 위험은 낮다 — 입이 내는 것이 곧 지금 하는 수어의 이름이다.
   // 다만 `시:9시`·`날짜:6월23일`·`물결표1`처럼 이름이 낱말이 아닌 것은 뺀다.
-  return PLAIN_KOREAN.test(lemma) ? lemma : undefined
+  // 시각·날짜는 국어 수 읽기 규칙으로 옮긴다(`시:9시` → 아홉시).
+  return readableGloss(gloss) ?? undefined
 }
 
 /** 글로스 이름에서 이형태 번호를 뗀 표제어 — 표는 표제어로 되어 있다. */

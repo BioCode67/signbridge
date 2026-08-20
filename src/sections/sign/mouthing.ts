@@ -126,3 +126,69 @@ export function mouthTimeline(word: string, frames: number): MouthFrame[] {
   }
   return out
 }
+
+
+// ── 시각·날짜 글로스의 입모양 ────────────────────────────────────────────
+//
+// `시:9시`·`날짜:6월23일` 같은 이름은 낱말이 아니라 숫자라서 그대로는 입을
+// 움직일 수 없다. 그런데 재난문자에는 시각·날짜가 거의 문장마다 나온다 —
+// 그 구간만 입이 다물려 있으면 눈에 띈다.
+//
+// **읽는 법은 지어내지 않는다.** 한국어 수 읽기는 규칙이 정해져 있고, 원본
+// 주석자도 `시:9시 → 9시`처럼 숫자를 그대로 적어 두어 읽기를 알려 주지 않는다.
+// 그래서 **국어 규칙 그대로** 옮긴다. 불규칙한 자리(유월·시월)까지 넣었다.
+
+/** 한자어 수 — 분·일·월·년에 쓴다(십일, 이십삼…). */
+const SINO_ONES = ['', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
+export function sinoNumber(n: number): string {
+  if (n <= 0) return '공'
+  if (n > 9999) return String(n)
+  // 자리마다 `일`을 붙이지 않는다 — 100은 `일백`이 아니라 `백`이다.
+  let out = ''
+  for (const [unit, name] of [[1000, '천'], [100, '백'], [10, '십']] as const) {
+    const d = Math.floor(n / unit) % 10
+    if (d) out += (d > 1 ? SINO_ONES[d] : '') + name
+  }
+  return out + SINO_ONES[n % 10]
+}
+
+/** 고유어 수 — **시(時)에만** 쓴다(한 시, 두 시…). 열두 시까지. */
+const NATIVE_HOUR = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟',
+  '아홉', '열', '열한', '열두']
+
+/** 달 이름 — **6월은 `유월`, 10월은 `시월`**이다(육월·십월이 아니다). */
+function monthWord(m: number): string {
+  if (m === 6) return '유월'
+  if (m === 10) return '시월'
+  return sinoNumber(m) + '월'
+}
+
+/**
+ * 시각·날짜 글로스를 입으로 읽을 한국어로 바꾼다. 낱말이면 그대로 돌려준다.
+ *
+ *     시:9시       → 아홉시          (13시 이상은 한자어 — "이십일시")
+ *     시:2시5분    → 두시오분
+ *     날짜:6월23일 → 유월이십삼일
+ */
+export function readableGloss(gloss: string): string | null {
+  // **꼴이 정해진 것부터 본다.** 숫자를 먼저 떼면 `시:9시`가 `시시`가 되어
+  // 그대로 낱말처럼 통과한다(2026-08-20에 실제로 그렇게 넣었다가 검사가 잡았다).
+  const time = /^시:(-?)(\d{1,2})시(?:(\d{1,2})분)?$/.exec(gloss)
+  if (time) {
+    const h = Number(time[2])
+    // 0시는 `공시`가 아니라 **영시**다(`00시53분` → 영시오십삼분).
+    const hour = h === 0 ? '영시'
+      : h >= 1 && h <= 12 ? NATIVE_HOUR[h] + '시'
+        : sinoNumber(h) + '시'
+    const min = time[3] ? sinoNumber(Number(time[3])) + '분' : ''
+    return hour + min
+  }
+  const date = /^날짜:(\d{1,2})월(\d{1,2})일$/.exec(gloss)
+  if (date) return monthWord(Number(date[1])) + sinoNumber(Number(date[2])) + '일'
+  // 숫자만 있는 글로스(`463`)도 한자어로 읽는다 — 네 자리까지.
+  if (/^\d{1,4}$/.test(gloss)) return sinoNumber(Number(gloss))
+  // 이형태 번호는 **가운데에도 들어간다**(`자동차2밀리다`). 전부 떼고 본다.
+  const lemma = gloss.replace(/[0-9#:@]/g, '')
+  // 여덟 음절까지 — `광주광역시청`·`세종특별자치시` 같은 이름도 입으로 낸다.
+  return /^[가-힣]{1,8}$/.test(lemma) ? lemma : null
+}

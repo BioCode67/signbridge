@@ -33,9 +33,10 @@ for (const name of ['일상회화', '창구대화', '길찾기', '행동요령']
 }
 
 const lemma = (g) => g.replace(/[0-9#:@]+$/, '')
-// 앱과 같은 되돌림 — 표에 없으면 글로스 이름 그대로 발음한다(실측 73.8%가 그렇다).
-const PLAIN = /^[가-힣]{1,5}$/
-const has = (g) => !!(mouth[g] || mouth[lemma(g)] || PLAIN.test(lemma(g)))
+// **앱과 같은 함수를 쓴다.** 여기서 따로 규칙을 적으면 "검사는 통과하는데
+// 화면은 다르다"가 된다 — 이 프로젝트에서 가장 찾기 어려운 실패다.
+const { readableGloss } = await import('../src/sections/sign/mouthing.ts')
+const has = (g) => !!(mouth[g] || mouth[lemma(g)] || readableGloss(g))
 const stat = new Map()
 const missing = new Map()
 for (const r of rows) {

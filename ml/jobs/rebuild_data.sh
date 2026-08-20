@@ -74,3 +74,8 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 # 사전을 다시 만들면 글로스 이름이 그대로 파일명이 된다. 웹에서는 아무 문자나
 # 되지만 **윈도우는 `:`를 못 쓴다** — 노트북용 zip이 안 풀린다(2026-08-19 실측).
 node scripts/check_filenames.mjs
+
+# 글로스가 통째로 비면 아바타가 아무것도 안 한다 — 표현률로는 안 잡히는
+# 문장 단위 실패다(2026-08-20: 476문장 중 20개가 `X 주세요` 꼴로 비어 있었다).
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_empty_gloss.mjs

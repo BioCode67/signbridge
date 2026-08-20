@@ -580,6 +580,9 @@ def conjugations(stem_word: str) -> list[str]:
                   stem_word + harmony + "서", stem_word + harmony + "야",
                   stem_word + harmony + "집니다", stem_word + harmony + "졌"]
         forms += [stem_word + "은", stem_word + "습니다", stem_word + "습니까",
+                  # 2026-08-20 창구 문장 검토에서 빠진 꼴 — 물음·청유의 기본이다.
+                  #   "어디가 아픕니까" · "검사 결과를 봅시다" · "아픈가요"
+                  stem_word + "는가요", stem_word + "은가요", stem_word + "읍시다",
                   stem_word + "으면", stem_word + "으세요", stem_word + "으니",
                   stem_word + "을", stem_word + "을까요", stem_word + "을게요", stem_word + "으시면",
                   stem_word + "으셨", stem_word + "으신가요"]
@@ -589,6 +592,10 @@ def conjugations(stem_word: str) -> list[str]:
         forms.append(head + _compose(cho, jung, 17) + "니다")  # 17 = 종성 ㅂ
         forms.append(head + _compose(cho, jung, 4) + "다")  # 4 = 종성 ㄴ (온다·간다)
         forms.append(head + _compose(cho, jung, 4))  # 관형형: 나온·온·간
+        # -ㄴ가요 / -ㅂ니까 / -ㅂ시다 — 받침으로 붙는다(아프 → 아픈가요·아픕니까, 보 → 봅시다)
+        forms.append(head + _compose(cho, jung, 4) + "가요")   # ㄴ + 가요
+        forms.append(head + _compose(cho, jung, 17) + "니까")  # ㅂ + 니까
+        forms.append(head + _compose(cho, jung, 17) + "시다")  # ㅂ + 시다
         # 받침 없는 어간에는 'ㄹ'이 받침으로 붙는다: 되 + ㄹ까요 → 될까요
         forms.append(head + _compose(cho, jung, 8) + "까요")
         forms.append(head + _compose(cho, jung, 8) + "게요")

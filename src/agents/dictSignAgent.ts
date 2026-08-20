@@ -571,6 +571,18 @@ export class DictSignAgent implements SignAgent {
       // 그대로 "글로스"라고 내놓지만 동작 사전에 그런 조각이 없어 **아바타가 서 있는다** —
       // 화면상 정상처럼 보이는 조용한 실패다(실측: 일상 문장 22종이 이렇게 증발).
       // 표현할 수 없다는 사실을 낱말 카드로 정직하게 보여주는 편이 낫다.
+      //
+      // **다만 요청 꼴은 살린다.** "처방전 주세요"는 낱말 카드로 `처방전`이 뜨지만
+      // 아바타는 가만히 서 있다 — 창구에서 **"요청"이라는 뜻 자체가 사라진다.**
+      // 실측 476문장 중 20문장이 이랬고 전부 `X 주세요` 꼴이었다. 제외어 `주세요`를
+      // 여기서만 `주다`로 살려, 카드(무엇을) + 수어(달라)로 뜻이 이어지게 한다.
+      if (/(주세요|주십시오|주시겠|줘요|주세|드릴까요|드릴게요|드리겠|드립니다)/.test(text)) {
+        const give = table['주다'] ?? table['주']
+        if (give?.length) {
+          this.lastBackend = 'dict'
+          return { text, gloss: [give[0]], unmatched }
+        }
+      }
       this.lastBackend = 'dict'
       return { text, gloss: [], unmatched }
     }
@@ -585,6 +597,35 @@ export class DictSignAgent implements SignAgent {
       const prev = squashed[squashed.length - 1]
       if (prev && glossLabel(prev) === glossLabel(g)) continue
       squashed.push(g)
+    }
+
+    // **글로스가 통째로 비면 아바타가 아무것도 안 한다.**
+    //
+    //   "처방전 주세요" → 처방전(수어 없음) + 주세요(제외어) → 빈 목록
+    //
+    // 낱말 카드로 `처방전`은 뜨지만 아바타는 가만히 서 있다. 창구에서 이건
+    // "요청"이라는 뜻 자체가 사라진 것이다(실측: 476문장 중 20문장이 이랬고
+    // 전부 `X 주세요` 꼴이었다).
+    //
+    // 그래서 **비었을 때만** 제외어를 한 번 풀어 준다. 제외어는 원래 뜻이 없어서
+    // 뺀 것이지만, 그것마저 없으면 아무 뜻도 못 전한다 — 덜 정확한 편이
+    // 아무것도 안 하는 것보다 낫다. 비지 않은 문장은 건드리지 않는다.
+    if (squashed.length === 0) {
+      // ① 요청 꼴이면 `주다` — "처방전 주세요"의 뜻은 **요청**이다.
+      if (/(주세요|주십시오|주시겠|줘요|주라|주세|부탁)/.test(text)) {
+        const give = table['주다'] ?? table['주']
+        if (give?.length) squashed.push(give[0])
+      }
+      // ② 그래도 비면 아무 내용어나 하나 — 아무것도 안 하는 것보다 낫다.
+      if (squashed.length === 0) {
+        for (const w of text.match(/[가-힣]{2,}/g) ?? []) {
+          for (const form of stemChain(w)) {
+            const hit = table[form]
+            if (hit?.length) { squashed.push(hit[0]); break }
+          }
+          if (squashed.length) break
+        }
+      }
     }
 
     this.lastBackend = 'dict'

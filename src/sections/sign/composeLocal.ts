@@ -36,6 +36,47 @@ function loadHeadTable(base: string): Promise<void> {
   return headLoading
 }
 
+/** 마우징 표 — 글로스 → 입으로 내는 한국어 낱말.
+ *
+ *  `Mmo` 채널만 `descriptor`(무엇을)가 채워져 있어 이것만 만들 수 있다.
+ *  눈썹(EBf 7건)·고개(Hno 10건)는 "언제"만 있고 "어떻게"가 비어 있다. */
+let mouthTable: Record<string, string> | null = null
+let mouthLoading: Promise<void> | null = null
+function loadMouthTable(base: string): Promise<void> {
+  if (mouthLoading) return mouthLoading
+  mouthLoading = fetch(`${base}data/mouthing.json`)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((t) => {
+      mouthTable = t && typeof t === 'object' ? t : null
+    })
+    .catch(() => {
+      mouthTable = null
+    })
+  return mouthLoading
+}
+
+/** 순한글 낱말인가 — 숫자·기호·`시:9시`·`날짜:6월23일` 같은 이름은 뺀다. */
+const PLAIN_KOREAN = /^[가-힣]{1,5}$/
+
+function mouthOf(gloss: string): string | undefined {
+  const lemma = headLemma(gloss)
+  const hit = mouthTable?.[gloss] ?? mouthTable?.[lemma]
+  if (hit) return hit
+  // **표에 없으면 글로스 이름 그대로 발음한다.**
+  //
+  // 지어내는 것이 아니다 — 실측으로 확인한 기본값이다. 원본에서 뽑은 마우징
+  // 2,081종 가운데 **1,535종(73.8%)이 글로스 이름과 같았다.** 마우징은 원래
+  // "지금 하는 수어의 한국어 낱말"을 입으로 내는 것이라 그렇다.
+  //
+  // 이 되돌림이 없으면 `안전1`·`대피0`·`화재`·숫자처럼 **가장 자주 나오는
+  // 낱말들이 통째로 입을 다문다**(실측: 수록률 46.9%에서 멈췄다). 원본은
+  // 재난문자 225개 문장에서 뽑은 것이라 창구·일상 낱말이 거의 없다.
+  //
+  // 뜻이 어긋날 위험은 낮다 — 입이 내는 것이 곧 지금 하는 수어의 이름이다.
+  // 다만 `시:9시`·`날짜:6월23일`·`물결표1`처럼 이름이 낱말이 아닌 것은 뺀다.
+  return PLAIN_KOREAN.test(lemma) ? lemma : undefined
+}
+
 /** 글로스 이름에서 이형태 번호를 뗀 표제어 — 표는 표제어로 되어 있다. */
 const headLemma = (g: string) => g.replace(/[0-9#:@]+$/, '')
 
@@ -188,7 +229,7 @@ export async function composeGlosses(
   loadGloss: (name: string, entry: BankEntry) => Promise<SignData>,
 ): Promise<ComposeResult | null> {
   const pieces: Piece[] = []
-  const timeline: { gloss: string; start: number; end: number; head?: 'nod' | 'shake' }[] = []
+  const timeline: { gloss: string; start: number; end: number; head?: 'nod' | 'shake'; mouth?: string }[] = []
   const missing: string[] = []
   let cursor = 0
 
@@ -202,7 +243,9 @@ export async function composeGlosses(
   // **기다렸다 쓴다.** 시작만 걸어 두면 표가 도착하기 전에 타임라인이 끝나서
   // **첫 문장에만 고개 동작이 안 붙는다**(실측). 파일은 작고 한 번만 받으므로
   // 기다리는 비용이 없다시피 하다 — 두 번째 문장부터는 이미 끝나 있다.
-  await loadHeadTable(import.meta.env?.BASE_URL ?? './')
+  const base = import.meta.env?.BASE_URL ?? './'
+  await loadHeadTable(base)
+  await loadMouthTable(base)
   const unique = [...new Set(glosses)].filter((g) => bank[g])
   const loaded = new Map<string, SignData>()
   await Promise.all(
@@ -258,7 +301,7 @@ export async function composeGlosses(
     const start = cursor / BANK_FPS
     pieces.push(piece)
     cursor += piece.pose.length
-    timeline.push({ gloss, start, end: cursor / BANK_FPS, head: headMotion(gloss) })
+    timeline.push({ gloss, start, end: cursor / BANK_FPS, head: headMotion(gloss), mouth: mouthOf(gloss) })
   }
 
   if (pieces.length === 0) return null

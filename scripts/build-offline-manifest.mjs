@@ -46,8 +46,11 @@ const essential = new Set()
 // 작은 공통 파일 — 이게 없으면 번역 자체가 안 된다.
 // nearby.json은 **재난 때가 곧 오프라인**이라 필수다 — 통신이 끊긴 상태에서
 // "대피소 어디?"에 답하지 못하면 이 기능은 정작 필요한 순간에 없는 것과 같다.
+// 비수지(고개)·마우징(입모양)도 여기 있어야 한다 — 둘 다 없으면 오류 없이
+// **표정만 사라진다.** 손은 그대로 움직여서 화면으로는 알 수 없다.
 for (const f of ['./data/bank.json', './data/align.json', './data/order.json',
-                 './data/feed.json', './data/nearby.json', './data/timegloss.json'])
+                 './data/feed.json', './data/nearby.json', './data/timegloss.json',
+                 './data/nonmanual.json', './data/mouthing.json'])
   essential.add(f)
 for (const g of phraseGlosses) {
   const f = fileOf(g)

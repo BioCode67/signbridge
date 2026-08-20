@@ -394,7 +394,25 @@ t2gs는 domain으로 갈라 재난문자에만 쓸 수 있었지만, 글로스�
   갈래 필터에 0건으로 걸려 오래 못 찾았다. 키포인트만 받으면 자모 CTC를 학습할 수
   있다 — `ml/jobs/run_fingerspell.sh` (**`AIHUB_APIKEY`가 필요하다**).
   아바타가 지문자를 쓰는 것은 자모별 구간이 없어 아직 길이 서 있지 않다.
-- **비수지(표정)** — 우리 **가공본**에 없는 것이지 원본에 없는 것이 아니다(2026-08-18 정정).
+- **비수지(표정)** — 마우징은 **붙였다**(2026-08-20). 눈썹은 아직이다.
+
+  마우징(입모양)은 `public/data/mouthing.json` 2,081종 + 되돌림으로 문장 기준
+  **수록률 98.9%**다. 표에 없으면 글로스 이름을 그대로 발음한다 — 지어낸 것이
+  아니라 원본에서 뽑은 마우징의 **73.8%가 글로스 이름과 같았다.**
+  다시 만들려면 `python3 ml/tools/build_mouthing.py`(엑셀 131개, 약 10분).
+  계측점 `data-sign-mouthwords`·`data-sign-mouth`를 e2e가 잰다.
+
+  ```bash
+  node --experimental-strip-types --import ./scripts/ts-register.mjs \
+       scripts/check_mouthing.mjs         # 사전 실존·입모양 갈림·지명 오염
+  node --experimental-strip-types --import ./scripts/ts-register.mjs \
+       scripts/check_mouth_coverage.mjs   # 문장 기준 수록률
+  ```
+
+  **눈썹은 여전히 안 붙인다.** 원본에 구간만 있고 방향이 없다(EBf descriptor 7건).
+  판정 의문문과 설명 의문문은 눈썹 방향이 반대라 지어내면 틀린 문법을 가르친다.
+
+- (아래는 2026-08-18 정정 기록) 우리 **가공본**에 없는 것이지 원본에 없는 것이 아니다.
   AI Hub 수어스크립트 원본에 8채널이 시간 구간까지 붙어 있다. 엑셀 25개만 세어도
   EBf(눈썹) 26,232 · Hno(고개 끄덕임) 15,685 · Mctr/Mo1(입) 23,398 · Ci 6,953 ·
   Mmo 2,505 · Hs(고개 흔들기) 648 · Tbt 72. 학습 파일은 225개다.

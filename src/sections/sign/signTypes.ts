@@ -6,6 +6,9 @@ export interface Gloss {
   /** 이 낱말에 함께 나오는 고개 동작 — 부정은 젓고, 당부는 끄덕인다.
    *  원본 비수지 주석에서 재고(`ml/etl/aihub_nms.py`) 사람이 확정한 낱말에만 붙는다. */
   head?: 'nod' | 'shake'
+  /** 이 낱말을 하면서 입으로 내는 한국어 낱말(마우징).
+   *  원본 `Mmo` 채널에서 왔다 — 지어내지 않는다. 없으면 입을 다물고 있는다. */
+  mouth?: string
 }
 
 /** Per-frame non-manual expression: mouth opening (mo), brow height (br). */

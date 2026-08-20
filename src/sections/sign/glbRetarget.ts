@@ -322,6 +322,35 @@ function aimHand(
 }
 
 /** Drive eye-blink via ARKit blendshapes (RPM/Avaturn). amount 0..1. */
+/** 입모양(비짐)을 세운다.
+ *
+ *  아바타(`real-avaturn.glb`)는 Oculus 비짐 15종을 Head·Teeth·Tongue 세 메시에
+ *  나눠 갖고 있다 — **셋 다 움직여야** 이가 입술을 뚫고 나오지 않는다.
+ *  이름이 없는 메시는 조용히 건너뛴다(아바타를 바꿔도 안 깨진다).
+ *
+ *  `viseme`이 null이면 전부 0으로 되돌린다 — 마우징이 없는 낱말에서 입이
+ *  마지막 모양으로 굳어 있으면 그것대로 이상해 보인다. */
+const VISEMES = [
+  'viseme_sil', 'viseme_PP', 'viseme_FF', 'viseme_TH', 'viseme_DD', 'viseme_kk',
+  'viseme_CH', 'viseme_SS', 'viseme_nn', 'viseme_RR', 'viseme_aa', 'viseme_E',
+  'viseme_I', 'viseme_O', 'viseme_U',
+]
+export function setMouthGLB(rig: GLBRig, viseme: string | null, weight: number, jaw: number) {
+  for (const m of rig.faceMeshes) {
+    const d = m.morphTargetDictionary
+    const inf = m.morphTargetInfluences
+    if (!d || !inf) continue
+    for (const v of VISEMES) {
+      const i = d[v]
+      if (i !== undefined) inf[i] = v === viseme ? weight : 0
+    }
+    for (const key of ['jawOpen', 'mouthOpen']) {
+      const i = d[key]
+      if (i !== undefined) inf[i] = jaw
+    }
+  }
+}
+
 export function setBlinkGLB(rig: GLBRig, amount: number) {
   for (const m of rig.faceMeshes) {
     const d = m.morphTargetDictionary

@@ -251,6 +251,14 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     rep.check(hz == "1", "손 깊이(hand_z)가 문장까지 도달", f"data-sign-handz={hz}")
     spread = await pg.evaluate("() => +(document.body.getAttribute('data-sign-spread') || 0)")
     rep.check(spread >= 4, "손가락 벌림이 적용됨", f"손가락 {spread}개")
+    # 마우징 — 수어를 하면서 입으로 한국어 낱말을 발음한다. 표가 안 실리거나
+    # 글로스 이름이 안 맞으면 **입만 다물고 손은 그대로 움직인다**.
+    mw = await pg.evaluate(
+        "() => +(document.querySelector('[data-sign-mouthwords]')"
+        "?.getAttribute('data-sign-mouthwords') || 0)")
+    rep.check(mw >= 3, "마우징이 낱말에 붙음", f"낱말 {mw}개")
+    mfired = await pg.evaluate("() => document.body.getAttribute('data-sign-mouth')")
+    rep.check(mfired == "1", "마우징이 실제로 입을 움직임", f"data-sign-mouth={mfired}")
 
     # ── 화면 밖으로 밀린 요소가 없는가(폰에서 탭이 잘리던 회귀)
     overflow = await pg.evaluate(

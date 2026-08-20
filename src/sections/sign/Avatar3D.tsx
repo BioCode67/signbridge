@@ -5,7 +5,8 @@ import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
 import { applyPoseToVRM, restPoseVRM, prepareVRMRig } from './retarget'
-import { prepareGLBRig, applyPoseToGLB, setBlinkGLB, lastSpreadCount, type GLBRig } from './glbRetarget'
+import { prepareGLBRig, applyPoseToGLB, setBlinkGLB, setMouthGLB, lastSpreadCount, type GLBRig } from './glbRetarget'
+import { mouthTimeline } from './mouthing'
 import { DEFAULT_MODEL_URL } from './avatars'
 
 /** Frame any humanoid so its head sits at a canonical height + upper body fills the stage. */
@@ -51,6 +52,8 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
   const vrm = (gltf.userData as { vrm?: VRM }).vrm
   // 벌림이 걸린 손가락 수의 **최댓값** — 프레임마다 0이 될 수 있어 봉우리로 본다.
   const spreadPeak = useRef(0)
+  // 마우징이 한 번이라도 걸렸는가 — 표가 안 실리면 조용히 입이 안 움직인다.
+  const mouthSeen = useRef(false)
   const rigRef = useRef<GLBRig | null>(null)
   /** 고개의 원래 자세 — 고개 동작을 절대값으로 주기 위해 한 번만 기억한다. */
   const headRestRef = useRef<THREE.Euler | null>(null)
@@ -107,6 +110,14 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
       const phase = t % 4.2
       const blink = phase > 4.05 ? Math.sin(((phase - 4.05) / 0.15) * Math.PI) : 0
       setBlinkGLB(rig, blink)
+      // 마우징 — 수어를 하면서 입으로 한국어 낱말을 발음한다. 표에 있는
+      // 낱말만 움직이고, 없으면 입을 다문다(지어내지 않는다).
+      const mo = animate ? mouthAt(data, frame) : null
+      setMouthGLB(rig, mo?.viseme ?? null, mo?.weight ?? 0, mo?.jaw ?? 0)
+      if (mo && !mouthSeen.current) {
+        mouthSeen.current = true
+        document.body.setAttribute('data-sign-mouth', '1')
+      }
       // 고개 동작 — **절대값으로 준다.** 매 프레임 더하면 흔들림이 쌓여 고개가
       // 돌아가 버린다. 처음 자세를 한 번 기억해 두고 거기서 얼마나 돌릴지 정한다.
       if (rig.head) {
@@ -145,6 +156,22 @@ function headOffset(data: SignData | undefined, frame: number): { x: number; y: 
   const ease = Math.sin(u * Math.PI)             // 시작·끝에서 0
   const a = wave * ease
   return g.head === 'nod' ? { x: a * 0.13, y: 0 } : { x: 0, y: a * 0.17 }
+}
+
+/** 지금 프레임의 입모양 — 그 순간 재생 중인 낱말의 마우징을 발음한다.
+ *
+ *  낱말 구간을 통째로 한 번 발음한다. 구간이 짧으면 빨리, 길면 천천히 —
+ *  사람도 그렇게 한다. 표에 없는 낱말은 null이라 입이 닫힌다. */
+function mouthAt(data: SignData | undefined, frame: number) {
+  if (!data?.gloss_sequence?.length) return null
+  const fps = data.fps || 30
+  const t = frame / fps
+  const g = data.gloss_sequence.find((x) => x.mouth && t >= x.start && t <= x.end)
+  if (!g?.mouth) return null
+  const frames = Math.max(1, Math.round((g.end - g.start) * fps))
+  const line = mouthTimeline(g.mouth, frames)
+  const i = Math.min(frames - 1, Math.max(0, Math.round((t - g.start) * fps)))
+  return line[i] ?? null
 }
 
 /** Frames the upper body and gives a gentle cyan-lit studio look. */

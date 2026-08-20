@@ -416,9 +416,20 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
       Pinky: [1.22, 1.40, 0.82],
     }
     /** 비율 → 굽힘(0~1). 1.0이면 곧게, 0.35 이하면 완전히 쥔 것으로 본다. */
+    /** 비율 → 굽힘(0~1). 1.0이면 곧게, 0.35 이하면 완전히 쥔 것으로 본다.
+     *
+     *  **바닥값을 둔다.** 측정된 굽힘이 0이면 손가락이 자로 잰 듯 곧게 펴진다.
+     *  사람 손은 쉴 때도 그렇지 않다 — 마디마다 조금씩 굽어 있다. 실측에서
+     *  쉬는 손(비우세손)의 굽힘이 0.02~0.11로 나와, 아바타가 손을 **쫙 편 채로**
+     *  들고 있었다. 손가락 하나하나는 맞는데 손 전체가 어색해 보이던 원인이다.
+     *
+     *  바닥값 0.12는 사람이 힘을 뺀 손의 굽힘에 가깝다. 완전히 편 손모양
+     *  (`사` = 네 손가락 펴기)도 실제로는 이만큼 굽어 있으므로 손해가 아니다. */
+    const CURL_REST = 0.12
     const curlOf = (ratio: number) => {
       const c = (1 - ratio) / 0.65
-      return c < 0 ? 0 : c > 1 ? 1 : c
+      const clamped = c < 0 ? 0 : c > 1 ? 1 : c
+      return CURL_REST + (1 - CURL_REST) * clamped
     }
     const px = (i: number) => h[i * 3]
     const py = (i: number) => h[i * 3 + 1]

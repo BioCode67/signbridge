@@ -287,7 +287,7 @@ python3 ml/tools/schema_report.py <경로 또는 zip> --limit 3
 | 〃 이전 t2gs-v1 | F1 55.5 · BLEU 21.9 — **같은 검증 800문장**으로 다시 재서 견줬다 |
 | 〃 배포한 int8 30MB | F1 **62.6** · BLEU **27.3** (검증 400문장, 1스레드 문장당 144ms) |
 | 의도 판정 낱말이 인식 클래스에 실존 | **47/47** (`scripts/check_intent_words.mjs`) |
-| 재난 갈래 한국어 이름 | **41/41** (`scripts/check_categories.mjs`) — 행동요령은 21/41에만 있다 |
+| 재난 갈래 한국어 이름 | **41/41** (`scripts/check_categories.mjs`) — 행동요령은 **37/41**(2026-08-20에 15종 추가) |
 | CTC 디코딩 파이썬↔브라우저 일치 | **3,000판 전부** (`python -m ml.tools.ctc_parity`) |
 | 오역 회귀 사례 | **156건** (`scripts/translation_cases.json`) |
 | 번역이 낸 글로스가 재생되는가 | 371문장 **2,388개 전부** (`scripts/check_silent_skip.mjs`) |

@@ -1,0 +1,1 @@
+import{i as e,u as t}from"./index-Dq475rt_.js";var n=t(e(),1),r=`200px`;function i(){let e=(0,n.useRef)(null),[t,i]=(0,n.useState)(!0);return(0,n.useEffect)(()=>{let t=e.current;if(!t||typeof IntersectionObserver>`u`)return;let n=new IntersectionObserver(([e])=>i(e.isIntersecting),{rootMargin:r});return n.observe(t),()=>n.disconnect()},[]),[e,t]}export{i as t};

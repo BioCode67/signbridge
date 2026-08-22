@@ -1,0 +1,1 @@
+var e=typeof window<`u`&&/[?&]kiosk=1/.test(window.location.hash);function t(t,n){return e?n:t()}function n(t){e||t()}export{t as n,n as r,e as t};

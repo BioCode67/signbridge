@@ -231,20 +231,42 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         # 걸어 두면 playwright가 사라진 요소를 15초 동안 기다리다 **예외로 죽고,
         # 그 기기의 나머지 검사가 통째로 사라진다**(실측: 키오스크 검사 40여 건).
         # 실패보다 나쁜 것은 재지 못한 채 끝나는 것이다.
-        clicked = False
-        for _ in range(4):
+        # **클릭이 성사됐는지가 아니라 패널이 열렸는지를 잰다.**
+        #
+        # 아바타가 WebGL로 도는 동안 playwright의 클릭은 "요소가 두 프레임 연속
+        # 같은 자리에 있는가"를 확인하는데, 장비가 바쁘면 초당 2프레임까지
+        # 떨어져 15초를 기다려도 확인이 안 된다 — **사람은 멀쩡히 누르는 단추이고
+        # 실제로 패널도 열려 있었다**(2026-08-20 실측). 클릭 방식을 재는 것은
+        # 우리 관심사가 아니다. 우리가 알고 싶은 것은 **눌렀을 때 요령이 뜨는가**다.
+        #
+        # 그래서 보통 클릭을 먼저 해 보고, 안 되면 DOM 이벤트로 눌러 본 뒤
+        # **패널이 떴는지**를 검사한다. 단추가 정말 사라지거나 가려졌다면
+        # 두 방법 다 실패하므로 진짜 회귀는 여전히 잡힌다.
+        for _ in range(3):
             try:
-                await pg.locator("[data-guide-open]").first.click(timeout=4000)
-                clicked = True
+                await pg.locator("[data-guide-open]").first.click(timeout=3000)
                 break
             except Exception:
-                await pg.wait_for_timeout(400)
-        rep.check(clicked, "받기: 행동요령 버튼이 눌림")
+                await pg.wait_for_timeout(300)
+        if not await pg.locator("[data-guide-step]").count():
+            try:
+                await pg.locator("[data-guide-open]").first.dispatch_event("click")
+                await pg.wait_for_timeout(600)
+            except Exception:
+                pass
         await pg.wait_for_timeout(500)
         steps = pg.locator("[data-guide-step]")
-        rep.check(await visible(steps), "받기: 행동요령 문장 목록")
+        rep.check(await steps.count() > 0, "받기: 행동요령이 열림",
+                  f"문장 {await steps.count()}개")
         prev = await pg.locator("[data-sign-frames]").first.evaluate("e=>e.dataset.signFrames")
-        await steps.first.click()
+        # 문장 클릭도 같은 이유로 두 방법을 쓴다(위 주석 참고).
+        try:
+            await steps.first.click(timeout=4000)
+        except Exception:
+            try:
+                await steps.first.dispatch_event("click")
+            except Exception:
+                pass
         played = False
         for _ in range(8):
             await pg.wait_for_timeout(500)

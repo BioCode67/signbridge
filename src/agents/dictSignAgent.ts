@@ -24,7 +24,7 @@ const MIN_STEM = 2
  *  **build_align_dict.py의 STOP_WORDS와 같은 목록이어야 한다.** */
 const STOP_WORDS = new Set([
   '바랍니다', '바라며', '바람니다', '주시기', '주십시오', '있습니다', '있는',
-  '있으니', '있으면', '없습니다', '않도록', '않기', '됩니다', '되도록',
+  '있으니', '있으면', '없습니다', '됩니다', '되도록',
   '합니다', '하시기', '하도록', '인해', '인한', '위해', '위한', '통해',
   '통하여', '따라', '따른', '대한', '대해', '관련', '관한', '해당',
   '등의', '등을', '등이', '및', '또는', '그리고', '기타', '위하여', '인하여',
@@ -302,6 +302,22 @@ export class DictSignAgent implements SignAgent {
       chunkIds.push(chunk)
     }
     const push = (g: string) => pushAs(g, nextChunk++)
+    /** **뒤에 붙는 부정은 자기 동사와 한 덩어리로 둔다.**
+     *
+     *  `-지 않도록`·`-지 마세요`는 앞에 나온 동사를 부정한다. 그런데 어순을 바꿀 때
+     *  덩어리가 따로면 부정이 **엉뚱한 동사 옆으로 밀린다**:
+     *
+     *      넘어지지 않도록 손잡이를 잡으세요
+     *        → 손잡이 잡다 **하지마** 넘어지다   ← "손잡이를 잡지 마라"로 읽힌다
+     *
+     *  목숨이 걸린 안내에서 이러면 안 된다. 앞 덩어리에 붙여 함께 움직이게 한다.
+     *  (`안`·`못`은 동사 **앞**에 오므로 여기 해당하지 않는다 — 그쪽은 따로 못박혀
+     *  있고 회귀 사례가 지키고 있다.) */
+    const POST_NEG = new Set(['하지마1', '하지마0', '하지마'])
+    const pushMaybeNeg = (g: string) => {
+      if (POST_NEG.has(g) && chunkIds.length) pushAs(g, chunkIds[chunkIds.length - 1])
+      else push(g)
+    }
     /** 숫자 읽기처럼 반드시 붙어 다녀야 하는 글로스들 */
     const pushGroup = (gs: string[]) => {
       const chunk = nextChunk++
@@ -483,7 +499,7 @@ export class DictSignAgent implements SignAgent {
       // 문법·공손 표현은 번역하지 않는다(수어에 대응 표현이 없다). 카드에도 안 띄운다.
       if (STOP_WORDS.has(raw) || STOP_WORDS.has(stemKorean(raw))) continue
       const hit = lookup(raw)
-      if (hit?.length) { push(hit[0]); continue }
+      if (hit?.length) { pushMaybeNeg(hit[0]); continue }
       // 복합어 최장일치 분해 — 재난문자는 "실외활동자제"처럼 낱말을 붙여 쓴다.
       // 어간 제거만으로는 못 쪼개므로, 사전 키로 앞에서부터 가장 길게 잘라 나간다.
       // (예: 실외활동자제 → 실외+활동+자제). 두 조각 이상 해석될 때만 채택한다 —

@@ -3,7 +3,7 @@
 // 대화 화면에서는 화면의 절반만 아바타에 줄 수 있어(나머지는 대화 기록과 답 카드)
 // `compact`로 자막을 한 줄로 줄인다. 무대의 문법은 두 화면에서 같아야 한다 —
 // 같은 앱 안에서 아바타가 있는 곳마다 다르게 보이면 사용자가 매번 다시 배운다.
-import { lazy, Suspense } from 'react'
+import { useRef, lazy, Suspense } from 'react'
 import { glossLabel } from '../agents/glossLabel'
 import { APP_MODEL_URL } from '../sections/sign/avatars'
 import type { SignPlayer } from './useSignPlayer'
@@ -24,6 +24,16 @@ interface Props {
 
 export default function SignStage({ player, compact, fontScale = 1, idle, badges }: Props) {
   const { data, frame, playing, busy, nowGloss, time, setPlaying, restart } = player
+  // **낱말 사이에도 앞 낱말을 계속 띄운다.**
+  //
+  // 조각과 조각 사이에는 이음매 프레임(8프레임 ≈ 0.27초)이 들어가는데, 그 동안
+  // `nowGloss`가 비어 자막이 **깜빡인다.** 자리는 고정해 두었지만(minHeight)
+  // 글자가 사라졌다 나타나면 읽는 사람이 눈으로 좇기 어렵다. 아바타가 다음
+  // 동작으로 옮겨 가는 동안에도 **방금 그 낱말**을 보고 있는 편이 낫다.
+  const heldRef = useRef<string | null>(null)
+  if (nowGloss) heldRef.current = nowGloss
+  if (!data) heldRef.current = null
+  const shownGloss = nowGloss || heldRef.current
 
   return (
     // data-* 는 자동 검증용 계측이다. 화면만 보고는 "재생되는 중"과 "합성 실패라 한 장짜리"를
@@ -167,7 +177,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
                 : ['text-2xl sm:text-3xl', 'text-3xl sm:text-4xl', 'text-5xl sm:text-6xl'][fontScale]
             }`}
           >
-            {nowGloss || '\u00a0'}
+            {shownGloss || '\u00a0'}
           </p>
           {/* 원문이 지금 글로스와 **같은 글자면 접는다.** 사전에서 낱말 하나를 볼 때
               "병원 / 병원"처럼 같은 말이 두 줄로 겹쳐 보였다(실측 사진). */}
@@ -176,7 +186,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
               40px 튀었다. 접는 것이 필요한 자리는 **사전 탭에서 낱말 하나를 볼
               때**(병원 / 병원처럼 겹쳐 보임)이므로, 글로스가 하나일 때만 본다. */}
           {!(data.gloss_sequence.length <= 1
-            && data.korean_text.trim() === (nowGloss ?? '').trim()) && (
+            && data.korean_text.trim() === (shownGloss ?? '').trim()) && (
             <p className={`mx-auto mt-1 max-w-2xl leading-relaxed text-slate-300 ${
               compact
                 ? ['text-xs', 'text-sm', 'text-lg'][fontScale]

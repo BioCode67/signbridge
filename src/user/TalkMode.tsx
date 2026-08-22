@@ -238,7 +238,11 @@ export default function TalkMode({ onImmersive }: TalkProps) {
 
   if (!place) {
     return (
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      // **키가 큰 화면(키오스크 1080×1920)에서는 아래가 통째로 비어 있었다.**
+      // 내용이 위쪽 3분의 1에만 몰리고 나머지는 검은 화면이었다(실측 사진).
+      // 창구에 세워 두는 화면이라 **서서 손이 닿는 높이**에 단추가 있어야 한다.
+      // 세로로 가운데 정렬하고, 남는 높이만큼 장소 칸을 키운다.
+      <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto p-4">
         <button
           type="button"
           onClick={() => { setSos(true); navigator.vibrate?.([400, 100, 400]) }}
@@ -263,6 +267,7 @@ export default function TalkMode({ onImmersive }: TalkProps) {
           </button>
         )}
         <p className="mb-3 text-center text-lg font-bold text-slate-300">어디에 계신가요?</p>
+        {/* 칸 높이를 화면에 맞춘다 — 폰에서는 지금 그대로, 키가 큰 화면에서는 커진다. */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {PLACES.map((p) => (
             <button
@@ -275,10 +280,10 @@ export default function TalkMode({ onImmersive }: TalkProps) {
                 // 사이에 끝나므로, 첫 질문 카드부터 바로 재생된다.
                 player.prewarm(p.ask.flatMap((q) => q.gloss ?? []))
               }}
-              className="rounded-3xl border border-white/10 bg-space-800 py-8 text-center transition-colors hover:border-cyan-glow/50"
+              className="rounded-3xl border border-white/10 bg-space-800 py-8 text-center transition-colors hover:border-cyan-glow/50 [@media(min-height:1200px)]:py-16"
             >
-              <span className="block text-5xl">{p.icon}</span>
-              <span className="mt-2 block text-xl font-bold text-slate-100">{p.name}</span>
+              <span className="block text-5xl [@media(min-height:1200px)]:text-7xl">{p.icon}</span>
+              <span className="mt-2 block text-xl font-bold text-slate-100 [@media(min-height:1200px)]:mt-4 [@media(min-height:1200px)]:text-3xl">{p.name}</span>
             </button>
           ))}
         </div>

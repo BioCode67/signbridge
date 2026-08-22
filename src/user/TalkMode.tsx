@@ -467,9 +467,9 @@ export default function TalkMode({ onImmersive }: TalkProps) {
           <button
             type="button"
             onClick={() => player.setSpeed(player.speed === 1 ? 0.6 : player.speed === 0.6 ? 1.4 : 1)}
-            title={speed === 1 ? '재생 속도 — 지금은 또박또박(1×). 누르면 느리게'
-            : speed === 0.6 ? '재생 속도 — 지금은 느리게(0.6×). 누르면 실제 수어 속도'
-              : '재생 속도 — 지금은 실제 수어 속도(1.4×). 실측으로 사람이 문장에서 하는 속도에 가깝다'}
+            title={player.speed === 1 ? '재생 속도 — 지금은 또박또박(1×). 누르면 느리게'
+              : player.speed === 0.6 ? '재생 속도 — 지금은 느리게(0.6×). 누르면 실제 수어 속도'
+                : '재생 속도 — 지금은 실제 수어 속도(1.4×). 실측으로 사람이 문장에서 하는 속도에 가깝다'}
             className="min-h-[40px] rounded-lg border border-white/15 bg-space-900/85 px-3 py-1 text-base font-bold text-slate-300"
           >
             {player.speed === 1 ? '1×' : player.speed === 0.6 ? '🐢' : '⚡'}

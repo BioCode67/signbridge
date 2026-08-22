@@ -518,6 +518,7 @@ export default function UserApp() {
               <button
                 key={s}
                 type="button"
+                data-guide-step=""
                 onClick={() => { setShowGuide(false); onAnswer(s, undefined, true) }}
                 className="flex w-full items-center gap-3 rounded-2xl border border-emerald-400/30 bg-space-800 px-4 py-4 text-left"
               >
@@ -590,6 +591,12 @@ export default function UserApp() {
                 {guide && (
                   <button
                     type="button"
+                    // 검사가 잡을 표식. **역할·글자로 찾으면 안 된다** — 아바타가
+                    // 60fps로 도는 동안 접근성 트리 조회가 계속 밀려, 사람은
+                    // 멀쩡히 누르는 단추를 playwright는 15초를 기다려도 못 눌렀다
+                    // (실측 2026-08-20: force 클릭도 "locator 대기"에서 멈췄고,
+                    //  정작 패널은 열려 있었다).
+                    data-guide-open=""
                     onClick={(e) => { e.stopPropagation(); setShowGuide(true); setAuto(false); player.setPlaying(false) }}
                     className="rounded-lg border border-emerald-400/50 bg-emerald-400/15 px-2.5 py-1 text-base font-bold text-emerald-300"
                   >

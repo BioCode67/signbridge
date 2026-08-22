@@ -143,16 +143,40 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
               </div>
             )
           })()}
-          <p className={`font-extrabold tracking-wide text-cyan-soft text-glow ${
-            compact
-              ? ['text-xl', 'text-2xl', 'text-4xl'][fontScale]
-              : ['text-2xl sm:text-3xl', 'text-3xl sm:text-4xl', 'text-5xl sm:text-6xl'][fontScale]
-          }`}>
-            {nowGloss || ' '}
+          {/* **높이를 두 줄로 못박는다.** 이 자막은 낱말마다 글자 수가 달라서
+              긴 낱말이 두 줄이 되면 한 줄일 때보다 40px 높아진다. 이 덩어리는
+              화면 아래에 붙어 **위로 자라기 때문에**, 그때마다 배지·행동요령
+              단추가 통째로 40px 튀어 오른다. 재생 중에는 낱말이 계속 바뀌므로
+              **단추가 쉬지 않고 위아래로 흔들린다** — 누르려던 손이 빗나간다.
+              (실측 2026-08-20: y가 594↔634를 오갔고, e2e 클릭이 통째로 실패했다.) */}
+          {/* **높이를 두 줄로 못박는다.** 이 줄은 두 가지로 높이가 변한다:
+                ① 긴 낱말이 두 줄로 넘어갈 때
+                ② **낱말과 낱말 사이**(이음매 구간)에 보여 줄 낱말이 없어 빈칸이 될 때
+              이 덩어리는 화면 아래에 붙어 **위로 자라기 때문에**, 그때마다 배지와
+              행동요령 단추가 통째로 40px 튀어 오른다. 재생 중에는 낱말이 계속
+              바뀌므로 **단추가 쉬지 않고 흔들려 누르려던 손이 빗나간다.**
+              (실측 2026-08-20: y가 594↔634를 오갔고 e2e 클릭이 통째로 실패했다.
+               이음매를 6→8프레임으로 늘리면서 빈칸 구간이 더 잦아졌다.)
+              Tailwind 임의값 대신 인라인 style을 쓴다 — em 기준이라 글씨 크기
+              단계가 바뀌어도 늘 두 줄이다. */}
+          <p
+            style={{ minHeight: '2.4em' }}
+            className={`font-extrabold tracking-wide text-cyan-soft text-glow ${
+              compact
+                ? ['text-xl', 'text-2xl', 'text-4xl'][fontScale]
+                : ['text-2xl sm:text-3xl', 'text-3xl sm:text-4xl', 'text-5xl sm:text-6xl'][fontScale]
+            }`}
+          >
+            {nowGloss || '\u00a0'}
           </p>
           {/* 원문이 지금 글로스와 **같은 글자면 접는다.** 사전에서 낱말 하나를 볼 때
               "병원 / 병원"처럼 같은 말이 두 줄로 겹쳐 보였다(실측 사진). */}
-          {data.korean_text.trim() !== (nowGloss ?? '').trim() && (
+          {/* **재생 중에 조건이 바뀌면 안 된다.** 예전에는 "지금 낱말"과 견줬는데,
+              문장 한가운데서 우연히 같아지는 순간 이 줄이 통째로 사라져 아래가
+              40px 튀었다. 접는 것이 필요한 자리는 **사전 탭에서 낱말 하나를 볼
+              때**(병원 / 병원처럼 겹쳐 보임)이므로, 글로스가 하나일 때만 본다. */}
+          {!(data.gloss_sequence.length <= 1
+            && data.korean_text.trim() === (nowGloss ?? '').trim()) && (
             <p className={`mx-auto mt-1 max-w-2xl leading-relaxed text-slate-300 ${
               compact
                 ? ['text-xs', 'text-sm', 'text-lg'][fontScale]

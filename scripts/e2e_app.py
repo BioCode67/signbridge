@@ -207,7 +207,11 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     rep.check(len(caption) > 0 or played["glosses"] > 0, "받기: 자막 표시", f"'{caption[:14]}'")
 
     # ── 행동요령: 재난 종류에 맞는 요령을 문장 단위로 수어로 본다
-    guide = pg.get_by_role("button", name="📋 행동요령")
+    # **역할·글자가 아니라 표식으로 찾는다.** 아바타가 60fps로 도는 동안에는
+    # 접근성 트리 조회가 계속 밀려, 사람은 멀쩡히 누르는 단추를 15초를 기다려도
+    # 못 눌렀다(2026-08-20 실측: force 클릭도 "locator 대기"에서 멈췄는데
+    # 정작 패널은 열려 있었다). 표식(`data-guide-open`)은 DOM 조회라 흔들리지 않는다.
+    guide = pg.locator("[data-guide-open]")
     # 갈래 41종 중 21종에만 행동요령이 있다 — 없는 갈래가 뜨면 버튼도 없다.
     # 그때 검사를 조용히 건너뛰면 "통과"에 이 항목이 통째로 빠진다. 남긴다.
     if not await guide.count():
@@ -230,14 +234,14 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         clicked = False
         for _ in range(4):
             try:
-                await pg.get_by_role("button", name="📋 행동요령").first.click(timeout=4000)
+                await pg.locator("[data-guide-open]").first.click(timeout=4000)
                 clicked = True
                 break
             except Exception:
                 await pg.wait_for_timeout(400)
         rep.check(clicked, "받기: 행동요령 버튼이 눌림")
         await pg.wait_for_timeout(500)
-        steps = pg.locator("button", has_text="세요")
+        steps = pg.locator("[data-guide-step]")
         rep.check(await visible(steps), "받기: 행동요령 문장 목록")
         prev = await pg.locator("[data-sign-frames]").first.evaluate("e=>e.dataset.signFrames")
         await steps.first.click()

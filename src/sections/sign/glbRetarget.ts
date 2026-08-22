@@ -330,11 +330,6 @@ function aimHand(
  *
  *  `viseme`이 null이면 전부 0으로 되돌린다 — 마우징이 없는 낱말에서 입이
  *  마지막 모양으로 굳어 있으면 그것대로 이상해 보인다. */
-const VISEMES = [
-  'viseme_sil', 'viseme_PP', 'viseme_FF', 'viseme_TH', 'viseme_DD', 'viseme_kk',
-  'viseme_CH', 'viseme_SS', 'viseme_nn', 'viseme_RR', 'viseme_aa', 'viseme_E',
-  'viseme_I', 'viseme_O', 'viseme_U',
-]
 /** 마우징 세기 — 비짐을 1.0으로 주면 **입이 쩍 벌어진다**(2026-08-20 사진 확인).
  *
  *  두 가지가 겹쳐 있었다. ① Oculus 비짐에는 **턱 벌림이 이미 들어 있다** —
@@ -346,20 +341,50 @@ const MOUTH_GAIN = 0.55
 const JAW_GAIN = 0.30
 
 export function setMouthGLB(rig: GLBRig, viseme: string | null, weight: number, jaw: number) {
+  // **바뀔 때만 쓴다.** 처음에는 프레임마다 모든 얼굴 메시의 비짐 15개와 턱을
+  // 다시 써 넣었다. 값이 같아도 three.js는 모프 데이터를 다시 GPU로 올리므로,
+  // 머리(72개)·이·혀·눈썹 메시가 매 프레임 갱신되면서 **메인 스레드가 포화됐다**
+  // (실측 2026-08-20: 페이지 조회 한 번에 1~2.6초, 단추 클릭이 통째로 실패).
+  // 마우징은 초당 몇 번만 바뀌므로 그때만 쓰면 된다.
+  const w = viseme ? weight * MOUTH_GAIN : 0
+  const j = jaw * JAW_GAIN
+  if (viseme === lastViseme && Math.abs(w - lastWeight) < 0.01 && Math.abs(j - lastJaw) < 0.01) return
+  const prev = lastViseme
+  lastViseme = viseme
+  lastWeight = w
+  lastJaw = j
   for (const m of rig.faceMeshes) {
     const d = m.morphTargetDictionary
     const inf = m.morphTargetInfluences
     if (!d || !inf) continue
-    for (const v of VISEMES) {
-      const i = d[v]
-      if (i !== undefined) inf[i] = v === viseme ? weight * MOUTH_GAIN : 0
+    // 이전에 쓰던 비짐만 0으로 되돌린다 — 15개를 매번 훑지 않는다.
+    if (prev && prev !== viseme) {
+      const pi = d[prev]
+      if (pi !== undefined) inf[pi] = 0
     }
-    const j = d['jawOpen']
-    if (j !== undefined) inf[j] = jaw * JAW_GAIN
-    // `mouthOpen`은 0으로 되돌린다 — 예전에 여기까지 열어 입이 쩍 벌어졌다.
+    if (viseme) {
+      const i = d[viseme]
+      if (i !== undefined) inf[i] = w
+    }
+    const ji = d['jawOpen']
+    if (ji !== undefined) inf[ji] = j
+    // `mouthOpen`은 0으로 둔다 — 비짐에 턱 벌림이 이미 들어 있어, 여기까지
+    // 열면 입이 쩍 벌어진다(사진으로 확인).
     const mo = d['mouthOpen']
-    if (mo !== undefined) inf[mo] = 0
+    if (mo !== undefined && inf[mo] !== 0) inf[mo] = 0
   }
+}
+
+/** 마지막으로 써 넣은 값 — 같은 값을 다시 쓰지 않기 위해 기억한다. */
+let lastViseme: string | null = null
+let lastWeight = -1
+let lastJaw = -1
+
+/** 아바타를 갈아 끼우면 기억을 지운다(다른 리그에는 다른 비짐이 들어 있다). */
+export function resetMouthGLB() {
+  lastViseme = null
+  lastWeight = -1
+  lastJaw = -1
 }
 
 export function setBlinkGLB(rig: GLBRig, amount: number) {

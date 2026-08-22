@@ -626,7 +626,9 @@ export default function UserApp() {
         <button
           type="button"
           onClick={() => player.setSpeed(speed === 1 ? 0.6 : speed === 0.6 ? 1.4 : 1)}
-          title="재생 속도"
+          title={speed === 1 ? '재생 속도 — 지금은 또박또박(1×). 누르면 느리게'
+            : speed === 0.6 ? '재생 속도 — 지금은 느리게(0.6×). 누르면 실제 수어 속도'
+              : '재생 속도 — 지금은 실제 수어 속도(1.4×). 실측으로 사람이 문장에서 하는 속도에 가깝다'}
           className="rounded-2xl border border-white/15 bg-space-800 px-5 py-4 text-xl font-bold text-slate-200"
         >
           {speed === 1 ? '1×' : speed === 0.6 ? '🐢' : '⚡'}

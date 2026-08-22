@@ -222,7 +222,20 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
             await pg.wait_for_timeout(300)
         except Exception:
             pass
-        await guide.first.click(timeout=15000)
+        # **버튼을 다시 찾아 가며 여러 번 눌러 본다.** 받기 화면은 재난문자가
+        # 자동으로 넘어가서, 누르려는 순간 버튼이 통째로 다시 그려진다. 한 번만
+        # 걸어 두면 playwright가 사라진 요소를 15초 동안 기다리다 **예외로 죽고,
+        # 그 기기의 나머지 검사가 통째로 사라진다**(실측: 키오스크 검사 40여 건).
+        # 실패보다 나쁜 것은 재지 못한 채 끝나는 것이다.
+        clicked = False
+        for _ in range(4):
+            try:
+                await pg.get_by_role("button", name="📋 행동요령").first.click(timeout=4000)
+                clicked = True
+                break
+            except Exception:
+                await pg.wait_for_timeout(400)
+        rep.check(clicked, "받기: 행동요령 버튼이 눌림")
         await pg.wait_for_timeout(500)
         steps = pg.locator("button", has_text="세요")
         rep.check(await visible(steps), "받기: 행동요령 문장 목록")

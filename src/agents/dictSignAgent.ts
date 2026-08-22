@@ -377,10 +377,19 @@ export class DictSignAgent implements SignAgent {
     let afterNumber = false
     // 한글 수사가 이어지면 합쳐 읽는다: "만" + "오천" → 15000
     let pending: number | null = null
+    // **고유어 수사였는가.** `세 분`(사람 셋)과 `삼 분`(시간)은 한국어에서
+    // 수사 종류로 갈린다 — 사람은 고유어(한·두·세), 시간은 한자어(일·이·삼).
+    // 이 표시가 없으면 창구에서 "세 분 기다리세요"가 **"3분 기다리세요"**로
+    // 나간다(2026-08-20 실측). 뜻이 완전히 다르다.
+    let pendingNative = false
+    /** 방금 흘려보낸 수가 고유어였는가 — 바로 뒤의 단위 해석에 쓴다. */
+    let lastNative = false
     const flushNumber = () => {
       if (pending === null) return
       pushGroup(numberGlosses(String(pending)))
       pending = null
+      lastNative = pendingNative
+      pendingNative = false
       afterNumber = true
     }
     for (let mi = 0; mi < matches.length; mi++) {
@@ -450,6 +459,7 @@ export class DictSignAgent implements SignAgent {
           // 뒤에 수사가 또 오면 이어지는 수다("만" + "오천" = 15000).
           const numberNext = next !== undefined && readKoreanNumber(next) !== null
           if (word.length >= 2 || unitNext || numberNext || pending !== null) {
+            if (word in NATIVE_NUM) pendingNative = true
             // 큰 자리 뒤에 작은 자리가 이어지면 더한다(만 → 오천 → 15000)
             pending = pending === null ? value
               : pending > value ? pending + value : pending * value
@@ -475,8 +485,10 @@ export class DictSignAgent implements SignAgent {
       if (afterNumber && UNIT_GLOSS[raw[0]]) {
         const rest = raw.slice(1)
         if (rest === '' || rest.replace(PARTICLE_RE, '') === '') {
+          // 고유어 수사 뒤의 `분`은 시간이 아니라 **사람을 세는 말**이다.
+          const unitGloss = raw[0] === '분' && lastNative ? '명' : UNIT_GLOSS[raw[0]]
           // 단위는 앞의 숫자와 같은 덩어리로 — 어순을 바꿔도 떨어지지 않게.
-          pushAs(UNIT_GLOSS[raw[0]], chunkIds[chunkIds.length - 1] ?? nextChunk++)
+          pushAs(unitGloss, chunkIds[chunkIds.length - 1] ?? nextChunk++)
           afterNumber = false
           continue
         }

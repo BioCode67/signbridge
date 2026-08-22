@@ -335,6 +335,16 @@ const VISEMES = [
   'viseme_CH', 'viseme_SS', 'viseme_nn', 'viseme_RR', 'viseme_aa', 'viseme_E',
   'viseme_I', 'viseme_O', 'viseme_U',
 ]
+/** 마우징 세기 — 비짐을 1.0으로 주면 **입이 쩍 벌어진다**(2026-08-20 사진 확인).
+ *
+ *  두 가지가 겹쳐 있었다. ① Oculus 비짐에는 **턱 벌림이 이미 들어 있다** —
+ *  거기에 `jawOpen`·`mouthOpen`을 또 더하면 두 번 열린다. ② 수어의 마우징은
+ *  소리 내어 말하는 것이 아니라 **입만 조용히 움직이는 것**이라 원래 작다.
+ *  크게 벌리면 말하는 것처럼 보여 오히려 어색하다. */
+const MOUTH_GAIN = 0.55
+/** 턱은 비짐이 못 담는 만큼만 조금 보탠다. `mouthOpen`은 건드리지 않는다. */
+const JAW_GAIN = 0.30
+
 export function setMouthGLB(rig: GLBRig, viseme: string | null, weight: number, jaw: number) {
   for (const m of rig.faceMeshes) {
     const d = m.morphTargetDictionary
@@ -342,12 +352,13 @@ export function setMouthGLB(rig: GLBRig, viseme: string | null, weight: number, 
     if (!d || !inf) continue
     for (const v of VISEMES) {
       const i = d[v]
-      if (i !== undefined) inf[i] = v === viseme ? weight : 0
+      if (i !== undefined) inf[i] = v === viseme ? weight * MOUTH_GAIN : 0
     }
-    for (const key of ['jawOpen', 'mouthOpen']) {
-      const i = d[key]
-      if (i !== undefined) inf[i] = jaw
-    }
+    const j = d['jawOpen']
+    if (j !== undefined) inf[j] = jaw * JAW_GAIN
+    // `mouthOpen`은 0으로 되돌린다 — 예전에 여기까지 열어 입이 쩍 벌어졌다.
+    const mo = d['mouthOpen']
+    if (mo !== undefined) inf[mo] = 0
   }
 }
 

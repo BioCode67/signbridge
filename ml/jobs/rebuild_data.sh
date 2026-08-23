@@ -81,6 +81,12 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 # 되지만 **윈도우는 `:`를 못 쓴다** — 노트북용 zip이 안 풀린다(2026-08-19 실측).
 node scripts/check_filenames.mjs
 
+# 글로스 이름(`시:9시`·`시간:2시간`)이 입모양이나 소리로 그대로 새 나가지 않는가.
+# 마우징 수록률은 100%인데 입이 "시간시간"을 발음하고 있었다(2026-08-23 실측) —
+# **읽을 수 있는가는 재고 있지 않았다.**
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_gloss_reading.mjs
+
 # 글로스가 통째로 비면 아바타가 아무것도 안 한다 — 표현률로는 안 잡히는
 # 문장 단위 실패다(2026-08-20: 476문장 중 20개가 `X 주세요` 꼴로 비어 있었다).
 node --experimental-strip-types --import ./scripts/ts-register.mjs \

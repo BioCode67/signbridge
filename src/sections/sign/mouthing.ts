@@ -190,6 +190,21 @@ export function readableGloss(gloss: string): string | null {
     const min = time[3] ? sinoNumber(Number(time[3])) + '분' : ''
     return hour + min
   }
+  // **소요시간**(`시간:2시간`·`시간:30분`) — 이 꼴이 없어 숫자를 떼고 나면
+  // `시간시간`·`시간분`이 되어 그대로 낱말처럼 통과했다. 입모양이 "시간시간"을
+  // 말하고, 직원이 듣는 소리도 그랬다(2026-08-23 실측). 시간은 고유어로,
+  // 분은 한자어로 센다 — "두 시간 삼십 분".
+  const dur = /^시간:(?:(\d{1,2})시간)?(?:(\d{1,2})분)?$/.exec(gloss)
+  if (dur && (dur[1] || dur[2])) {
+    // `시간:0시간10분`처럼 **0시간**이 붙어 있다 — 말로는 "십 분"이지
+    // "공 시간 십 분"이 아니다.
+    const hn = dur[1] ? Number(dur[1]) : 0
+    const h = hn >= 1
+      ? (hn <= 12 ? NATIVE_HOUR[hn] : sinoNumber(hn)) + '시간'
+      : ''
+    const m = dur[2] ? sinoNumber(Number(dur[2])) + '분' : ''
+    return h + m
+  }
   const date = /^날짜:(\d{1,2})월(\d{1,2})일$/.exec(gloss)
   if (date) return monthWord(Number(date[1])) + sinoNumber(Number(date[2])) + '일'
   // 숫자만 있는 글로스(`463`)도 한자어로 읽는다 — 네 자리까지.

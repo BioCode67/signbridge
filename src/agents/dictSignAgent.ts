@@ -30,7 +30,7 @@ function stripParticles(w: string): string {
 }
 
 const PARTICLE_RE =
-  /(나요|시기|어야|아야|여야|겠고|겠지|겠다|겠는|이므로|으므로|므로|이라서|라서|이지만|지만|으려면|려면|으면서|면서|으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|드리오니|되오니|하오니|오니|이에요|예요|에요|이야|인가요|인가|인데|이죠|죠|거예요|을게요|군요|잖아요|거든요|더라고요|던데요|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는|했|해|하|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$/
+  /(만요|나요|시기|어야|아야|여야|겠고|겠지|겠다|겠는|이므로|으므로|므로|이라서|라서|이지만|지만|으려면|려면|으면서|면서|으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|드리오니|되오니|하오니|오니|이에요|예요|에요|이야|인가요|인가|인데|이죠|죠|거예요|을게요|군요|잖아요|거든요|더라고요|던데요|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는|했|해|하|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$/
 const MIN_STEM = 2
 
 /** 번역 제외어 — 한국어 문법·공손 표현으로, 수어에서는 표현하지 않는다.
@@ -115,8 +115,21 @@ export function stemKorean(word: string): string {
 const HONORIFIC_RE =
   /(으셔야|셔야|으셔서|셔서|으시면|시면|으십니다|십니다|으십시오|으셨습니다|셨습니다|으셨어요|셨어요|으셨나요|셨나요|으시겠어요|시겠어요|으시나요|시나요|으시는|시는|으세요|세요)$/
 
+/** `-신` 존대형은 **낱말을 못박아** 되살린다.
+ *
+ *  `신`을 규칙으로 떼면 `신다`(신발)와 갈린다 — `-실`이 `싣다`로 갈리던 것과
+ *  같은 함정이라 위 규칙에 넣지 않았다. 그런데 "전에 오신 적 있어요"·
+ *  "어디 가신가요"처럼 창구에서 자주 쓰인다(실측에서 통째로 사라졌다).
+ *  그래서 **어간을 아는 것만** 목록으로 둔다 — 지어내지 않는다. */
+const HONORIFIC_WORDS: Record<string, string> = {
+  오신: '오다', 가신: '가다', 하신: '하다', 되신: '되다', 주신: '주다',
+  받으신: '받다', 드신: '먹다', 계신: '있다', 아프신: '아프다', 다치신: '다치다',
+}
+
 export function stemChain(word: string): string[] {
   const forms = [word]
+  const fixed = HONORIFIC_WORDS[word]
+  if (fixed) forms.push(fixed)
   const hon = word.replace(HONORIFIC_RE, '')
   if (hon !== word && hon.length >= 1) forms.push(hon + '다')
   let out = word
@@ -175,14 +188,18 @@ const DAYPART: readonly string[] = [
 const DIGIT_GLOSS = ['영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구']
 const PLACE_GLOSS = ['', '십', '백', '천', '만']
 
-export function numberGlosses(num: string): string[] {
+export function numberGlosses(num: string, emergencyOk = true): string[] {
   const out: string[] = []
   const digitwise = (s: string) => {
     for (const ch of s) out.push(ch === '0' ? '공' : DIGIT_GLOSS[Number(ch)])
   }
   const [int, frac] = num.split('.')
+  // **신고 번호는 자릿수로 읽는다.** 119를 "백십구"라고 읽으면 수(數)가 되어
+  // 전화번호로 안 들린다 — 사람은 "일 일 구"라고 말한다. 재난 안내에서 가장
+  // 자주 나오는 숫자인데 `119에 신고하세요`가 `백 십 구 신고0`으로 나갔다.
+  const EMERGENCY = new Set(['119', '112', '110', '111', '113', '117', '182', '1339'])
   // 0으로 시작하거나 다섯 자리 초과(전화번호·우편번호류)는 자릿수 읽기.
-  if (/^0/.test(int) || int.length > 5) {
+  if (/^0/.test(int) || int.length > 5 || (emergencyOk && EMERGENCY.has(int))) {
     digitwise(int)
   } else {
     for (let i = 0; i < int.length; i++) {
@@ -350,9 +367,12 @@ export class DictSignAgent implements SignAgent {
     // 뜻이 사라진다). 그래서 낱말마다 덩어리 번호를 매겨 두고, 덩어리 단위로만 옮긴다.
     const chunkIds: number[] = []
     let nextChunk = 0
-    const pushAs = (g: string, chunk: number) => {
+    const pushAs = (g: string, chunk: number, allowRepeat = false) => {
       // 같은 글로스가 연달아 나오면 한 번만 — 수어에서 반복은 다른 의미가 된다.
-      if (gloss[gloss.length - 1] === g) return
+      // **다만 자릿수 읽기에서는 반복이 곧 뜻이다.** 이 규칙이 전화번호를
+      // 망가뜨리고 있었다: `010-1122-3344` → 공일공일이삼사(자릿수가 사라진다).
+      // `119`도 `일 구`가 됐다.
+      if (!allowRepeat && gloss[gloss.length - 1] === g) return
       gloss.push(g)
       chunkIds.push(chunk)
     }
@@ -374,9 +394,9 @@ export class DictSignAgent implements SignAgent {
       else push(g)
     }
     /** 숫자 읽기처럼 반드시 붙어 다녀야 하는 글로스들 */
-    const pushGroup = (gs: string[]) => {
+    const pushGroup = (gs: string[], allowRepeat = false) => {
       const chunk = nextChunk++
-      for (const g of gs) pushAs(g, chunk)
+      for (const g of gs) pushAs(g, chunk, allowRepeat)
     }
     // 조사를 한 겹씩 벗겨 가며 **처음 걸리는 것**을 쓴다(stemChain 주석 참고).
     const lookup = (w: string): string[] | undefined => {
@@ -553,12 +573,15 @@ export class DictSignAgent implements SignAgent {
       flushNumber()
       if (m[13]) {
         // 전화번호: 자릿수 읽기 (032 → 공 삼 이)
-        pushGroup(numberGlosses(m[13].replace(/-/g, '')))
+        pushGroup(numberGlosses(m[13].replace(/-/g, '')), true)
         afterNumber = false
         continue
       }
       if (m[14]) {
-        pushGroup(numberGlosses(m[14]))
+        // **`119명`은 세는 수다.** 뒤에 단위가 오면 신고 번호로 읽지 않는다.
+        const after = matches[mi + 1]?.[15]
+        const counted = after !== undefined && UNIT_GLOSS[after[0]] !== undefined
+        pushGroup(numberGlosses(m[14], !counted), true)
         afterNumber = true
         continue
       }
@@ -708,22 +731,30 @@ export class DictSignAgent implements SignAgent {
       // 순이라 흔들 이유가 없다. 그래서 **재난문자에서만 모르는 낱말까지 함께**
       // 정렬하고, 밖에서는 **표가 아는 덩어리만** 제 자리로 옮긴다.
       // (학습 모델을 domain으로 가른 것과 같은 판단이다.)
-      let reordered: string[]
+      let ordered: typeof chunks
       if (domain === 'disaster') {
-        chunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
-        reordered = chunks.flatMap((c) => c.glosses)
+        ordered = chunks.slice().sort((a, b) => a.bias - b.bias || a.at - b.at)
       } else {
         // 아는 덩어리끼리만 순서를 정하고 **원래 아는 덩어리가 있던 자리에** 되꽂는다.
         const knownAt: number[] = []
         const knownChunks: typeof chunks = []
         chunks.forEach((c, i) => { if (c.known) { knownAt.push(i); knownChunks.push(c) } })
         knownChunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
-        const slotted = chunks.slice()
-        knownAt.forEach((slot, i) => { slotted[slot] = knownChunks[i] })
-        reordered = slotted.flatMap((c) => c.glosses)
+        ordered = chunks.slice()
+        knownAt.forEach((slot, i) => { ordered[slot] = knownChunks[i] })
       }
       gloss.length = 0
-      for (const g of reordered) if (gloss[gloss.length - 1] !== g) gloss.push(g)
+      // **반복은 덩어리가 다를 때만 지운다.** 어순을 바꾸다 우연히 같은 글로스가
+      // 맞닿으면 지우고, 원래 한 덩어리 안에서 반복된 것은 둔다 — 자릿수 읽기가
+      // 그렇다(`119` = 일 일 구). 여기서 다시 뭉개져 **가운데 1이 사라졌다.**
+      let prevChunk = -1
+      for (const c of ordered) {
+        for (const g of c.glosses) {
+          if (gloss[gloss.length - 1] === g && prevChunk !== c.at) continue
+          gloss.push(g)
+          prevChunk = c.at
+        }
+      }
     }
 
     if (gloss.length === 0) {
@@ -752,10 +783,15 @@ export class DictSignAgent implements SignAgent {
     // 아바타가 같은 말을 두 번 했다 — "화재 발생 화재 발생"처럼 보인다.
     // 수어에서 반복은 복수·강조를 뜻할 수 있지만, 사전 경로는 반복을 **의도해서**
     // 만들지 않는다. 여기 있는 것은 전부 복합어 분해가 남긴 찌꺼기다.
+    // 표제어가 같으면 한 번만(`열다0 열다1` → 열다0). **다만 자릿수 읽기는 뺀다** —
+    // 숫자에서 반복은 뜻 그 자체다. 이 규칙이 `119`를 `일 구`로, 전화번호
+    // `010-1122-3344`를 `공일공일이삼사`로 뭉개고 있었다(2026-08-23 실측).
+    // 앞의 두 곳을 고쳐도 여기서 다시 뭉개져 한참 못 찾았다.
+    const DIGITS = new Set(['공', '영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'])
     const squashed: string[] = []
     for (const g of gloss) {
       const prev = squashed[squashed.length - 1]
-      if (prev && glossLabel(prev) === glossLabel(g)) continue
+      if (prev && glossLabel(prev) === glossLabel(g) && !DIGITS.has(glossLabel(g))) continue
       squashed.push(g)
     }
 

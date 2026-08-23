@@ -133,6 +133,33 @@ class Report:
 
 
 
+async def tap(loc, page=None, tries: int = 3, timeout: int = 4000) -> bool:
+    """누른다 — **누르기가 성사됐는지가 아니라 눌렀는지**를 답한다.
+
+    Playwright의 `click()`은 요소가 **두 프레임 같은 자리에 있어야** 누른다.
+    이 앱은 아바타가 늘 움직이고, 판에 부하가 걸리면 그 두 프레임이 안 나온다.
+    그래서 화면은 멀쩡한데 30초를 기다리다 죽는다(실측 2026-08-20·23:
+    같은 검사가 단독으로 돌리면 늘 통과했다). **부하에 따라 답이 바뀌는 검사는
+    못 믿는다.**
+
+    그래서 짧게 몇 번 눌러 보고, 안 되면 `dispatch_event`로 직접 이벤트를 준다.
+    누르기가 목적이 아니라 **그다음에 무엇이 나오는지**가 목적이므로, 이 함수의
+    성공/실패로 판정하지 말고 결과를 따로 재라.
+    """
+    for _ in range(tries):
+        try:
+            await loc.first.click(timeout=timeout)
+            return True
+        except Exception:
+            if page is not None:
+                await page.wait_for_timeout(300)
+    try:
+        await loc.first.dispatch_event("click")
+        return True
+    except Exception:
+        return False
+
+
 async def visible(loc, timeout: int = 12000) -> bool:
     """요소가 보일 때까지 기다린다 — **고정 대기 뒤에 count()를 세지 않는다.**
 
@@ -326,7 +353,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
         # 다음 문자를 재생시켜 번역을 한 번 더 돌게 한다
         nxt = pg.get_by_role("button", name=re.compile("다음"))
         if await nxt.count():
-            await nxt.first.click()
+            await tap(nxt, pg)
     if (DIST / "models/t2g/meta.json").exists():
         rep.check(backend == "nn", "번역: 학습 모델이 실제로 쓰임", str(backend))
     else:
@@ -433,7 +460,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # 방금 소리로 내보낸 답이 전체화면으로 떠 있으면 먼저 닫는다(상대에게 보여주는 화면).
     closer = pg.get_by_text("화면을 누르면 닫혀요")
     if await closer.count():
-        await closer.first.click()
+        await tap(closer, pg)
         await pg.wait_for_timeout(400)
     await pg.get_by_role("button", name="← 장소").click()
     await pg.wait_for_timeout(500)
@@ -463,7 +490,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # 다 뜨는데 엉뚱한 쪽을 가리키는 실패가 이 앱에 실제로 있었다.
     shelter = pg.get_by_role("button", name=re.compile("대피소 어디"))
     if await visible(shelter, 8000):
-        await shelter.first.click()
+        await tap(shelter, pg)
         # 답이 만들어지고 아바타가 붙을 때까지 기다린다
         got = await visible(pg.get_by_text(re.compile(r"(미터|킬로미터)")), 20000)
         rep.check(got, "묻기: 눌러서 물으면 답이 나온다")
@@ -569,7 +596,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     starter = pg.get_by_role("button", name="병원", exact=True)
     rep.check(await visible(starter), "사전: 시작 낱말 '병원'이 있음")
     if await starter.count():
-        await starter.first.click()
+        await tap(starter, pg)
         played = False
         for _ in range(10):
             await pg.wait_for_timeout(600)
@@ -601,17 +628,17 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     await pg.wait_for_timeout(2500)
     talk = pg.get_by_role("button", name=re.compile("대화"))
     if await visible(talk, 10000):
-        await talk.first.click()
+        await tap(talk, pg)
         await pg.wait_for_timeout(1200)
         # **장소를 고르기 전** 화면에 있다(`if (!place)`). 병원을 먼저 누르면
         # 그 화면을 지나쳐 버려 버튼을 못 찾는다(2026-08-20에 그랬다).
         sos_btn = pg.get_by_role("button", name=re.compile("긴급 도움"))
         if await visible(sos_btn, 10000):
             rep.check(True, "긴급: 입구가 있다")
-            await sos_btn.first.click()
+            await tap(sos_btn, pg)
             rep.check(await visible(pg.get_by_text(re.compile("청각장애인"))),
                       "긴급: 첫 문구 — 청각장애인임을 알림")
-            await pg.get_by_text("화면을 탭하면 다음 문구").first.click()
+            await tap(pg.get_by_text("화면을 탭하면 다음 문구"), pg)
             await pg.wait_for_timeout(400)
             rep.check(await visible(pg.get_by_text(re.compile("119"))),
                       "긴급: 탭하면 119 신고 문구")
@@ -620,7 +647,11 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
                       "긴급: 위치·소리 안내가 있음")
             # **"닫기"로 잡히는 버튼이 둘이다** — 머리줄의 오프라인 안내에도 있다.
             # `.first`를 누르면 엉뚱한 것을 닫고 긴급 화면은 그대로 남는다.
-            await pg.get_by_role("button", name=re.compile("✕ 닫기")).last.click()
+            close = pg.get_by_role("button", name=re.compile("✕ 닫기")).last
+            try:
+                await close.click(timeout=4000)
+            except Exception:
+                await close.dispatch_event("click")
             await pg.wait_for_timeout(1000)
             gone = not await pg.get_by_text(re.compile("화면을 탭하면 다음 문구")).count()
             rep.check(gone, "긴급: 닫으면 화면이 사라짐")
@@ -664,22 +695,22 @@ async def run_kiosk(browser, rep: Report, port: int) -> None:
     hospital = pg.get_by_role("button", name="🏥 병원")
     rep.check(await visible(hospital), "키오스크: 장소 목록에 병원이 있음")
     if await hospital.count():
-        await hospital.first.click()
+        await tap(hospital, pg)
         await pg.wait_for_timeout(800)
         # 장소를 고르면 **직원에게 보여주는 안내 화면**이 먼저 뜬다. 한 번 눌러
         # 지나야 대화 화면이다(처음에 이걸 빼먹어 "대화가 시작됐다"고 착각했다 —
         # 실제로는 기록이 하나도 없어 초기화 타이머가 아예 걸리지 않았다).
         start = pg.get_by_text("화면을 누르면 시작합니다")
         if await start.count():
-            await start.first.click()
+            await tap(start, pg)
             await pg.wait_for_timeout(800)
         answer = pg.get_by_role("button", name="🤟 내 답 카드")
         if await answer.count():
-            await answer.first.click()
+            await tap(answer, pg)
             await pg.wait_for_timeout(400)
         card = pg.get_by_role("button", name="머리", exact=True)
         if await card.count():
-            await card.first.click()
+            await tap(card, pg)
             await pg.wait_for_timeout(800)
         # **기록이 실제로 생겼는지**로 확인한다. 장소 화면을 벗어난 것만으로는
         # 부족하다 — 기록이 없으면 초기화 타이머가 걸리지 않아 검사가 헛돈다.

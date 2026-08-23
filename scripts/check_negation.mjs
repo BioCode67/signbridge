@@ -86,5 +86,37 @@ for (const [text, verb] of NEAR) {
   console.log(`  ${ok ? '✓' : '✗'} 부정이 '${verb}' 옆에 — ${gloss.join(' ')}`)
 }
 
+// **부정만 남고 동사가 사라지지 않는가.**
+//
+// 이것이 세 번째 실패 모양이다. 부정은 살아 있고(위 검사는 통과한다) **부정할
+// 대상이 없다** — 뜻이 통째로 없어진다:
+//
+//     문이 안 열려요 → `문0 **아니다0**`     ← "문이 아니다"로 읽힌다
+//     불이 안 켜져요 → `불0 **아니다0**`
+//
+// 피동형(`열리다`·`켜지다`)이 사전에 없어서였다(2026-08-23 실측). 부정이 빠지는
+// 것만큼 나쁜데 위 두 검사로는 안 잡힌다.
+const ALONE = [
+  ['문이 안 열려요', '열다'],
+  ['불이 안 켜져요', '켜다'],
+  ['물이 안 나와요', '나오다'],
+  ['문이 안 닫혀요', '닫다'],
+  ['약을 안 먹었어요', '먹다'],
+  ['못 갑니다', '가다'],
+  ['인터넷이 안 돼요', '되다'],
+]
+for (const [text, verb] of ALONE) {
+  const { gloss } = await agent.convert(text)
+  const lemmas = gloss.map(lemma)
+  const hasVerb = lemmas.includes(verb)
+  const negAt = lemmas.findIndex((g) => NEG.includes(g))
+  const verbAt = lemmas.indexOf(verb)
+  // 부정은 있는데 동사가 없으면 실패. 있으면 **바로 옆에** 있어야 한다.
+  const ok = hasVerb && (negAt < 0 || Math.abs(verbAt - negAt) === 1)
+  if (!ok) bad += 1
+  console.log(`  ${ok ? '✓' : '✗'} 부정할 대상이 남아 있는가 — ${text} → ${gloss.join(' ') || '(없음)'}`)
+  if (!hasVerb) console.log(`      '${verb}'가 사라졌다 — 부정만 남으면 뜻이 통째로 없어진다`)
+}
+
 console.log(bad ? `\n[부정] ✗ ${bad}건 — 뜻이 뒤집혀 나갑니다` : '\n[부정] ✓ 모든 말투에서 부정이 살아 있습니다')
 process.exit(bad ? 1 : 0)

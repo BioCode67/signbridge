@@ -105,14 +105,6 @@ const QUESTION: Record<string, string> = {
   어떻게: '어떻게 해요',
 }
 
-/**
- * 글로스열을 읽어 줄 만한 한국어로 만든다.
- *
- * 규칙은 셋뿐이다 — 지어내지 않기 위해 일부러 적게 둔다.
- *   1) 글로스 번호를 뗀다(아프다1 → 아프다)
- *   2) 마지막 용언은 공손형으로(아프다 → 아파요), 앞의 용언은 이어지는 형태로(가다 → 가고)
- *   3) 나머지는 그대로 띄어 쓴다
- */
 /** 자릿수 읽기 글로스 — 이어지면 한 수로 붙여 읽는다. */
 const DIGIT_WORD = new Set(['공', '영', '일', '이', '삼', '사', '오', '육', '칠', '팔', '구'])
 
@@ -129,6 +121,14 @@ const NEG_LEXICAL: Record<string, string> = {
   있다: '없어요',
 }
 
+/**
+ * 글로스열을 읽어 줄 만한 한국어로 만든다.
+ *
+ * 규칙은 셋뿐이다 — 지어내지 않기 위해 일부러 적게 둔다.
+ *   1) 글로스 번호를 뗀다(아프다1 → 아프다)
+ *   2) 마지막 용언은 공손형으로(아프다 → 아파요), 앞의 용언은 이어지는 형태로(가다 → 가고)
+ *   3) 나머지는 그대로 띄어 쓴다
+ */
 export function glossesToKorean(glosses: string[]): string {
   let lemmas = glosses
     .map((g) => {
@@ -171,17 +171,20 @@ export function glossesToKorean(glosses: string[]): string {
     l.startsWith('\u0000') ? l.slice(1, l.indexOf(':')) : null
   const bare = (l: string) => (negKind(l) ? l.slice(l.indexOf(':') + 1) : l)
   const lastVerb = lemmas.map((l) => isVerb(bare(l))).lastIndexOf(true)
+  /** 문장을 맺는 말 — 맨 뒤로 보낼 자리를 여기서 표시해 둔다. */
+  let endWord: string | null = null
   const words = lemmas.map((lemma, i) => {
     const kind = negKind(lemma)
     const plain = bare(lemma)
     if (!isVerb(plain)) return plain
     const stem = plain.slice(0, -1)
-    if (kind === 'dont') return `${stem}지 마세요`
-    if (kind && NEG_LEXICAL[plain]) return NEG_LEXICAL[plain]
+    const mark = (w: string) => { if (i === lastVerb) endWord = w; return w }
+    if (kind === 'dont') return mark(`${stem}지 마세요`)
+    if (kind && NEG_LEXICAL[plain]) return mark(NEG_LEXICAL[plain])
     const body = i === lastVerb ? polite(stem) : connective(stem)
-    if (kind === 'not') return `안 ${body}`
-    if (kind === 'cant') return `못 ${body}`
-    return body
+    if (kind === 'not') return mark(`안 ${body}`)
+    if (kind === 'cant') return mark(`못 ${body}`)
+    return mark(body)
   })
   // 용언이 하나도 없으면 낱말 나열이다 — 말끝을 맺어 준다.
   // **마지막이 의문사면 물음으로 맺는다**("이름 무엇요" → "이름 뭐예요?").
@@ -199,6 +202,7 @@ export function glossesToKorean(glosses: string[]): string {
   for (let i = 1; i < words.length; i++) {
     if (bare(lemmas[i]) !== '원하다' || !isVerb(bare(lemmas[i - 1]))) continue
     words[i - 1] = `${bare(lemmas[i - 1]).slice(0, -1)}고 싶어요`
+    endWord = words[i - 1]
     words.splice(i, 1)
     lemmas.splice(i, 1)
     break
@@ -223,9 +227,12 @@ export function glossesToKorean(glosses: string[]): string {
   // **맺는 용언을 맨 뒤로 보낸다.** 한국어는 용언이 끝에 온다 — 수어 어순
   // 그대로 읽으면 "아파요 어제부터"가 스피커에서 나온다. 낱말을 지어내는 것이
   // 아니라 **있는 낱말의 자리만** 바꾸는 것이라 뜻이 달라지지 않는다.
-  const endIdx = clung.findIndex((w) => w.endsWith('요') || w.endsWith('마세요'))
-  if (endIdx >= 0 && endIdx < clung.length - 1) {
-    const [verb] = clung.splice(endIdx, 1)
+  //
+  // 맺는 말을 **끝글자로 찾지 않는다** — `중요`처럼 `요`로 끝나는 명사가 걸린다.
+  // 활용할 때 표시해 둔 자리(`endWord`)를 그대로 쓴다.
+  const endAt = endWord === null ? -1 : clung.indexOf(endWord)
+  if (endAt >= 0 && endAt < clung.length - 1) {
+    const [verb] = clung.splice(endAt, 1)
     clung.push(verb)
   }
   return clung.join(' ')

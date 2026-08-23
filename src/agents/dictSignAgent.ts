@@ -61,7 +61,7 @@ const STOP_WORDS = new Set([
   '부터', '까지', '부로', '이후', '이전',
   // 연결어 — 뜻을 지어내면 오역이 된다(2026-08-20 실측).
   //   중이니 → 끊다1 / 동반한 → 번개1  … 둘 다 문장을 잇는 말일 뿐이다.
-  '중이니', '중이며', '중인', '동반한', '동반하여', '동반된', '동반',
+  '중이니', '중이며', '중인', '중입니다', '중이다', '중이었', '중이고', '동반한', '동반하여', '동반된', '동반',
   // 기관명 — 발신처는 번역하지 않는다. 대괄호를 떼도 본문에 그냥 나오면
   // `행정안전부 → 다스리다1`로 나갔다(출현 480회 중 90%).
   '행정안전부', '기상청', '질병관리청', '소방청', '해양경찰청',
@@ -389,9 +389,29 @@ export class DictSignAgent implements SignAgent {
      *  (`안`·`못`은 동사 **앞**에 오므로 여기 해당하지 않는다 — 그쪽은 따로 못박혀
      *  있고 회귀 사례가 지키고 있다.) */
     const POST_NEG = new Set(['하지마1', '하지마0', '하지마'])
+    /** **앞에 붙는 부정은 뒤에 올 용언과 한 덩어리로 둔다.**
+     *
+     *  `안`·`못`은 동사 **앞**에 온다(`안 열려요`). 덩어리가 따로면 어순을 바꿀 때
+     *  부정만 앞으로 밀린다 — 실측: "인터넷이 안 돼요" → **`아니다0` 인터넷0 되다1**
+     *  ("아니다"가 인터넷을 부정하는 것처럼 읽힌다). `POST_NEG`와 짝이다. */
+    const PRE_NEG = new Set(['아니다0', '아니다', '못하다1', '못하다'])
+    let pendingNeg = -1
     const pushMaybeNeg = (g: string) => {
-      if (POST_NEG.has(g) && chunkIds.length) pushAs(g, chunkIds[chunkIds.length - 1])
-      else push(g)
+      if (POST_NEG.has(g) && chunkIds.length) {
+        pushAs(g, chunkIds[chunkIds.length - 1])
+        return
+      }
+      if (PRE_NEG.has(g)) {
+        push(g)
+        pendingNeg = chunkIds[chunkIds.length - 1] ?? -1
+        return
+      }
+      if (pendingNeg >= 0) {
+        pushAs(g, pendingNeg)
+        pendingNeg = -1
+        return
+      }
+      push(g)
     }
     /** 숫자 읽기처럼 반드시 붙어 다녀야 하는 글로스들 */
     const pushGroup = (gs: string[], allowRepeat = false) => {
@@ -735,13 +755,27 @@ export class DictSignAgent implements SignAgent {
       if (domain === 'disaster') {
         ordered = chunks.slice().sort((a, b) => a.bias - b.bias || a.at - b.at)
       } else {
-        // 아는 덩어리끼리만 순서를 정하고 **원래 아는 덩어리가 있던 자리에** 되꽂는다.
+        // **표는 두 무리만 안다 — 세밀한 값으로 줄 세우지 않는다.**
+        //
+        // 값의 분포를 세어 보면 0.1~0.3에 241종, 0.7~0.9에 124종이고 **0.4~0.6은
+        // 하나도 없다.** 즉 표가 말하는 것은 "앞쪽(지역명)"과 "뒤쪽(당부)"이라는
+        // 두 무리일 뿐, 0.69와 0.76의 차이는 잡음이다. 그걸 줄 세우면:
+        //
+        //     인터넷이 안 돼요 → **아니다0**(0.692) 인터넷0(0.758) 되다1
+        //     ("아니다"가 인터넷을 부정하는 것처럼 읽힌다)
+        //
+        // 그래서 **무리로 가른 뒤 무리 안에서는 원래 순서를 지킨다.**
         const knownAt: number[] = []
-        const knownChunks: typeof chunks = []
-        chunks.forEach((c, i) => { if (c.known) { knownAt.push(i); knownChunks.push(c) } })
-        knownChunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
+        const early: typeof chunks = []
+        const late: typeof chunks = []
+        chunks.forEach((c, i) => {
+          if (!c.known) return
+          knownAt.push(i)
+          ;(c.bias < 0.5 ? early : late).push(c)
+        })
+        const grouped = [...early, ...late]
         ordered = chunks.slice()
-        knownAt.forEach((slot, i) => { ordered[slot] = knownChunks[i] })
+        knownAt.forEach((slot, i) => { ordered[slot] = grouped[i] })
       }
       gloss.length = 0
       // **반복은 덩어리가 다를 때만 지운다.** 어순을 바꾸다 우연히 같은 글로스가

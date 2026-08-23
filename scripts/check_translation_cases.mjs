@@ -38,7 +38,9 @@ const lemma = (g) => g.replace(/[0-9#:]+$/, '')
 
 let failed = 0
 for (const c of cases) {
-  const { gloss } = await agent.convert(c.text)
+  // 어순표는 재난안전 말뭉치에서 쟀다 — 사례도 어느 자리 문장인지 밝힌다.
+  // (`order`를 못박은 사례는 전부 재난문자다.)
+  const { gloss } = await agent.convert(c.text, c.domain ?? (c.order ? 'disaster' : 'everyday'))
   const lemmas = gloss.map(lemma)
   const missing = (c.must ?? []).filter((w) => !lemmas.includes(w))
   const wrong = (c.never ?? []).filter((w) => lemmas.includes(w))

@@ -250,7 +250,7 @@ SEED_OVERRIDES = {
     "세부": "자세하다1",      # 강동2(지명)
     "조사중": "조사0",        # 평택1(지명)
     "낮에는": "낮1",          # 연기2(담배 연기)
-    "집합금지": "모이다1",    # 술1
+    "집합금지": "금지1",     # 모이다1 — "집합금지"는 금지가 알맹이다
     "어민": "물고기2",        # 캠프1
     "불면서": "바람1",        # 몸1 — "바람이 불면서"
     "대체": "바꾸다1",        # 햇빛2
@@ -480,6 +480,32 @@ SEED_OVERRIDES = {
     "검사소": "검사0",        # (마루)
     "선별검사소": "검사0",
     "임시선별검사소": "검사0",
+    # ── 2026-08-23 창구 말투 훑기
+    # 은행·관공서 창구에서 "영업시간"은 가장 흔한 말인데 `초대1`로 나갔다.
+    # 수어 사전에 '영업' 클립이 없다 — '장사'는 상업 행위라 은행에 안 맞고,
+    # '일하다'가 뜻이 넓어 틀리지 않는다("일하는 시간").
+    "영업": "일하다1",
+    "영업시간": "일하다1",
+    "접수증": "접수0",        # 클립 없음 — '접수'로라도 뜻이 이어진다
+    "식전": "식전",           # ['식사','식전'] 중 1순위가 식사라 '전'이 사라졌다
+    # "열이 나다"의 `나다`는 클립이 없어 **날다(fly)** 나 `나`(1인칭)로 나갔다.
+    # 병원 창구에서 "열이 나세요?"가 "열 날다"가 된다. `생기다`가 뜻이 맞는다.
+    "나다": "생기다1",
+    "나요": "생기다1",
+    "나세요": "생기다1",
+    "나셨어요": "생기다1",
+    "났어요": "생기다1",
+    "났습니다": "생기다1",
+    "났나요": "생기다1",
+    "났다": "생기다1",
+}
+
+# 존대 `-시-`가 든 활용형은 **낱말이 아니다**. 말뭉치에서 앞 낱말이 잘려 나온
+# 조각인데 사전 키로 남아, 어간 복원(`stemChain`의 `HONORIFIC_RE`)보다 먼저
+# 걸려 오역을 낸다(실측: `하셔야` → **입다1**, "착용하셔야"의 꼬리였다).
+HONORIFIC_ONLY = {
+    "하셔야", "하셔서", "하시면", "하십니다", "하셨나요", "하시나요",
+    "되셔야", "되시면", "오셔야", "가셔야", "주셔야", "내셔야",
 }
 
 # 조사·어미만으로 이루어진 표면형은 낱말이 아니다. 사전에 남으면 조사가 덜 떨어진
@@ -1139,9 +1165,60 @@ def main() -> None:
             dropped += 1
     print(f"[align] 조사 전용 키 {dropped}개 제거")
 
+    hon_dropped = 0
+    for word in HONORIFIC_ONLY:
+        if table.pop(word, None) is not None:
+            hon_dropped += 1
+    print(f"[align] 존대 활용 조각 {hon_dropped}개 제거")
+
+    # **저장소 사전에서 회수한 손질을 함께 싣는다.**
+    #
+    # 앞선 세션들이 창구·병원 말투를 훑으며 고친 결과가 `align.json`에만 들어가고
+    # 여기 빌더에는 안 들어가 있었다. 그래서 사전을 다시 만들면 417개 손질이
+    # 조용히 사라진다(실측 2026-08-23: 회귀 사례 240건 중 **59건이 한꺼번에**
+    # 깨졌다 — `연락처`가 전화번호0을 잃고 530으로, `말씀`·`성함`·`써`가 증발).
+    #
+    # 사전은 빌더가 만든 것과 같아야 한다. 한쪽만 고치면 어느 날 조용히 되돌아간다.
+    overrides = dict(SEED_OVERRIDES)
+    fixes_path = Path(__file__).resolve().parents[1] / "data/align_fixes.tsv"
+    if fixes_path.exists():
+        extra = 0
+        for line in fixes_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            word, _, gloss = line.partition("\t")
+            if not gloss:
+                continue
+            # **회수한 손질이 이긴다.** 이 파일은 실제로 배포돼 있던 사전에서
+            # 떠낸 것이라, 표현률·회귀 사례를 **그 상태에서 쟀다.** 파이썬 시드가
+            # 더 오래된 판단일 수 있다(실측: `집합금지`가 시드로는 `모이다1`인데
+            # 배포본은 `금지1`이었다 — "집합금지"는 금지가 알맹이다).
+            overrides[word] = gloss
+            extra += 1
+        print(f"[align] 회수한 손질 {extra}개 ({fixes_path.name})")
+
+    # `낱말<TAB>-` 은 **사전에서 뺀다**는 뜻이다.
+    #
+    # 통계가 만든 키가 **올바른 복합어 분해를 가로막는** 자리가 있다. 사전에
+    # 없는 낱말은 조각으로 쪼개 옮기는데(실외활동 → 실외+활동 → `밖1 활동1`),
+    # 통째 키가 생기면 그게 먼저 걸려 조각이 아예 안 만들어진다:
+    #
+    #     실외활동 → **아이1**       도와주 → **산소마스크0**
+    #
+    # 낱말 수가 많다고 좋은 사전이 아니다.
+    dropped_fix = 0
+    for word, g in list(overrides.items()):
+        if g == "-":
+            overrides.pop(word)
+            if table.pop(word, None) is not None:
+                dropped_fix += 1
+    if dropped_fix:
+        print(f"[align] 분해를 가로막던 키 {dropped_fix}개 제거")
+
     seeded = 0
     spread = 0
-    for word, g in SEED_OVERRIDES.items():
+    for word, g in overrides.items():
         if playable is not None and g not in playable:
             print(f"[align] ⚠️ 시드 {word}→{g} 는 동작 사전에 없어 건너뜀")
             continue
@@ -1161,6 +1238,11 @@ def main() -> None:
             if key == word or not key.startswith(word):
                 continue
             tail = key[len(word):]
+            # **자기 시드가 있는 낱말은 덮지 않는다.** `안` → 아니다0(부정) 시드가
+            # `안에` → 안(내부) 시드를 덮어써 "집 안에 있으세요"가
+            # `집 **아니다** 있다`로 나갔다 — 뜻이 뒤집힌다.
+            if key in overrides:
+                continue
             if tail in _SEED_TAILS and table[key][:1] != [g]:
                 rest = [x for x in table[key] if x != g]
                 table[key] = [g] + rest[: args.top - 1]

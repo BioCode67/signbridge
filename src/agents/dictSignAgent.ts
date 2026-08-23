@@ -15,6 +15,20 @@ import { RuleSignAgent } from './signAgent'
 
 /** 조사·어미 근사 제거 — 파이썬 쪽 build_align_dict.py와 **같은 규칙**이어야 한다.
  *  한쪽만 고치면 사전 키가 어긋나 조용히 못 찾는다. */
+/** 조사·어미는 **겹쳐 붙는다** — "네 시까지입니다"의 `까지입니다`가 그렇다.
+ *  `PARTICLE_RE`는 `$` 고정이라 한 번에 한 겹만 벗는다. 겹친 것을 다 벗기려면
+ *  더 벗겨지지 않을 때까지 돌려야 한다(실측: `시까지입니다`가 단위로 안 잡혀
+ *  "네 시까지입니다"가 `사` 하나로 나갔다). */
+function stripParticles(w: string): string {
+  let out = w
+  for (let i = 0; i < 5; i++) {
+    const next = out.replace(PARTICLE_RE, '')
+    if (next === out) break
+    out = next
+  }
+  return out
+}
+
 const PARTICLE_RE =
   /(나요|시기|어야|아야|여야|겠고|겠지|겠다|겠는|이므로|으므로|므로|이라서|라서|이지만|지만|으려면|려면|으면서|면서|으로부터|로부터|에서는|에게서|께서는|하시기|하십시오|입니다|습니다|ㅂ니다|하겠습니다|겠습니다|았습니다|었습니다|였습니다|습니까|ㅂ니까|을까요|ㄹ까요|으십시오|십시오|으세요|세요|주세요|네요|지요|까요|어요|아요|여요|드리오니|되오니|하오니|오니|이에요|예요|에요|이야|인가요|인가|인데|이죠|죠|거예요|을게요|군요|잖아요|거든요|더라고요|던데요|으로|에서|에게|에는|까지|부터|이나|라도|처럼|만큼|보다|이며|이고|하고|하는|하여|해서|되어|되는|된다|하라|하세요|해요|이다|이란|라는|했|해|하|은|는|이|가|을|를|와|과|의|도|만|로|에|께|랑|나)$/
 const MIN_STEM = 2
@@ -86,8 +100,25 @@ export function stemKorean(word: string): string {
  *  엑스레이가 빠짐). `장애인이 → 장애`처럼 뜻이 바뀌는 자리도 같은 이유다.
  *
  *  그래서 벗긴 순서대로 다 만들어 두고, 사전에 **처음 걸리는 것**을 쓴다. */
+/** 존대 `-시-`가 든 활용 — 어간만 남기면 한 글자가 되어 버려진다.
+ *
+ *  창구에서 가장 흔한 말투가 이것인데 통째로 사라지고 있었다(2026-08-20 실측):
+ *
+ *      오셔야 합니다 → (없음)      가셔야 합니다 → (없음)
+ *      기다리셔야 합니다 → (없음)   하셔야 합니다 → **입다1**
+ *
+ *  `-셔야`는 `-시-어야`라 조사 규칙에 걸리지 않고, 벗겨 봐야 `오`·`가`·`하`처럼
+ *  한 글자만 남아 "너무 짧다"에 다시 걸린다. 그래서 **어간에 `다`를 붙인 원형**을
+ *  후보에 넣는다 — 사전에는 `오다`·`가다`·`기다리다`가 원형으로 들어 있다.
+ *
+ *  `신`(신다/신발)은 넣지 않는다 — `-실`이 `싣다`로 갈리던 것과 같은 함정이다. */
+const HONORIFIC_RE =
+  /(으셔야|셔야|으셔서|셔서|으시면|시면|으십니다|십니다|으십시오|으셨습니다|셨습니다|으셨어요|셨어요|으셨나요|셨나요|으시겠어요|시겠어요|으시나요|시나요|으시는|시는|으세요|세요)$/
+
 export function stemChain(word: string): string[] {
   const forms = [word]
+  const hon = word.replace(HONORIFIC_RE, '')
+  if (hon !== word && hon.length >= 1) forms.push(hon + '다')
   let out = word
   let prev = ''
   while (out !== prev) {
@@ -180,6 +211,28 @@ const SINO_DIGIT: Record<string, number> = {
 }
 const SINO_PLACE: Record<string, number> = { 십: 10, 백: 100, 천: 1000, 만: 10000 }
 // 고유어 수사 — 시각·개수에 쓴다(세 시, 두 명). 관형형(한·두·세·네)도 함께.
+/** 고유어 날수 — 클립이 없어 통째로 사라지던 말들.
+ *
+ *  수어 사전에 `이틀`·`사흘`·`나흘`·`열흘` 동작이 **하나도 없다.** 그래서
+ *  "검사 결과는 이틀 뒤에 나옵니다"가 `검사 결과0 뒤0`로 나갔다 —
+ *  **며칠 뒤인지가 사라진다.** 병원 창구에서 그건 정보의 알맹이다.
+ *
+ *  수어로는 숫자 + `일`로 표현한다. `하루`는 클립이 있어 여기 넣지 않는다. */
+/** 한 낱말인데 **수어로는 두 동작**인 말들 — 한쪽 동작이 사전에 없어 뜻이 잘린다.
+ *
+ *  실측: `식후` → `식사`. 처방전에 늘 적히는 말인데 **'후'가 사라져** 밥 먹기
+ *  전인지 뒤인지 알 수 없게 나갔다. 동작 사전에 `식후` 클립이 없고 `식사`와
+ *  `후1`은 따로 있다. 통계 사전은 낱말당 글로스 하나를 고르므로 여기서 잇는다.
+ *
+ *  (`식전`은 클립이 그대로 있어 넣지 않는다.) */
+const PHRASE_GLOSS: Record<string, string[]> = {
+  식후: ['식사', '후1'],
+}
+
+const NATIVE_DAYS: Record<string, number> = {
+  이틀: 2, 사흘: 3, 나흘: 4, 닷새: 5, 엿새: 6, 이레: 7, 여드레: 8, 아흐레: 9, 열흘: 10,
+}
+
 const NATIVE_NUM: Record<string, number> = {
   하나: 1, 한: 1, 둘: 2, 두: 2, 셋: 3, 세: 3, 넷: 4, 네: 4, 다섯: 5, 여섯: 6,
   일곱: 7, 여덟: 8, 아홉: 9, 열: 10, 스물: 20, 스무: 20, 서른: 30, 마흔: 40,
@@ -281,7 +334,9 @@ export class DictSignAgent implements SignAgent {
     return this.loading
   }
 
-  async convert(text: string): Promise<SignConversion> {
+  /** `domain`은 **어순 재배치**를 가른다. 어순표는 재난안전 말뭉치에서 쟀으므로
+   *  그 밖에서는 통째로 믿지 않는다 — 아래 재배치 주석 참고. 기본은 보수적인 쪽. */
+  async convert(text: string, domain: 'disaster' | 'everyday' = 'everyday'): Promise<SignConversion> {
     await this.ensure()
     const table = this.table
     if (!table) {
@@ -384,6 +439,32 @@ export class DictSignAgent implements SignAgent {
     let pendingNative = false
     /** 방금 흘려보낸 수가 고유어였는가 — 바로 뒤의 단위 해석에 쓴다. */
     let lastNative = false
+    /** 한글 수사로 말한 시각을 시각 글로스로 낸다 — "네 시" → `시:4시`.
+     *
+     *  아라비아 숫자(`14시`)는 `SCAN_RE`가 이미 잡지만 **한글 수사는 못 잡는다.**
+     *  창구에서 시간을 말할 때는 거의 늘 고유어다("네 시까지입니다"). 그대로
+     *  두면 `사 시`로 나가 **자릿수 읽기**가 되는데, 사람 번역가는 전용 동작
+     *  하나(`시:4시`)를 쓴다. 실측에서 `네 시까지입니다`는 아예 `사` 하나로
+     *  나갔다 — 시간이라는 사실 자체가 사라졌다.
+     *
+     *  고유어 수사일 때만 시각으로 본다. 한자어 `사 시`는 시간대로 안 쓴다. */
+    const flushHour = (hourWord: string): boolean => {
+      if (pending === null || !pendingNative || pending < 1 || pending > 12) return false
+      const rest = hourWord.slice(1)
+      if (rest !== '' && stripParticles(rest) !== '') return false
+      // **오전인지 오후인지 지어내지 않는다.** "네 시"는 12시간제 그대로라
+      // 원문에 근거가 없다. `DAYPART`를 그냥 대면 창구의 "네 시까지입니다"가
+      // `새벽1 시:4시`로 나간다 — 눈썹 방향을 지어내지 않는 것과 같은 이유다.
+      // (앞에 "오후"라고 말했으면 그 말이 이미 따로 글로스로 나가 있다.)
+      const gs = timeGlosses(pending, 0)
+      if (!gs) return false
+      pushGroup(gs.slice(-1))
+      pending = null
+      pendingNative = false
+      lastNative = false
+      afterNumber = false
+      return true
+    }
     const flushNumber = () => {
       if (pending === null) return
       pushGroup(numberGlosses(String(pending)))
@@ -467,6 +548,8 @@ export class DictSignAgent implements SignAgent {
           }
         }
       }
+      // 고유어 수사 + `시`는 시각이다 — 숫자를 흘리기 **전에** 잡는다.
+      if (pending !== null && m[15]?.[0] === '시' && flushHour(m[15])) continue
       flushNumber()
       if (m[13]) {
         // 전화번호: 자릿수 읽기 (032 → 공 삼 이)
@@ -480,11 +563,23 @@ export class DictSignAgent implements SignAgent {
         continue
       }
       const raw = m[15]
+      // 한 낱말 → 두 동작(식후 = 식사 + 후). 한 덩어리로 두어 갈라지지 않게 한다.
+      const phrase = PHRASE_GLOSS[stripParticles(raw)] ?? PHRASE_GLOSS[raw]
+      if (phrase) { pushGroup(phrase); afterNumber = false; continue }
+      // 고유어 날수는 숫자 + `일`로 낸다 — 클립이 없어 통째로 사라지던 자리다.
+      const days = NATIVE_DAYS[stripParticles(raw)] ?? NATIVE_DAYS[raw]
+      if (days !== undefined) {
+        const dayUnit = UNIT_GLOSS['일']
+        const gs = numberGlosses(String(days))
+        pushGroup(dayUnit ? [...gs, dayUnit] : gs)
+        afterNumber = false
+        continue
+      }
       // 숫자 뒤의 단위(3일·14시·5층)는 한 글자여도 살린다 — 조사가 붙어도("14시에")
       // 단위 글자 + 조사뿐이면 단위로 본다.
       if (afterNumber && UNIT_GLOSS[raw[0]]) {
         const rest = raw.slice(1)
-        if (rest === '' || rest.replace(PARTICLE_RE, '') === '') {
+        if (rest === '' || stripParticles(rest) === '') {
           // 고유어 수사 뒤의 `분`은 시간이 아니라 **사람을 세는 말**이다.
           const unitGloss = raw[0] === '분' && lastNative ? '명' : UNIT_GLOSS[raw[0]]
           // 단위는 앞의 숫자와 같은 덩어리로 — 어순을 바꿔도 떨어지지 않게.
@@ -551,7 +646,15 @@ export class DictSignAgent implements SignAgent {
         if (parts) {
           const glossed = parts.filter((p) => !p.stop)
           if (parts.length >= 2 && glossed.length >= 1) {
-            for (const part of glossed) push(lookup(part.piece)![0])
+            // **한 낱말에서 나온 조각은 한 덩어리로 둔다.** 따로 두면 어순을 바꿀 때
+            // 사이로 동사가 밀려든다(실측):
+            //
+            //     번호표를 뽑아 주세요 → 표1 **뽑다0** 번호0   ← 순서까지 뒤집혔다
+            //     비밀번호를 눌러 주세요 → 비밀0 **누르다0** 번호0
+            //
+            // 원래 한 낱말이었으니 함께 움직여야 한다. 부정을 자기 동사에 붙여 둔
+            // 것(`POST_NEG`)과 같은 이유다.
+            pushGroup(glossed.map((part) => lookup(part.piece)![0]))
             continue
           }
           // "주시기바랍니다"처럼 전부 제외어 조각이면 조용히 소비한다(카드 소음 방지).
@@ -575,7 +678,7 @@ export class DictSignAgent implements SignAgent {
     const order = this.order
     if (order && gloss.length >= 3) {
       // 덩어리 단위로 모은다(숫자+단위가 갈라지지 않게).
-      const chunks: { glosses: string[]; bias: number; at: number }[] = []
+      const chunks: { glosses: string[]; bias: number; at: number; known?: boolean }[] = []
       for (let i = 0; i < gloss.length; i++) {
         const id = chunkIds[i]
         const last = chunks[chunks.length - 1]
@@ -589,10 +692,36 @@ export class DictSignAgent implements SignAgent {
         const known = c.glosses
           .map((g) => order[glossLabel(g)])
           .find((v) => v !== undefined)
-        if (known !== undefined) c.bias = known
+        if (known !== undefined) { c.bias = known; c.known = true }
       }
-      chunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
-      const reordered = chunks.flatMap((c) => c.glosses)
+      // **어순표는 재난안전 말뭉치에서 쟀다 — 그 밖에서는 통째로 믿지 않는다.**
+      //
+      // 표에는 0.4~0.6 구간이 **한 낱말도 없다**(365종 전부 양극단). 즉 표가 아는
+      // 것은 "맨 앞(지역명)"과 "맨 뒤(당부)"뿐이고, 그 사이는 재난문자에서 그
+      // 낱말이 어디쯤 나왔나 하는 통계일 뿐이다. 창구 문장에 그대로 대면 어긋난다:
+      //
+      //     비밀번호를 눌러 주세요 → **누르다0** 비밀0 번호0
+      //     ('번호' 0.69 vs 모르는 '누르다' 0.5 → 동사가 목적어 앞으로 나갔다)
+      //
+      // 재난문자는 원문 어순이 뒤죽박죽이라("조심하세요 오늘 경산시에 지진")
+      // 전면 재배치가 이득이지만, 창구·일상 한국어는 이미 [무엇을][어찌하다]
+      // 순이라 흔들 이유가 없다. 그래서 **재난문자에서만 모르는 낱말까지 함께**
+      // 정렬하고, 밖에서는 **표가 아는 덩어리만** 제 자리로 옮긴다.
+      // (학습 모델을 domain으로 가른 것과 같은 판단이다.)
+      let reordered: string[]
+      if (domain === 'disaster') {
+        chunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
+        reordered = chunks.flatMap((c) => c.glosses)
+      } else {
+        // 아는 덩어리끼리만 순서를 정하고 **원래 아는 덩어리가 있던 자리에** 되꽂는다.
+        const knownAt: number[] = []
+        const knownChunks: typeof chunks = []
+        chunks.forEach((c, i) => { if (c.known) { knownAt.push(i); knownChunks.push(c) } })
+        knownChunks.sort((a, b) => a.bias - b.bias || a.at - b.at)
+        const slotted = chunks.slice()
+        knownAt.forEach((slot, i) => { slotted[slot] = knownChunks[i] })
+        reordered = slotted.flatMap((c) => c.glosses)
+      }
       gloss.length = 0
       for (const g of reordered) if (gloss[gloss.length - 1] !== g) gloss.push(g)
     }

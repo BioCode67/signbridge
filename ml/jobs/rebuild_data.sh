@@ -7,7 +7,8 @@
 # 동작 사전만 다시 만들고 나머지를 두면, 사라진 글로스를 가리키는 번역이 남아
 # **아바타가 조용히 서 있는다**(실측: 상용구 30개 중 17개가 이렇게 죽었다).
 #
-# 마지막 여섯 검사는 건너뛰지 말 것:
+# 마지막 검사들은 건너뛰지 말 것:
+#   check_align_fixes      손으로 고친 번역 417건이 새 사전에도 살아 있는가
 #   check_app_glosses      앱이 쓰는 글로스가 사전에 실존하는가
 #   check_rule_parity      파이썬과 TS가 같은 조사·어미 규칙을 쓰는가
 #   check_translation_cases 과거에 났던 오역이 되살아나지 않았는가
@@ -23,35 +24,40 @@ SCRIPT=${SCRIPT:-~/sbdata/script}
 INDEX=${INDEX:-"$HOME/sbdata/ksl $HOME/sbdata/ksl-slword"}
 TOP=${TOP:-10000}
 
-echo "── 1/8 웹 동작 사전 (빈도 상위 $TOP + 생활 어휘 보장)"
+echo "── 1/9 웹 동작 사전 (빈도 상위 $TOP + 생활 어휘 보장)"
 # shellcheck disable=SC2086
 python -m ml.etl.export_web_bank --bank "$BANK" --index $INDEX \
   --out public/data --top "$TOP" \
   --must ml/data/daily_vocab.txt ml/data/daily_vocab_aihub.txt
 
-echo "── 2/8 번역 사전 (Dice + 표제어 직결 + 활용형)"
+echo "── 2/9 번역 사전 (Dice + 표제어 직결 + 활용형)"
 python -m ml.etl.build_align_dict --data "$SCRIPT" \
   --out public/data/align.json --vocab public/data/bank.json
 
-echo "── 3/8 어순표 (말뭉치에서 잰 낱말 위치)"
+echo "── 3/9 어순표 (말뭉치에서 잰 낱말 위치)"
 python -m ml.etl.build_order --data "$SCRIPT" \
   --out public/data/order.json --vocab public/data/bank.json
 
-echo "── 4/8 앱 글로스 정합 검사"
+echo "── 4/9 손질이 새 사전에 살아 있는가"
+# 사전을 다시 만들면 손으로 고친 번역이 조용히 되돌아간다. 낱말은 그대로 다
+# 나가므로 표현률로도 화면으로도 안 잡힌다 — 뜻만 틀려진다(2026-08-23 실측).
+python3 ml/tools/check_align_fixes.py
+
+echo "── 5/9 앱 글로스 정합 검사"
 python3 ml/tools/check_app_glosses.py
 
-echo "── 5/8 파이썬↔TS 규칙 대조 (조사·어미·제외어)"
+echo "── 6/9 파이썬↔TS 규칙 대조 (조사·어미·제외어)"
 python3 ml/tools/check_rule_parity.py
 
-echo "── 6/8 번역 오역 회귀 검사"
+echo "── 7/9 번역 오역 회귀 검사"
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
   scripts/check_translation_cases.mjs
 
-echo "── 7/8 고개 동작이 합성에 실리는가"
+echo "── 8/9 고개 동작이 합성에 실리는가"
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
   scripts/check_nonmanual.mjs
 
-echo "── 8/8 묻기 화면 — 의도 판정 · 길찾기 계산"
+echo "── 9/9 묻기 화면 — 의도 판정 · 길찾기 계산"
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
   scripts/check_intent.mjs
 node --experimental-strip-types --import ./scripts/ts-register.mjs \

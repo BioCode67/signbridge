@@ -165,7 +165,9 @@ export class NnSignAgent implements SignAgent {
       void this.ensure().then(() => {
         this.ready = Boolean(this.meta && this.enc && this.dec && this.ort)
       })
-      const out = await this.fallback.convert(text)
+      // NnSignAgent은 **재난문자 자리에서만** 쓰인다. 사전으로 물러설 때도
+      // 그 자리이므로 재난 어순표를 그대로 쓴다.
+      const out = await this.fallback.convert(text, 'disaster')
       this.lastBackend = this.fallback.lastBackend
       return out
     }
@@ -177,7 +179,9 @@ export class NnSignAgent implements SignAgent {
       this.lastBackend = 'nn'
       return { text, gloss, unmatched: [] }
     } catch {
-      const out = await this.fallback.convert(text)
+      // NnSignAgent은 **재난문자 자리에서만** 쓰인다. 사전으로 물러설 때도
+      // 그 자리이므로 재난 어순표를 그대로 쓴다.
+      const out = await this.fallback.convert(text, 'disaster')
       this.lastBackend = this.fallback.lastBackend
       return out
     }

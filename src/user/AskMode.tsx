@@ -26,6 +26,8 @@ import { useRecognizer } from '../recognition/useRecognizer'
 import type { LandmarkFrame } from '../recognition/landmarks'
 import RecognizedWords from './RecognizedWords'
 import SignStage from './SignStage'
+import { useCamZoom, ZOOM_LABELS } from './camZoom'
+import CamZoomButton from './CamZoomButton'
 import { useSignPlayer } from './useSignPlayer'
 import { detectIntent, intentKo, type Intent } from './askIntent'
 import {
@@ -73,6 +75,8 @@ export default function AskMode({ notice, onImmersive }: Props) {
   const running = status === 'running'
   const rec = useRecognizer(running)
   useEffect(() => { pushFrameRef.current = rec.pushFrame }, [rec.pushFrame])
+  // 화면 거리 조절 — **표시만** 바꾼다(CamZoom.tsx의 주석 참고).
+  const cam = useCamZoom()
 
   const player = useSignPlayer()
   const [phase, setPhase] = useState<Phase>('idle')
@@ -336,10 +340,35 @@ export default function AskMode({ notice, onImmersive }: Props) {
         className={asking
           ? 'relative min-h-0 flex-1 overflow-hidden bg-black'
           : 'absolute right-3 top-3 z-20 h-28 w-20 overflow-hidden rounded-2xl border-2 border-white/25 bg-black'}
+        data-sign-camfit={asking ? 'contain' : 'cover'}
+        data-sign-camzoom={asking ? cam.scale : 1}
       >
-        <video ref={videoRef} playsInline muted
-          className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90" />
-        <canvas ref={overlayRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+        {/* **배율은 감싼 층에 건다.** video의 `-scale-x-100`과 Tailwind `scale-*`는 같은
+            `--tw-scale-x`에 써서 합성되지 않고 한쪽이 조용히 사라진다(거울이 뒤집혀도
+            정확도는 그대로라 어떤 검사도 안 걸린다). 래퍼에 걸면 곱해져 정상 합성되고,
+            영상과 뼈대가 **함께** 움직여 정합이 유지된다. */}
+        <div
+          className="absolute inset-0"
+          style={asking && cam.scale !== 1
+            ? { transform: `scale(${cam.scale})`, transformOrigin: 'center' }
+            : undefined}
+        >
+          {/* video와 canvas에 **같은** object-fit을 준다. 캔버스 비트맵은 언제나
+              video.videoWidth×videoHeight로 잡히므로(useHolistic.ts) 내재 비율이 같고,
+              같은 상자·같은 fit이면 픽셀 단위로 겹친다. 예전에는 canvas에 fit이 없어
+              기본값 fill(늘이기)이었고, video는 cover(잘라내기)였다 — 폰에서 뼈대가
+              가로로 0.385배 눌려 몸에 붙지 않았다. */}
+          <video ref={videoRef} playsInline muted
+            className={`absolute inset-0 h-full w-full -scale-x-100 opacity-90 ${asking ? 'object-contain' : 'object-cover'}`} />
+          <canvas ref={overlayRef}
+            className={`absolute inset-0 h-full w-full ${asking ? 'object-contain' : 'object-cover'}`}
+            aria-hidden="true" />
+        </div>
+
+        {asking && (
+          <CamZoomButton zoom={cam.zoom} label={cam.label} name={cam.name}
+            hint={cam.hint} onNext={cam.next} big={cam.kiosk} />
+        )}
 
         {asking && status === 'loading' && (
           <div className="absolute inset-0 grid place-items-center bg-space-950/80">
@@ -402,6 +431,14 @@ export default function AskMode({ notice, onImmersive }: Props) {
               조금 뒤로 물러나서 <b className="text-white">양손이 화면 안</b>에 들어오게 해 주세요.
               손을 가슴 높이로 들면 잘 잡혀요.
             </p>
+            {/* 확대 중에는 다시 화면 ≠ 프레임이다 — 손이 프레임 안인데 화면 밖일 수 있다.
+                이 말이 없으면 사용자는 더 뒤로 물러나거나 더 확대한다. */}
+            {cam.zoom > 0 && (
+              <p className="mx-auto mt-2 max-w-sm break-keep rounded-2xl bg-black/60 px-4 py-2 text-base leading-relaxed text-amber-200">
+                지금 화면을 크게 보고 있어요 — <b className="text-white">{ZOOM_LABELS[0]}</b>로 바꾸면
+                손이 더 잘 들어와요.
+              </p>
+            )}
           </div>
         )}
 

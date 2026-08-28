@@ -26,6 +26,14 @@ python3 ml/tools/check_rule_parity.py   # 조사·어미·제외어 규칙도 �
 
 Node 22의 타입 스트리핑으로 TS를 직접 실행해 수치를 대조한다. 현재 **오차 0**.
 
+**카메라는 표시와 촬영을 나눠서 본다.** 화면이 어떻게 보이는지(object-fit·transform)는
+얼마든지 바꿔도 된다 — MediaPipe는 `<video>`의 내재 프레임버퍼를 읽어 CSS가 닿지 않는다.
+하지만 `useHolistic.ts`의 **getUserMedia 제약(640×480)은 건드리지 말 것.** 화면비를
+16:9로 넓히면 코드를 한 줄도 안 고치고 y 특징 51개가 1.333배 밀리는데,
+**`feature_parity`가 그것을 못 잡는다**(양쪽에 같은 숫자를 넣는 검사라 여전히 오차 0).
+`scripts/check_camera.py`가 getUserMedia 인자를 받아 적는 유일한 방어선이다.
+2026-08-28 기록 참고.
+
 ### 앱 글로스 == 동작 사전
 
 `src/user/places.ts`의 상용구 글로스와 `dictSignAgent.ts`의 숫자·단위 글로스는
@@ -58,6 +66,7 @@ bash ml/jobs/deploy_model.sh ~/sbruns/iso-v2
 
 ```bash
 npm run build && python3 scripts/e2e_app.py    # 폰·태블릿·키오스크 실조작
+python3 scripts/check_camera.py                 # 카메라가 잡은 프레임이 화면에 다 보이는가
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_translation_cases.mjs        # 번역 오역 회귀 검사
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
@@ -167,6 +176,7 @@ scripts/audit_translation.mjs  번역 품질 실측(도메인별 표현률·빠�
 scripts/check_translation_cases.mjs  오역 회귀 검사(사례 40건)
 scripts/check_intent.mjs   수어 낱말 묶음 → 의도 판정 검사(오검출 포함 27건)
 scripts/check_nearby.mjs   길찾기 계산 — 거리·방위·어림수·답변 문장·너무 먼 곳 차단
+scripts/check_camera.py    카메라 화면 — 잡은 프레임이 다 보이는가·뼈대 정합·거리 조절
 scripts/check_landing.py   소개 페이지 — 섹션 10개·Q&A·에이전트가 실제로 채워지는가
 scripts/check_filenames.mjs 윈도우에서 압축이 풀리는 이름인가
 scripts/demo_rehearsal.py  시연 대본 조작을 그대로 눌러 보는 리허설

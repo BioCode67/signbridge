@@ -214,7 +214,11 @@ export default function RecognitionDemo() {
               muted
               className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90"
             />
-            <canvas ref={overlayRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+            {/* 상자가 `aspect-[4/3]`라 640×480과 정확히 맞아 지금은 잘림도 어긋남도 없다.
+                그래도 canvas에 video와 **같은** fit을 적어 둔다 — 안 적으면 기본값이
+                fill(늘이기)이라, 다음 사람이 상자 비율을 바꾸는 순간 뼈대가 조용히
+                어긋난다(묻기·답하기 화면에서 실제로 그 상태였다). */}
+            <canvas ref={overlayRef} className="absolute inset-0 h-full w-full object-cover" aria-hidden="true" />
 
             {/* 실시간 자막 오버레이 */}
             {running && (

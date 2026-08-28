@@ -456,7 +456,7 @@ async def run_device(browser, name: str, w: int, h: int, mobile: bool, keep: boo
     # 함께 내려받아 소프트웨어 렌더링으로 몇 분이 걸린다 — 기기마다 되풀이할 이유가
     # 없다(화면 구성은 세 기기가 같은 컴포넌트다).
     if name == "폰":
-        await pg.get_by_role("button", name="수어로 묻기").click()
+        await pg.get_by_role("button", name="수어로 묻기").first.click()
         await pg.wait_for_timeout(2500)
         rep.check(await visible(pg.get_by_role("button", name="💬 답 받기")),
                   "묻기: 촬영 화면 진입")
@@ -729,7 +729,11 @@ async def main(keep: bool) -> int:
         async with async_playwright() as p:
             # 컨테이너에 playwright 브라우저가 없을 수 있다 — 시스템 크롬을 쓴다.
             exe = None
-            for cand in ("/usr/bin/google-chrome", "/usr/bin/chromium-browser"):
+            # `/opt/pw-browsers/chromium`은 미리 깔린 브라우저(원격 작업 환경). pip으로
+            # 새로 깐 playwright가 요구하는 빌드 번호와 어긋나면 "Executable doesn't
+            # exist"로 죽으므로, 있는 것을 찾아 쓴다 — `playwright install`을 돌리지 않는다.
+            for cand in ("/opt/pw-browsers/chromium",
+                         "/usr/bin/google-chrome", "/usr/bin/chromium-browser"):
                 if Path(cand).exists():
                     exe = cand
                     break

@@ -18,6 +18,8 @@ import { useRecognizer } from '../recognition/useRecognizer'
 import type { LandmarkFrame } from '../recognition/landmarks'
 import { glossesToKorean } from '../agents/glossToKorean'
 import RecognizedWords from './RecognizedWords'
+import { useCamZoom, ZOOM_LABELS } from './camZoom'
+import CamZoomButton from './CamZoomButton'
 
 interface Props {
   /** 모은 낱말을 상대에게 전한다(대화 기록 + 음성 출력). */
@@ -36,6 +38,8 @@ export default function SignInputPanel({ onSend, onClose }: Props) {
   const running = status === 'running'
   const rec = useRecognizer(running)
   useEffect(() => { pushFrameRef.current = rec.pushFrame }, [rec.pushFrame])
+  // 화면 거리 조절 — **표시만** 바꾼다. 묻기 화면과 같은 값을 나눠 쓴다.
+  const cam = useCamZoom()
 
   // 이 패널에 들어온 이유가 카메라뿐이다 — 바로 켠다.
   useEffect(() => {
@@ -49,14 +53,29 @@ export default function SignInputPanel({ onSend, onClose }: Props) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-black">
-      <div className="relative min-h-0 flex-1 overflow-hidden">
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          className="absolute inset-0 h-full w-full -scale-x-100 object-cover opacity-90"
-        />
-        <canvas ref={overlayRef} className="absolute inset-0 h-full w-full" aria-hidden="true" />
+      <div
+        className="relative min-h-0 flex-1 overflow-hidden"
+        data-sign-camfit="contain"
+        data-sign-camzoom={cam.scale}
+      >
+        {/* 배율은 감싼 층에 건다 — video의 `-scale-x-100`과 Tailwind `scale-*`가 같은
+            커스텀 속성을 써서 합성되지 않기 때문이다. 자세한 근거는 CamZoom.tsx. */}
+        <div
+          className="absolute inset-0"
+          style={cam.scale !== 1 ? { transform: `scale(${cam.scale})`, transformOrigin: 'center' } : undefined}
+        >
+          {/* video와 canvas에 **같은** fit을 준다(예전에는 canvas만 fill이라 뼈대가 어긋났다). */}
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="absolute inset-0 h-full w-full -scale-x-100 object-contain opacity-90"
+          />
+          <canvas ref={overlayRef} className="absolute inset-0 h-full w-full object-contain" aria-hidden="true" />
+        </div>
+
+        <CamZoomButton zoom={cam.zoom} label={cam.label} name={cam.name}
+          hint={cam.hint} onNext={cam.next} big={cam.kiosk} />
 
         {status === 'loading' && (
           <div className="absolute inset-0 grid place-items-center bg-space-950/80">
@@ -87,6 +106,13 @@ export default function SignInputPanel({ onSend, onClose }: Props) {
               조금 뒤로 물러나서 <b className="text-white">양손이 화면 안</b>에 들어오게 해 주세요.
               손을 가슴 높이로 들면 잘 잡혀요.
             </p>
+            {/* 확대 중에는 화면 ≠ 프레임이다 — 손이 프레임 안인데 화면 밖일 수 있다. */}
+            {cam.zoom > 0 && (
+              <p className="mx-auto mt-2 max-w-xs break-keep rounded-2xl bg-black/60 px-4 py-2 text-base leading-relaxed text-amber-200">
+                지금 화면을 크게 보고 있어요 — <b className="text-white">{ZOOM_LABELS[0]}</b>로 바꾸면
+                손이 더 잘 들어와요.
+              </p>
+            )}
           </div>
         )}
 

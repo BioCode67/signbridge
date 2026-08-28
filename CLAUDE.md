@@ -75,6 +75,8 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_intent_words.mjs             # 의도 낱말이 인식 클래스에 실존하는가
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_categories.mjs               # 재난 갈래에 한국어 이름이 있는가
+node --experimental-strip-types --import ./scripts/ts-register.mjs \
+     scripts/check_region.mjs                   # 문자에서 뽑은 지역이 진짜 지명인가
 python -m ml.tools.ctc_parity                   # CTC 디코딩 파이썬==브라우저
 ```
 
@@ -177,6 +179,7 @@ scripts/check_translation_cases.mjs  오역 회귀 검사(사례 40건)
 scripts/check_intent.mjs   수어 낱말 묶음 → 의도 판정 검사(오검출 포함 27건)
 scripts/check_nearby.mjs   길찾기 계산 — 거리·방위·어림수·답변 문장·너무 먼 곳 차단
 scripts/check_camera.py    카메라 화면 — 잡은 프레임이 다 보이는가·뼈대 정합·거리 조절
+scripts/check_region.mjs   재난문자에서 뽑은 지역이 진짜 지명인가(`야외활동`·`해수면` 오탐)
 scripts/check_landing.py   소개 페이지 — 섹션 10개·Q&A·에이전트가 실제로 채워지는가
 scripts/check_filenames.mjs 윈도우에서 압축이 풀리는 이름인가
 scripts/demo_rehearsal.py  시연 대본 조작을 그대로 눌러 보는 리허설

@@ -16,6 +16,7 @@ import { guideFor } from './safetyGuides'
 import { useSignPlayer } from './useSignPlayer'
 import { glossLabel } from '../agents/glossLabel'
 import { useOfflineReady } from './useOfflineReady'
+import { regionOf } from './regionName'
 import SignStage from './SignStage'
 
 // 심각도 → 색·라벨. 색만으로 구분하지 않도록 라벨을 함께 쓴다(색각 배려).
@@ -25,10 +26,10 @@ const SEVERITY_UI: Record<Severity, { label: string; cls: string }> = {
   watch: { label: '주의', cls: 'border-amber-300 bg-amber-300/15 text-amber-200' },
   info: { label: '안내', cls: 'border-slate-400 bg-slate-400/15 text-slate-300' },
 }
-// 문자 원문에서 지역 근사 추출 — 행정단위 접미사가 붙은 첫 낱말.
-// 접미사 뒤가 한글이면 낱말 중간이다("철새도래지"의 "철새도" 오인 방지).
-// 한 글자 행정단위(도·시·구·동·읍·면)는 앞이 2글자 이상일 때만 지역으로 본다.
-const REGION_RE = /([가-힣]{2,6}(?:특별시|광역시|자치시|자치도|시|군|구|도|동|읍|면))(?![가-힣])/
+// 문자 원문에서 지역을 뽑는 일은 regionName.ts가 한다.
+// 예전에는 여기서 정규식 한 줄로 끝냈는데, 표본 246건에 돌려 보니 뽑힌 71종 중
+// 22종이 지역이 아니었다 — `야외활동`·`놀이기구`·`해수면`·`적어도`.
+// 행정구역 목록과 대조하는 것 말고는 가릴 방법이 없다.
 
 // 말하기(웹캠 인식)는 MediaPipe 번들이 무거워 탭을 열 때만 불러온다.
 // 수어로 묻기 — 카메라 → 낱말 → 의도 → 위치 기반 답 → 아바타 수어 + 방향 지도.
@@ -147,7 +148,7 @@ export default function UserApp() {
     setNotice({
       category: item.category,
       severity: disasterRef.current.assess({ text: item.text }).severity,
-      region: REGION_RE.exec(item.text)?.[1],
+      region: regionOf(item.text),
     })
     // **재난문자만 학습 모델로.** 모델이 배운 자리가 여기다(글로스 F1 18.7 → 55.8).
     // 창구·자유 입력은 사전이 낫다 — 모델이 못 배운 말투에서 자신 있게 틀린다.
@@ -491,7 +492,7 @@ export default function UserApp() {
                 ? {
                     text: feed[cursor].text,
                     category: feed[cursor].category,
-                    region: REGION_RE.exec(feed[cursor].text)?.[1],
+                    region: regionOf(feed[cursor].text),
                   }
                 : null}
               onImmersive={onImmersive}
@@ -582,9 +583,14 @@ export default function UserApp() {
                     {categoryKo(notice.category)}
                   </span>
                 )}
+                {/* **핀(📍)을 쓰지 않는다.** 이건 *문자가 발령된 지역*이지 사용자가 있는
+                    곳이 아니다. 이 화면은 위치를 아예 물어보지도 않는다.
+                    핀을 달아 뒀더니 서울에 있는 사람이 `📍 대구시`를 보고
+                    "위치 인식이 틀렸다"고 신고했다(2026-08-28). 핀은 어디서나
+                    '내가 여기 있다'로 읽힌다 — 그러면 안내가 아니라 오해를 만든다. */}
                 {notice.region && (
                   <span className="rounded-lg border border-white/20 bg-space-800 px-2.5 py-1 text-base font-bold text-slate-200">
-                    📍 {notice.region}
+                    {notice.region} 문자
                   </span>
                 )}
                 {guide && (

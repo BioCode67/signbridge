@@ -262,7 +262,7 @@ def bidir():
             + row(330, C["user"], C["userBg"], "② 수어 → 한국어 · 음성  (묻기 · 대화)", [
                 ("웹캠", "MediaPipe(동봉 32MB)로<br>상반신·양손 관절 추출<br>영상은 기기 밖으로 안 나감", ""),
                 ("155차원 특징", "어깨 기준 정규화<br>features.py == landmarks.ts<br>오차 0 검사", ""),
-                ("낱말 인식 iso-v2", "트랜스포머 2.8M · ONNX int8 20MB<br>13,576종 · 무작위 대비 약 1만 배", ""),
+                ("낱말 인식 iso-v2", "트랜스포머 6.3M · ONNX int8 20MB<br>13,576종 · 무작위 대비 약 1만 배", ""),
                 ("의도 판정 · 답", "낱말 묶음 → 의도 27/27<br>거리·8방위·어림수 → 수어+지도<br>한국어 문장 → 음성 출력", "AGENT 3 · 질의응답"),
             ])
             + "<div style='position:absolute;left:44px;top:560px;width:1512px;background:#f3f5f7;border-radius:12px;padding:14px 18px;font-size:15px;color:#3d4752'>"
@@ -362,34 +362,66 @@ def gantt():
 
 # ── 그림 F: 핵심 성능 지표 ───────────────────────────────
 def kpi():
-    W, H = 1600, 660
+    W, H = 1600, 500
     tiles = [
-        ("100%", "오역 회귀 통과율", "156 / 156 문장", C["edge"]),
-        ("100%", "번역 글로스 재생 성공률", "2,388 / 2,388 글로스", C["edge"]),
-        ("100%", "수어 의도 판정 정확도", "27 / 27 · 오검출 0", C["user"]),
-        ("100%", "행동요령·길찾기 표현률", "목숨이 걸린 안내 전 문장", C["edge"]),
-        ("99.95%", "송출 데이터 절감", "영상 대비 1/2,000 · 문장당 2.4KB", C["core"]),
-        ("100%", "학습↔추론 특징 일치", "155차원 · 오차 0", C["core"]),
-        ("98.9%", "처음 보는 수어자 어휘 커버리지", "학습에 없던 수어자 평가 클립", C["user"]),
-        ("98%", "재난문자 정상 출력률", "반복 차단 후 · 길찾기 100%", C["core"]),
-        ("≈10,000×", "무작위 추측 대비 인식률", "13,576종 중 하나를 고르는 문제", C["user"]),
-        ("0.05%p", "검증 ↔ 미지 수어자 격차", "학습에 없던 수어자 13명 · 49,721표본", C["user"]),
-        ("+45%", "학습 모델 BLEU 향상", "통계 사전 대비 · 사람 번역 정답 기준", C["edge"]),
-        ("144ms", "문장 번역 지연(브라우저)", "int8 30MB · 1스레드", C["core"]),
+        ("100%", "오역 회귀 통과율", "번역 정확도 · 156/156 문장", C["edge"]),
+        ("100%", "재난 행동요령 표현률", "재난문자 본문 95.8%", C["edge"]),
+        ("+45%", "번역 품질(BLEU) 향상", "학습 모델 · 통계 사전 대비", C["edge"]),
+        ("100%", "수어 의도 판정 정확도", "27/27 · 오검출 0", C["user"]),
+        ("0.05%p", "인식 일반화 격차", "처음 보는 수어자 · 무작위 대비 약 1만 배", C["user"]),
+        ("144ms", "문장 번역 속도", "브라우저 1스레드 · int8", C["core"]),
+        ("18ms", "수어 인식 추론 속도", "브라우저 ONNX · 1회 추론", C["core"]),
+        ("99.95%", "송출 데이터 절감", "문장당 2.4KB · 영상 대비 1/2,000", C["core"]),
+        ("35배", "노드당 동시 수용 인원", "400Gbps 기준 이론값 · 영상 대비", C["core"]),
+        ("17.6초", "단말 1만 대 사전 배포", "KOREN 400Gbps 이론값(1Gbps 약 2시간)", C["core"]),
     ]
     cells = "".join(
         f"<div style='background:#fff;border:2px solid {c}33;border-top:6px solid {c};border-radius:16px;padding:18px 20px'>"
-        f"<div style='font-size:46px;font-weight:700;color:{c};letter-spacing:-1px'>{v}</div>"
+        f"<div style='font-size:42px;font-weight:700;color:{c};letter-spacing:-1px'>{v}</div>"
         f"<div style='font-size:20px;font-weight:700;margin-top:4px'>{k}</div>"
         f"<div style='font-size:15px;color:#5b6673;margin-top:4px'>{d}</div></div>" for v, k, d, c in tiles)
     html = (f"<div class='wrap' style='width:{W}px;height:{H}px'>"
-            "<h1>핵심 성능 지표 — 모두 저장소의 측정 스크립트가 재계산한 값</h1>"
-            "<div class='sub'>번역 · 인식 · 의도 판정 · 송출 · 일관성 5개 축. 수어자 분리 평가 · 튜닝에 쓰지 않은 홀드아웃 기준.</div>"
-            f"<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:28px'>{cells}</div></div>")
+            "<h1>핵심 성능 지표 10 — 수어 변환 정확도 · 속도 · KOREN 성능</h1>"
+            "<div class='sub'>정확도 · 속도 · KOREN 성능(이론값) 3개 축 10개 핵심 지표. 인식은 수어자 분리, KOREN 수치는 회선 용량으로 계산한 이론값.</div>"
+            f"<div style='display:grid;grid-template-columns:repeat(5,1fr);gap:18px;margin-top:28px'>{cells}</div></div>")
     shoot("kpi", html, W, H)
 
 
+# ── 그림 G: KOREN 대역폭 분석(이론값) ─────────────────────
+def bandwidth():
+    W, H = 1600, 820
+
+    def bars(title, sub, rows, unit, top, maxv):
+        out = [f"<div style='position:absolute;left:44px;top:{top}px;width:1512px'>"
+               f"<div style='font-size:21px;font-weight:700'>{title}</div><div style='font-size:15px;color:#5b6673;margin-top:2px'>{sub}</div>"]
+        for i, (name, v, label, col) in enumerate(rows):
+            import math
+            wpx = max(1100 * math.log10(v + 1) / math.log10(maxv + 1), 6)
+            out.append(f"<div style='display:flex;align-items:center;gap:14px;margin-top:12px'>"
+                       f"<div style='width:250px;text-align:right;font-size:16px'>{name}</div>"
+                       f"<div style='height:30px;width:{wpx:.0f}px;background:{col};border-radius:6px'></div>"
+                       f"<div style='font-size:18px;font-weight:700;white-space:nowrap'>{label}</div></div>")
+        out.append("</div>")
+        return "".join(out)
+
+    html = (f"<div class='wrap' style='position:relative;width:{W}px;height:{H}px'>"
+            "<h1>KOREN 대역폭 분석 — 같은 회선에 몇 명을 동시에 태울 수 있나 (이론값)</h1>"
+            "<div class='sub'>가정: 수어 통역 영상 스트리밍 2Mbps/명 · SignBridge는 재난문자 1건(3문장, 7.2KB)을 1초 안에 전달(57.6kbps/명) · 모델 묶음 88MB/대</div>"
+            + bars("① 대전 노드에 1만 명이 동시에 받을 때 필요한 대역폭", "막대는 로그 눈금",
+                   [("수어 영상 스트리밍", 20000, "20 Gbps", "#9aa6b2"), ("SignBridge 수어 패키지", 576, "0.58 Gbps", C["edge"])], "", 130, 20000)
+            + bars("② 400Gbps 노드 회선 1개로 동시에 수용 가능한 인원", "KOREN 지역 노드 400Gbps 이더넷 기준",
+                   [("수어 영상 스트리밍", 200000, "약 20만 명", "#9aa6b2"), ("SignBridge 수어 패키지", 6940000, "약 690만 명 (35배)", C["core"])], "", 330, 6940000)
+            + bars("③ 재난 전 단말 1만 대에 모델 묶음(88MB)을 미리 배포하는 시간", "880GB 전송 · 짧을수록 좋음",
+                   [("상용 서버 1Gbps", 7040, "약 2시간(7,040초)", "#9aa6b2"), ("상용 서버 10Gbps", 704, "약 12분(704초)", "#c3ccd5"),
+                    ("KOREN 노드 400Gbps", 17.6, "17.6초", C["user"])], "", 530, 7040)
+            + "<div style='position:absolute;left:44px;top:770px;width:1512px;font-size:14px;color:#5b6673'>"
+              "※ 회선 용량으로 계산한 이론값이며 실회선 측정치가 아니다. 서울 주센터–대전 부센터 백본은 7Tbps급으로, 노드 회선보다 더 넉넉하다.</div>"
+            "</div>")
+    shoot("bandwidth", html, W, H)
+
+
 if __name__ == "__main__":
+    bandwidth()
     kpi()
     koren_network()
     pipeline()

@@ -255,7 +255,9 @@ def wide_figure(path, caption):
     ls.page_width, ls.page_height = Cm(29.7), Cm(21)
     ls.left_margin = ls.right_margin = Cm(1.6)
     ls.top_margin, ls.bottom_margin = Cm(1.3), Cm(1.3)
-    figure(path, caption, width=26.0)
+    from PIL import Image as _I
+    w_, h_ = _I.open(path).size
+    figure(path, caption, width=min(26.0, 15.2 * w_ / h_))  # 머리글·캡션까지 한 쪽에 들어가게
     ps = doc.add_section(WD_SECTION.NEW_PAGE)
     ps.orientation = WD_ORIENT.PORTRAIT
     ps.page_width, ps.page_height = Cm(21), Cm(29.7)

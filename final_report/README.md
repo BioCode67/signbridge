@@ -10,3 +10,13 @@
 |---|---|
 | `양식/` | 사무국이 보낸 첨부파일 7개 원본을 그대로 올린다 |
 | `제출본/` | 양식을 채운 최종 제출 파일 |
+
+## 제출 체크리스트 (10/18 23:59)
+
+1. `제출본/최종보고서_닿다.docx` → 한글에서 열기 → 다른 이름으로 저장 → **HWP** → `최종보고서_닿다.hwp`
+2. `제출본/과제개요_닿다_영남대학교.docx` → 같은 방법 → `과제개요_닿다_영남대학교.hwp` (1쪽인지 확인)
+3. 한글에서 확인: 글꼴 휴먼명조 적용, 구성도 4장이 가로 쪽으로 유지, 표가 쪽 경계에서 깨지지 않음
+4. `제출본/단체사진_닿다.jpg` (4:3, 복지관 이용자 얼굴 흐림 처리)
+5. Gmail 임시보관함 메일에 위 3개 첨부 → niamnc@naver.com 발송
+
+다시 만들기: `python3 build/diagrams2.py && python3 build/blur_faces.py && python3 build/meeting_materials.py && python3 build/make_report.py && python3 build/make_overview.py`

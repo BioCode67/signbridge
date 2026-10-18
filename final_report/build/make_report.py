@@ -35,8 +35,8 @@ st = doc.styles["Normal"]
 st.font.name = FONT
 st.font.size = Pt(BODY)
 st.element.rPr.rFonts.set(qn("w:eastAsia"), FONT)
-st.paragraph_format.line_spacing = 1.45
-st.paragraph_format.space_after = Pt(3)
+st.paragraph_format.line_spacing = 1.5
+st.paragraph_format.space_after = Pt(4)
 
 
 # ── 도우미 ─────────────────────────────────────────────
@@ -82,6 +82,7 @@ def bullet(text, level=0, mark="○"):
     marks = {0: mark, 1: "-", 2: "·"}
     p = para(f"{marks[level]} {text}", indent=0.4 + 0.6 * level)
     p.paragraph_format.first_line_indent = Cm(-0.4)
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT  # 양쪽 정렬이면 긴 낱말 앞에서 글자 사이가 벌어진다
     return p
 
 
@@ -110,6 +111,56 @@ def cell_text(cell, text, bold=False, size=11, align="l"):
             run(p, rest, bold, size)
 
 
+def style_table(t):
+    """연한 회색 테두리 + 셀 안쪽 여백 — 표가 덜 빽빽해 보이게."""
+    tblPr = t._tbl.tblPr
+    borders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+        e = OxmlElement(f"w:{edge}")
+        e.set(qn("w:val"), "single")
+        e.set(qn("w:sz"), "8" if edge in ("top", "bottom") else "4")
+        e.set(qn("w:color"), "1F3864" if edge in ("top", "bottom") else "B8C2CF")
+        borders.append(e)
+    tblPr.append(borders)
+    mar = OxmlElement("w:tblCellMar")
+    for side, v in (("top", 50), ("bottom", 50), ("left", 90), ("right", 90)):
+        e = OxmlElement(f"w:{side}")
+        e.set(qn("w:w"), str(v))
+        e.set(qn("w:type"), "dxa")
+        mar.append(e)
+    tblPr.append(mar)
+
+
+def callout(title, lines, color="0B6E79", fill="EAF5F5"):
+    """장 첫머리 '핵심 요약' 상자 — 바쁜 심사위원이 이것만 읽어도 흐름을 잡게."""
+    t = doc.add_table(rows=1, cols=1)
+    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    c = t.rows[0].cells[0]
+    shade(c, fill)
+    tcPr = c._element.get_or_add_tcPr()
+    b = OxmlElement("w:tcBorders")
+    for edge, sz, col in (("left", "36", color), ("top", "4", fill), ("bottom", "4", fill), ("right", "4", fill)):
+        e = OxmlElement(f"w:{edge}")
+        e.set(qn("w:val"), "single"); e.set(qn("w:sz"), sz); e.set(qn("w:color"), col)
+        b.append(e)
+    tcPr.append(b)
+    p0 = c.paragraphs[0]
+    p0.paragraph_format.space_after = Pt(3)
+    run(p0, title, bold=True, size=12, color=color)
+    for ln in lines:
+        q = c.add_paragraph()
+        q.paragraph_format.space_after = Pt(1)
+        q.paragraph_format.line_spacing = 1.3
+        q.paragraph_format.left_indent = Cm(0.3)
+        run(q, "▸ ", bold=True, size=11, color=color)
+        run(q, ln, size=11)
+    mar = OxmlElement("w:tblCellMar")
+    for side, v in (("top", 120), ("bottom", 120), ("left", 200), ("right", 200)):
+        e = OxmlElement(f"w:{side}"); e.set(qn("w:w"), str(v)); e.set(qn("w:type"), "dxa"); mar.append(e)
+    t._tbl.tblPr.append(mar)
+    para("", after=4)
+
+
 FIG_LIST, TAB_LIST = [], []
 
 
@@ -134,10 +185,19 @@ def table(caption, header, rows, widths=None, size=11, merge_first=False):
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
     for j, h in enumerate(header):
         cell_text(t.rows[0].cells[j], h, bold=True, size=size, align="c")
-        shade(t.rows[0].cells[j], "D9E2F3")
+        shade(t.rows[0].cells[j], "1F3864")
+        for r_ in t.rows[0].cells[j].paragraphs[0].runs:
+            r_.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
     for i, r in enumerate(rows, 1):
         for j, v in enumerate(r):
-            cell_text(t.rows[i].cells[j], str(v), size=size, align="c" if j == 0 else "l")
+            c = t.rows[i].cells[j]
+            cell_text(c, str(v), size=size, align="c" if j == 0 else "l")
+            if j == 0:
+                for r_ in c.paragraphs[0].runs:
+                    r_.bold = True
+            if i % 2 == 0 and not merge_first:
+                shade(c, "F4F7FB")
+    style_table(t)
     # 머리글 줄은 쪽이 넘어가도 반복, 각 줄은 쪽 경계에서 쪼개지지 않게
     for k, row in enumerate(t.rows):
         trPr = row._tr.get_or_add_trPr()
@@ -400,6 +460,12 @@ page_break()
 
 # ── Ⅰ 서론 ──────────────────────────────────────────
 chapter("Ⅰ", "서 론")
+callout("이 장의 핵심", [
+    "재난문자는 한국어로만 오고, 약 44만 명 청각장애인 다수에게 한국수어는 다른 언어다.",
+    "농인은 정보를 받기만 했다 — 대피소가 어디냐고 되물을 수단이 없었다.",
+    "재난 때는 통신이 먼저 끊긴다 — 서버 없이 기기 안에서 동작해야 한다.",
+    "SignBridge: 수어로 전달하고(받기) 수어로 묻는(묻기) 양방향 · 오프라인 · KOREN 학습.",
+])
 h2("1. 개발 목적 및 필요성")
 h3("가. 재난 정보는 농인에게 도착하지 않는다")
 para("국내 등록 청각장애인은 약 44만 명(보건복지부, 2024)이며, 2016년 「한국수화언어법」으로 한국수어는 국어와 동등한 공용어로 인정되었다. "
@@ -434,6 +500,12 @@ page_break()
 
 # ── Ⅱ 추진 내용과 범위 ───────────────────────────────
 chapter("Ⅱ", "아이디어 개발 추진 내용과 범위")
+callout("이 장의 핵심", [
+    "4개 에이전트(재난 판단 → 수어 변환 → 질의응답 → 송출)가 양방향을 처리한다.",
+    "KOREN을 Core(학습·원천 서버) · Edge(지역 노드) · 단말(기기 안 추론) 3계층으로 설계했다.",
+    "학습은 KOREN AI Cloud에서 실제 수행, 3계층 송출은 설계·이론값 산정까지 수행했다.",
+    "5단계 계획을 모두 진행했고, 3단계에서 계획 외 기능(오프라인·창구 대화·묻기)을 추가했다.",
+])
 h2("1. 개발 목표 및 추진 내용")
 h3("가. 개발 목표")
 bullet("최종 목표: 재난 정보를 한국수어로 즉시 전달하고, 농인의 수어 질문에 수어·음성으로 답하는 양방향 통역 서비스를 KOREN 자원으로 학습·운영한다.")
@@ -513,6 +585,12 @@ page_break()
 
 # ── Ⅲ 진행 내용 및 결과 ──────────────────────────────
 chapter("Ⅲ", "아이디어 개발 진행 내용 및 결과")
+callout("이 장의 핵심", [
+    "실제 농인 수어자 동작 12,833종 · 인식 13,576종 · 번역 사전 23만 낱말을 갖춘 앱을 완성했다.",
+    "KOREN AI Cloud에서 133GB 수신 · 40만 클립 가공 · 모델 4종 학습을 수행했다.",
+    "같은 회선으로 영상 스트리밍보다 약 35배 많은 사람에게 전달할 수 있다(이론값).",
+    "오역 회귀 100% · 의도 판정 100% · 문장 번역 144ms · 복지관 2곳 현장 시연과 당사자 평가.",
+])
 h2("1. 개발 수행 현황 및 최종 결과물")
 h3("가. 하드웨어 부분")
 para("본 과제는 별도 하드웨어를 제작하지 않고, 이미 보급된 기기(스마트폰·태블릿·노트북 웹캠·키오스크용 태블릿)에서 동작하도록 설계하였다. "
@@ -702,6 +780,11 @@ page_break()
 
 # ── Ⅳ 결론 ──────────────────────────────────────────
 chapter("Ⅳ", "결 론")
+callout("이 장의 핵심", [
+    "최종 결과물: 서버 없이 동작하는 양방향 수어 통역 앱 + 학습·검증 파이프라인.",
+    "남은 과제와 상용화 추가 개발 8개 항목을 정리했다(아바타 사실감 · 표정 · 연속 수어 등).",
+    "기대 효과: 재난 정보 접근권 보장, 농인이 묻는 쪽이 됨, 연구망 자원의 공공 서비스 전환.",
+])
 h2("1. 개발 최종 결과물")
 para("본 과제의 최종 결과물은 서버 없이 브라우저 안에서 양방향으로 동작하는 한국수어 통역 앱 SignBridge와, 이를 만든 학습·검증 파이프라인이다.")
 bullet("웹앱(PWA): 받기·묻기·대화·사전 4개 탭, 키오스크 모드, 오프라인 동작. 공개 주소 https://biocode67.github.io/signbridge/ 및 KOREN VM 상시 서버")
@@ -823,6 +906,25 @@ def fill_list(ph, prefix, names):
     ph._p.getparent().remove(ph._p)
 
 
+def fix_page_breaks():
+    """빈 줄 + 쪽 나눔 대신 '다음 문단 앞에서 쪽 나눔'으로 — 빈 쪽이 생기지 않게."""
+    body = doc.element.body
+    W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    for pel in list(body.iterchildren(f"{W}p")):
+        brs = pel.findall(f".//{W}br")
+        texts = "".join(t.text or "" for t in pel.iter(f"{W}t"))
+        if len(brs) == 1 and brs[0].get(f"{W}type") == "page" and not texts.strip():
+            nxt = pel.getnext()
+            if nxt is not None and nxt.tag == f"{W}p":
+                pPr = nxt.find(f"{W}pPr")
+                if pPr is None:
+                    pPr = OxmlElement("w:pPr")
+                    nxt.insert(0, pPr)
+                pPr.insert(0, OxmlElement("w:pageBreakBefore"))
+                body.remove(pel)
+
+
+fix_page_breaks()
 fill_list(FIG_PH, "그림", FIG_LIST)
 fill_list(TAB_PH, "표", TAB_LIST)
 page_numbers()

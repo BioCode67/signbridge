@@ -82,11 +82,14 @@ def korea_paths(x0, y0, W, H):
     return "\n".join(out)
 
 
-POPS = {  # KOREN PoP(지역 거점) — 서울은 Core
-    "서울": (126.98, 37.57), "대전": (127.38, 36.35), "대구": (128.60, 35.87),
-    "부산": (129.07, 35.18), "광주": (126.85, 35.16),
+POPS = {  # KOREN 백본 10개 노드(koren.kr 공식 소개) — 서울 주센터·대전 부센터가 Core
+    "서울": (126.98, 37.57), "수원": (127.01, 37.27), "판교": (127.11, 37.40), "춘천": (127.73, 37.88),
+    "대전": (127.38, 36.35), "전주": (127.15, 35.82), "광주": (126.85, 35.16), "대구": (128.60, 35.87),
+    "부산": (129.07, 35.18), "제주": (126.53, 33.50),
 }
-LINKS = [("서울", "대전"), ("대전", "대구"), ("대구", "부산"), ("대전", "광주"), ("광주", "부산"), ("서울", "대구")]
+CORE = ("서울", "대전")
+LINKS = [("서울", "판교"), ("서울", "수원"), ("서울", "춘천"), ("춘천", "판교"), ("판교", "대전"), ("수원", "대전"),
+         ("대전", "전주"), ("전주", "광주"), ("대전", "대구"), ("대구", "부산"), ("광주", "부산"), ("광주", "제주")]
 SITES = {"경산시장애인종합복지관": (128.74, 35.83), "대구광역시청각언어장애인복지관": (128.57, 35.90)}
 
 
@@ -102,25 +105,30 @@ def koren_network():
            "<filter id='sh' x='-20%' y='-20%' width='140%' height='140%'><feDropShadow dx='0' dy='3' stdDeviation='5' flood-opacity='0.12'/></filter></defs>",
            korea_paths(mx, my, mw, mh)]
     # 백본
+    (x1, y1), (x2, y2) = P["서울"], P["대전"]
+    svg.append(f"<line x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}' stroke='#3b2f8f' stroke-width='11' stroke-linecap='round' opacity='0.9'/>")
+    svg.append(f"<text x='{(x1 + x2) / 2 + 14}' y='{(y1 + y2) / 2 + 30}' font-size='15' font-weight='700' fill='#3b2f8f'>7Tbps급</text>")
     for a, b in LINKS:
         (x1, y1), (x2, y2) = P[a], P[b]
-        svg.append(f"<line x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}' stroke='#3b2f8f' stroke-width='5' stroke-linecap='round' opacity='0.85'/>")
+        svg.append(f"<line x1='{x1}' y1='{y1}' x2='{x2}' y2='{y2}' stroke='#6b5bd6' stroke-width='4' stroke-linecap='round' opacity='0.75'/>")
     # 현장(경산·대구)
     for name, ll in SITES.items():
         x, y = proj(*ll, mx, my, mw, mh)
         svg.append(f"<circle cx='{x}' cy='{y}' r='7' fill='#a15c07' stroke='#fff' stroke-width='2'/>")
     # PoP
     for k, (x, y) in P.items():
-        core = k == "서울"
-        r = 20 if core else 14
+        core = k in CORE
+        r = 19 if core else 11
         fill = C["core"] if core else C["edge"]
         svg.append(f"<circle cx='{x}' cy='{y}' r='{r + 8}' fill='{fill}' opacity='0.15'/>")
         svg.append(f"<circle cx='{x}' cy='{y}' r='{r}' fill='{fill}' stroke='#fff' stroke-width='3' filter='url(#sh)'/>")
-        dx, dy = {"서울": (-104, 7), "대전": (-98, 7), "광주": (-98, 7), "대구": (16, -22), "부산": (-120, 44)}[k]
-        svg.append(f"<text x='{x + dx}' y='{y + dy}' font-size='19' font-weight='700' fill='{fill}'>{k} PoP</text>")
+        name = {"서울": "서울 주센터", "대전": "대전 부센터"}.get(k, k)
+        dx, dy = {"서울": (-128, -8), "수원": (-62, 14), "판교": (18, -6), "춘천": (16, -8), "대전": (-128, 8),
+                  "전주": (-62, 8), "광주": (-60, 30), "대구": (16, -18), "부산": (14, 32), "제주": (18, 6)}[k]
+        svg.append(f"<text x='{x + dx}' y='{y + dy}' font-size='{19 if core else 17}' font-weight='700' fill='{fill}'>{name}</text>")
     # 연결선(지도 → 오른쪽 상자)
     sx, sy = P["서울"]
-    svg.append(f"<path d='M{sx + 24},{sy - 6} C {sx + 160},{sy - 80} 640,240 702,240' stroke='#3b2f8f' stroke-width='2.5' fill='none' marker-end='url(#ahc)'/>")
+    svg.append(f"<path d='M{sx},{sy - 24} C {sx + 20},{sy - 170} 600,200 702,240' stroke='#3b2f8f' stroke-width='2.5' fill='none' marker-end='url(#ahc)'/>")
     dx_, dy_ = P["대구"]
     svg.append(f"<path d='M{dx_ + 18},{dy_ - 4} C {dx_ + 130},{dy_ + 20} 640,490 702,490' stroke='#0b6e79' stroke-width='2.5' fill='none' stroke-dasharray='8 6' marker-end='url(#ah)'/>")
     gx, gy = proj(*SITES["경산시장애인종합복지관"], mx, my, mw, mh)
@@ -145,28 +153,28 @@ def koren_network():
     plan = "<span class='tag plan'>확장 설계</span>"
     html = [f"<div class='wrap' style='position:relative;width:{W}px;height:{H}px'>",
             "<h1>KOREN 활용 네트워크 구성도 — Core · Edge · 단말 3계층</h1>",
-            "<div class='sub'>무거운 데이터·학습은 KOREN Core에, 가벼운 수어 패키지는 지역 PoP Edge로, 추론은 단말에서. 통신이 끊기면 단말이 혼자 답한다.</div>",
+            "<div class='sub'>KOREN 백본 10개 노드(서울 주센터–대전 부센터 7Tbps급). 학습은 Core에, KB 단위 수어 패키지는 지역 노드로, 추론은 단말에서.</div>",
             "<div class='legend' style='position:absolute;left:44px;top:982px'>"
             "<span><i></i>구현·운영</span><span><i class='d'></i>KOREN 확장 설계</span>"
-            "<span><b style='color:#3b2f8f'>●</b> Core PoP</span><span><b style='color:#0b6e79'>●</b> 지역 PoP(Edge)</span>"
-            "<span><b style='color:#a15c07'>●</b> 현장 시연·평가(경산·대구)</span><span style='color:#3b2f8f'>━ KOREN 백본</span></div>",
+            "<span><b style='color:#3b2f8f'>●</b> 주·부센터(Core)</span><span><b style='color:#0b6e79'>●</b> 지역 노드(Edge)</span>"
+            "<span><b style='color:#a15c07'>●</b> 현장 시연·평가(경산·대구)</span><span style='color:#3b2f8f'>━ KOREN 백본(노선은 개념도)</span></div>",
             "".join(svg),
-            layer(140, 196, C["core"], C["coreBg"], "Core Cloud · 수도권 KOREN", ok, [
+            layer(140, 196, C["core"], C["coreBg"], "Core · KOREN 연구 자원 + 주센터(서울)·부센터(대전)", ok, [
                 ("AI Cloud (CHEETAH)", "H200 MIG 1g.35GB · vCPU 16<br>AI Hub 133GB 수신 · 40만 클립 ETL<br>모델 4종 학습·평가·ONNX"),
                 ("HPC 이노베이션 허브", "Xeon Gold VM · PBS Torque<br>영상 → 관절 좌표<br>클립 단위 분산 변환"),
                 ("KOREN VM · 원천 서버", "24시간 상시 운영<br>웹앱·모델·동작 사전 배포<br>재난문자 수집 → 판단 → 변환"),
             ]),
-            flow(348, C["core"], "Core → Edge", "모델 50MB · 동작 사전 갱신분 · 수어 패키지(약 2.4KB/문장) — KOREN 백본으로 지역 PoP에 동기화"),
-            layer(392, 196, C["edge"], C["edgeBg"], "Edge Cloud · 지역 PoP (대전·대구·부산·광주)", plan, [
+            flow(348, C["core"], "Core → Edge", "모델 50MB · 동작 사전 갱신분 · 수어 패키지(약 2.4KB/문장) — KOREN 백본으로 지역 노드에 동기화"),
+            layer(392, 196, C["edge"], C["edgeBg"], "Edge · 지역 노드 (수원·판교·춘천·전주·광주·대구·부산·제주)", plan, [
                 ("수어 패키지 캐시", "글로스열 + 키포인트<br>문장당 약 2.4KB<br>(영상 대비 약 1/2,000)"),
-                ("동작 사전·모델 미러", "동작 사전 12,833종<br>인식 20MB · 번역 30MB<br>가까운 PoP에서 내려받기"),
-                ("지역 재난 송출", "재난 지역 PoP로만 푸시<br>전국 동시 발령은<br>PoP 병렬 송출"),
+                ("동작 사전·모델 미러", "동작 사전 12,833종<br>인식 20MB · 번역 30MB<br>가까운 노드에서 내려받기"),
+                ("지역 재난 송출", "재난 지역 노드로만 푸시<br>전국 동시 발령은<br>노드별 병렬 송출"),
             ]),
             flow(600, C["edge"], "Edge → 단말", "첫 방문 때 앱·모델·사전을 받아 저장 → 이후에는 새 재난 패키지(KB 단위)만 받는다"),
             layer(644, 196, C["user"], C["userBg"], "End User · 단말 (폰 · 태블릿 · 기관 키오스크)", ok, [
                 ("기기 안 추론", "인식·번역·길 안내를<br>브라우저에서 실행<br>영상은 기기 밖으로 안 나감"),
                 ("오프라인 폴백", "통신이 끊겨도 저장된<br>모델·사전·전국 28,125곳으로<br>수어로 묻고 답한다"),
-                ("현장 시연·평가", "경산시장애인종합복지관<br>대구광역시청각언어장애인복지관<br>→ 최근접 대구 PoP 권역"),
+                ("현장 시연·평가", "경산시장애인종합복지관<br>대구광역시청각언어장애인복지관<br>→ 최근접 대구 노드 권역"),
             ]),
             "<div style='position:absolute;left:712px;top:872px;width:850px;height:86px;border-radius:14px;background:#17202a;color:#fff;padding:14px 18px;display:flex;gap:18px'>"
             + "".join(f"<div style='flex:1'><div style='font-size:24px;font-weight:700;color:{c}'>{v}</div><div style='font-size:13px;color:#c9d1d9;margin-top:2px'>{k}</div></div>"
@@ -270,7 +278,7 @@ def sequence():
     lanes = [("재난문자 원천", "행정안전부 CBS · 공공데이터", "#17202a"),
              ("Core · KOREN VM", "판단 · 변환 · 패키징", C["core"]),
              ("KOREN 백본", "연구망 전송", "#6b5bd6"),
-             ("Edge · 지역 PoP", "캐시 · 지역 송출", C["edge"]),
+             ("Edge · 지역 노드", "캐시 · 지역 송출", C["edge"]),
              ("단말", "폰 · 태블릿 · 키오스크", C["user"])]
     lx = [150 + i * 315 for i in range(5)]
     svg = [f"<svg width='{W}' height='{H}' style='position:absolute;left:0;top:0'>"
@@ -281,8 +289,8 @@ def sequence():
     steps = [
         (0, 1, 250, "① 재난문자 수신(텍스트)", True),
         (1, 1, 300, "② 재난 판단 → 수어 변환 → 패키징(글로스+키포인트)", None),
-        (1, 3, 380, "③ 해당 지역 PoP로만 푸시 · 약 2.4KB/문장", True),
-        (3, 4, 450, "④ 가까운 PoP에서 단말로 전달", True),
+        (1, 3, 380, "③ 해당 지역 노드로만 푸시 · 약 2.4KB/문장", True),
+        (3, 4, 450, "④ 가까운 노드에서 단말로 전달", True),
         (4, 4, 500, "⑤ 단말이 아바타 수어로 재생", None),
         (4, 3, 590, "⑥ 최신 대피소·재난 정보 요청(선택)", True),
         (3, 1, 650, "⑦ Edge 캐시에 없을 때만 Core 조회", True),
@@ -314,9 +322,9 @@ def sequence():
         f"<div style='font-size:14px;color:#5b6673;margin-top:6px'>{s}</div></div>" for (t, s, col), x in zip(lanes, lx))
     html = (f"<div class='wrap' style='position:relative;width:{W}px;height:{H}px'>"
             "<h1>재난 발령 → 수어 표출 송출 시퀀스 (KOREN 설계)</h1>"
-            "<div class='sub'>영상이 아니라 KB 단위 수어 패키지를 지역 PoP로 보내 전국 동시 발령에서도 회선이 막히지 않게 한다.</div>"
+            "<div class='sub'>영상이 아니라 KB 단위 수어 패키지를 지역 노드로 보내 전국 동시 발령에서도 회선이 막히지 않게 한다.</div>"
             + heads + "".join(svg) +
-            "<div class='legend' style='position:absolute;left:44px;top:858px'><span><b style='color:#3d4752'>▮</b> 처리 단계</span><span><i class='d'></i>KOREN Core·PoP 송출 설계(실측 예정)</span><span style='color:#a15c07'>■ 단말 단독 동작은 구현·검증 완료</span></div>"
+            "<div class='legend' style='position:absolute;left:44px;top:858px'><span><b style='color:#3d4752'>▮</b> 처리 단계</span><span><i class='d'></i>KOREN Core·지역 노드 송출 설계(실측 예정)</span><span style='color:#a15c07'>■ 단말 단독 동작은 구현·검증 완료</span></div>"
             "</div>")
     shoot("sequence", html, W, H)
 
@@ -352,7 +360,37 @@ def gantt():
     shoot("gantt", html, W, H)
 
 
+# ── 그림 F: 핵심 성능 지표 ───────────────────────────────
+def kpi():
+    W, H = 1600, 660
+    tiles = [
+        ("100%", "오역 회귀 통과율", "156 / 156 문장", C["edge"]),
+        ("100%", "번역 글로스 재생 성공률", "2,388 / 2,388 글로스", C["edge"]),
+        ("100%", "수어 의도 판정 정확도", "27 / 27 · 오검출 0", C["user"]),
+        ("100%", "행동요령·길찾기 표현률", "목숨이 걸린 안내 전 문장", C["edge"]),
+        ("99.95%", "송출 데이터 절감", "영상 대비 1/2,000 · 문장당 2.4KB", C["core"]),
+        ("100%", "학습↔추론 특징 일치", "155차원 · 오차 0", C["core"]),
+        ("91.9%", "처음 보는 수어자 top-5", "학습에 없던 13명 · 49,721표본", C["user"]),
+        ("84.0", "글로스→한국어 음절 F1", "정밀도 85.0 · 재현율 83.0", C["core"]),
+        ("≈10,000×", "무작위 추측 대비 인식률", "top-1 78.2% ÷ 무작위 1/13,576", C["user"]),
+        ("0.05%p", "검증 ↔ 미지 수어자 격차", "외우지 않고 일반화", C["user"]),
+        ("+45%", "학습 모델 BLEU 향상", "사전 18.7 → 모델 27.1", C["edge"]),
+        ("144ms", "문장 번역 지연(브라우저)", "int8 30MB · 1스레드", C["core"]),
+    ]
+    cells = "".join(
+        f"<div style='background:#fff;border:2px solid {c}33;border-top:6px solid {c};border-radius:16px;padding:18px 20px'>"
+        f"<div style='font-size:46px;font-weight:700;color:{c};letter-spacing:-1px'>{v}</div>"
+        f"<div style='font-size:20px;font-weight:700;margin-top:4px'>{k}</div>"
+        f"<div style='font-size:15px;color:#5b6673;margin-top:4px'>{d}</div></div>" for v, k, d, c in tiles)
+    html = (f"<div class='wrap' style='width:{W}px;height:{H}px'>"
+            "<h1>핵심 성능 지표 — 모두 저장소의 측정 스크립트가 재계산한 값</h1>"
+            "<div class='sub'>인식 · 번역 · 의도 판정 · 송출 · 재생 · 일관성 6개 축. 수어자 분리 평가 · 튜닝에 쓰지 않은 홀드아웃 기준.</div>"
+            f"<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:28px'>{cells}</div></div>")
+    shoot("kpi", html, W, H)
+
+
 if __name__ == "__main__":
+    kpi()
     koren_network()
     pipeline()
     bidir()

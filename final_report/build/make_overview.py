@@ -67,13 +67,14 @@ ROWS = [
      "한국어 문장·음성과 '가까운 대피소의 방향·거리'로 되돌려 답한다. 모든 추론이 브라우저 안에서 돌아 영상이 기기 밖으로 "
      "나가지 않으며, 통신이 끊긴 재난 현장(비행기 모드)에서도 동작한다."),
     ("KOREN\n사용목적",
-     "AI Hub 대용량 수어 말뭉치를 연구망으로 받아 GPU에서 인식·번역 모델을 학습하고(AI Cloud), 영상→관절 좌표 변환을 "
-     "CPU VM으로 분산하며(HPC 이노베이션 허브), 심사·시연용 서비스를 24시간 상시 운영(KOREN VM)하기 위함."),
+     "KOREN을 Core·Edge·단말 3계층으로 나눠 쓴다. Core(수도권)에서는 AI Hub 대용량 원본을 연구망으로 받아 AI Cloud GPU로 "
+     "인식·번역 모델을 학습하고 HPC로 전처리를 분산하며, KOREN VM이 24시간 원천 서버로 앱·모델을 배포한다. Edge(지역 PoP)에는 "
+     "KB 단위 수어 패키지를 캐시해 재난 지역 가까이에서 송출하고, 단말은 기기 안에서 추론해 통신이 끊겨도 답한다."),
     ("KOREN 연동\n및 결과분석",
      "· AI Cloud(H200 MIG 1g.35GB): 실데이터 133GB 수신, 40만 클립 스트리밍 ETL, 모델 4종 학습·평가(에폭당 215만 세그먼트, 21~25분)\n"
-     "· MIG의 '메모리 넉넉·연산 부족' 특성에 맞춰 영상 CNN 대신 2.8M 랜드마크 트랜스포머를 채택 → 13,576종 분류를 학습 가능하게 함\n"
-     "· 영상 대신 관절 좌표를 다뤄 문장당 약 2.4KB(영상의 약 1/2,000) — 무거운 원본은 연구망 안에 두고 수십 MB 모델만 기기로 배포\n"
-     "· HPC: PBS 분산 변환 잡 구성 · KOREN VM: 상시 데모 서버 운영"),
+     "· MIG의 '메모리 넉넉·연산 부족' 특성에 맞춰 영상 CNN 대신 2.8M 랜드마크 트랜스포머 채택 → 13,576종 분류를 학습 가능하게 함\n"
+     "· 원본은 Core에 두고 밖으로는 모델(약 50MB)과 수어 패키지(문장당 약 2.4KB, 영상의 약 1/2,000)만 → 전국 동시 발령에도 회선 부담이 작음\n"
+     "· KOREN VM 상시 운영 · HPC PBS 분산 변환 잡 구성 · 지역 PoP 다지점 송출 지연 실측은 후속 과제"),
 ]
 for i, (k, v) in enumerate(ROWS, 1):
     a = t.cell(i, 0); b = t.cell(i, 1).merge(t.cell(i, 3))
@@ -83,7 +84,7 @@ a = t.cell(5, 0); b = t.cell(5, 1).merge(t.cell(5, 3))
 put(a, "네트워크\n구성도", True, center=True); shade(a)
 b.text = ""
 p = b.paragraphs[0]; p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-p.add_run().add_picture(str(Path(__file__).parent / "img/network.png"), width=Cm(14.4))
+p.add_run().add_picture(str(Path(__file__).parent / "img/koren_network.png"), width=Cm(14.4))
 
 a = t.cell(6, 0); b = t.cell(6, 1).merge(t.cell(6, 3))
 put(a, "과제\n주요 성과", True, center=True); shade(a)

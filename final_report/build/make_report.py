@@ -319,7 +319,46 @@ def page_break():
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
 
+def kpi_strip(items, cols=5):
+    """요약문용 '한눈에 보는 성과' — 큰 숫자 + 짧은 설명 칸."""
+    rows = [items[i:i + cols] for i in range(0, len(items), cols)]
+    t = doc.add_table(rows=len(rows), cols=cols)
+    t.alignment = WD_TABLE_ALIGNMENT.CENTER
+    for r, row in enumerate(rows):
+        for j, (v, k, col) in enumerate(row):
+            c = t.cell(r, j)
+            shade(c, "F4F7FB")
+            tcPr = c._element.get_or_add_tcPr()
+            b = OxmlElement("w:tcBorders")
+            for edge, sz, cc in (("top", "24", col), ("left", "4", "FFFFFF"), ("right", "4", "FFFFFF"), ("bottom", "4", "FFFFFF")):
+                e = OxmlElement(f"w:{edge}"); e.set(qn("w:val"), "single"); e.set(qn("w:sz"), sz); e.set(qn("w:color"), cc); b.append(e)
+            tcPr.append(b)
+            p0 = c.paragraphs[0]
+            p0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p0.paragraph_format.space_before = Pt(4)
+            p0.paragraph_format.space_after = Pt(0)
+            run(p0, v, bold=True, size=15, color=col)
+            q = c.add_paragraph()
+            q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            q.paragraph_format.space_after = Pt(4)
+            q.paragraph_format.line_spacing = 1.1
+            run(q, k, size=9)
+    para("", after=4)
+
+
 def page_numbers():
+    head = doc.sections[0].header.paragraphs[0]
+    head.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    run(head, "K-디지털 챌린지 : 넷 챌린지 캠프 시즌13  |  닿다 · SignBridge", size=8.5, color="7A8794")
+    pPr = head._p.get_or_add_pPr()
+    bdr = OxmlElement("w:pBdr")
+    bt = OxmlElement("w:bottom")
+    for k_, v_ in (("val", "single"), ("sz", "4"), ("space", "2"), ("color", "C3CCD5")):
+        bt.set(qn(f"w:{k_}"), v_)
+    bdr.append(bt)
+    pPr.append(bdr)
+    sp = doc.sections[0]._sectPr
+    sp.append(OxmlElement("w:titlePg"))  # 표지에는 머리글·쪽번호를 넣지 않는다
     for s in doc.sections[:1]:
         p = s.footer.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -388,12 +427,16 @@ bullet("KOREN 3계층 설계(학습은 KOREN AI Cloud에서 실제 수행, 3계�
 
 h2("4. 개 발 결 과")
 para("본 과제는 아래 결과를 모두 저장소의 측정 스크립트로 재계산 가능한 수치로 확인하였다.", indent=0.5)
-bullet("핵심 정량 지표 10개: 오역 회귀 통과율 100%(156/156), 수어 의도 판정 100%(27/27), 행동요령 표현률 100%, 문장 번역 144ms · 수어 인식 18ms")
+kpi_strip([
+    ("100%", "오역 회귀 통과율", "0B6E79"), ("100%", "수어 의도 판정", "A15C07"), ("100%", "행동요령 표현률", "0B6E79"),
+    ("144ms", "문장 번역 속도", "3B2F8F"), ("18ms", "수어 인식 속도", "3B2F8F"),
+    ("13,576종", "수어 인식 어휘", "A15C07"), ("12,833종", "실제 수어 동작 사전", "0B6E79"), ("99.95%", "송출 데이터 절감", "3B2F8F"),
+    ("35배", "노드당 동시 수용(이론값)", "3B2F8F"), ("2곳", "복지관 현장 시연·평가", "A15C07"),
+])
 bullet("KOREN 성능(이론값): 송출 데이터 99.95% 절감, 400Gbps 노드당 동시 수용 약 690만 명(영상 스트리밍의 35배), 단말 1만 대 모델 사전 배포 17.6초")
 bullet("수어 낱말 인식 13,576종: 무작위 대비 약 1만 배, 처음 보는 수어자 어휘 커버리지 98.9%, 검증과 처음 보는 수어자의 격차 0.05%p")
 bullet("한국어→글로스 학습 모델 t2gs-v2: 통계 사전 대비 BLEU +45%, 글로스 F1 약 3배, int8 30MB로 줄여 브라우저에서 문장당 144ms(1스레드)")
 bullet("번역 낱말 표현률: 행동요령·길찾기 100%, 일상회화 96.9%, 재난문자 95.8%, 창구 대화(홀드아웃) 94.8%")
-bullet("자동 검증: 오역 회귀 사례 156건, 번역 글로스 재생 확인 2,388개 전부, 수어 의도 판정 27/27, 학습↔추론 특징 오차 0")
 bullet("전국 장소 28,125곳(대피소 14,134곳) 기반 오프라인 길 안내, 폰·태블릿·키오스크 실조작 자동 검증 통과")
 bullet("복지관 2곳 현장 시연(8월) 및 농인 당사자 평가(9~10월) 실시, KOREN VM 상시 데모 서버 운영")
 

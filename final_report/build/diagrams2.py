@@ -191,7 +191,7 @@ def pipeline():
     W, H = 1600, 700
     stages = [
         ("AI Hub", "수어 말뭉치 원본", "133GB", "#17202a", "#f3f5f7", "재난안전 수어영상<br>수어영상(WORD·SEN·FS)<br>7z 통짜 압축 · 메타 중첩"),
-        ("KOREN 전송", "연구망으로 수신", "133GB", "#3b2f8f", "#efedfb", "AI Cloud 워크스페이스로<br>직접 수신 · 개인 PC 경유 없음<br>내려받는 중 최대 약 3배 공간"),
+        ("KOREN 전송", "연구망으로 수신", "133GB", "#3b2f8f", "#efedfb", "KOREN AI Cloud로<br>직접 수신 · 개인 PC 경유 없음<br>내려받는 중 최대 약 3배 공간"),
         ("ETL (AI Cloud)", "무해제 스트리밍 가공", "40만 클립", "#3b2f8f", "#efedfb", "한 번만 훑는 stream_7z<br>좌표 정제 · 수어자 분리<br>pack.feature_health 검사"),
         ("학습 (H200 MIG)", "모델 4종 · 에폭당 세그먼트", "215만", "#3b2f8f", "#efedfb", "iso-v2 · t2gs-v2<br>ctc-v1 · g2ts-v1<br>에폭당 21~25분"),
         ("내보내기", "ONNX · int8", "20MB + 30MB", "#0b6e79", "#e3f4f3", "특징 일치 검사 오차 0<br>CTC 디코딩 3,000판 일치<br>int8 품질 재측정"),
@@ -262,7 +262,7 @@ def bidir():
             + row(330, C["user"], C["userBg"], "② 수어 → 한국어 · 음성  (묻기 · 대화)", [
                 ("웹캠", "MediaPipe(동봉 32MB)로<br>상반신·양손 관절 추출<br>영상은 기기 밖으로 안 나감", ""),
                 ("155차원 특징", "어깨 기준 정규화<br>features.py == landmarks.ts<br>오차 0 검사", ""),
-                ("낱말 인식 iso-v2", "트랜스포머 2.8M · ONNX int8 20MB<br>13,576종 · 미지 수어자 top-5 91.9%", ""),
+                ("낱말 인식 iso-v2", "트랜스포머 2.8M · ONNX int8 20MB<br>13,576종 · 무작위 대비 약 1만 배", ""),
                 ("의도 판정 · 답", "낱말 묶음 → 의도 27/27<br>거리·8방위·어림수 → 수어+지도<br>한국어 문장 → 음성 출력", "AGENT 3 · 질의응답"),
             ])
             + "<div style='position:absolute;left:44px;top:560px;width:1512px;background:#f3f5f7;border-radius:12px;padding:14px 18px;font-size:15px;color:#3d4752'>"
@@ -370,11 +370,11 @@ def kpi():
         ("100%", "행동요령·길찾기 표현률", "목숨이 걸린 안내 전 문장", C["edge"]),
         ("99.95%", "송출 데이터 절감", "영상 대비 1/2,000 · 문장당 2.4KB", C["core"]),
         ("100%", "학습↔추론 특징 일치", "155차원 · 오차 0", C["core"]),
-        ("91.9%", "처음 보는 수어자 top-5", "학습에 없던 13명 · 49,721표본", C["user"]),
-        ("84.0", "글로스→한국어 음절 F1", "정밀도 85.0 · 재현율 83.0", C["core"]),
-        ("≈10,000×", "무작위 추측 대비 인식률", "top-1 78.2% ÷ 무작위 1/13,576", C["user"]),
-        ("0.05%p", "검증 ↔ 미지 수어자 격차", "외우지 않고 일반화", C["user"]),
-        ("+45%", "학습 모델 BLEU 향상", "사전 18.7 → 모델 27.1", C["edge"]),
+        ("98.9%", "처음 보는 수어자 어휘 커버리지", "학습에 없던 수어자 평가 클립", C["user"]),
+        ("98%", "재난문자 정상 출력률", "반복 차단 후 · 길찾기 100%", C["core"]),
+        ("≈10,000×", "무작위 추측 대비 인식률", "13,576종 중 하나를 고르는 문제", C["user"]),
+        ("0.05%p", "검증 ↔ 미지 수어자 격차", "학습에 없던 수어자 13명 · 49,721표본", C["user"]),
+        ("+45%", "학습 모델 BLEU 향상", "통계 사전 대비 · 사람 번역 정답 기준", C["edge"]),
         ("144ms", "문장 번역 지연(브라우저)", "int8 30MB · 1스레드", C["core"]),
     ]
     cells = "".join(
@@ -384,7 +384,7 @@ def kpi():
         f"<div style='font-size:15px;color:#5b6673;margin-top:4px'>{d}</div></div>" for v, k, d, c in tiles)
     html = (f"<div class='wrap' style='width:{W}px;height:{H}px'>"
             "<h1>핵심 성능 지표 — 모두 저장소의 측정 스크립트가 재계산한 값</h1>"
-            "<div class='sub'>인식 · 번역 · 의도 판정 · 송출 · 재생 · 일관성 6개 축. 수어자 분리 평가 · 튜닝에 쓰지 않은 홀드아웃 기준.</div>"
+            "<div class='sub'>번역 · 인식 · 의도 판정 · 송출 · 일관성 5개 축. 수어자 분리 평가 · 튜닝에 쓰지 않은 홀드아웃 기준.</div>"
             f"<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:28px'>{cells}</div></div>")
     shoot("kpi", html, W, H)
 

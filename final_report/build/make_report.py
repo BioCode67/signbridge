@@ -18,7 +18,7 @@ from docx.shared import Cm, Pt, RGBColor
 ROOT = Path(__file__).resolve().parents[2]
 IMG = Path(__file__).parent / "img"
 ASSET = ROOT / "ppt/assets"
-PHOTO = ROOT / "ppt/photos"
+PHOTO = Path(__file__).parent / "photos"  # 복지관 이용자 얼굴을 흐리게 한 사본(blur_faces.py)
 OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "final_report/제출본/최종보고서_닿다.docx"
 
 FONT = "휴먼명조"
@@ -732,26 +732,26 @@ page_break()
 # ── 별첨 회의록 ──────────────────────────────────────
 chapter("별첨", "회의록")
 MEETINGS = [
-    ("킥오프 회의", "2026년 7월 3일, 14:00 ~ 16:00", "영남대학교", [
+    ("킥오프 회의", "2026년 7월 3일, 14:00 ~ 16:00", "영남대학교", "meet_kickoff.png", "회의 자료 — 기획안 초안(과제 범위·KOREN 활용 방안·추진 일정)", [
         "과제 범위 확정: 재난정보 한국수어 통역을 '받기'만이 아닌 '묻기'까지 양방향으로 한다",
         "데이터: AI Hub 재난안전 수어영상·수어영상 말뭉치 사용, KOREN AI Cloud·HPC·VM 자원 신청",
         "역할 분담(모델·인프라 / 당사자·서비스)과 5단계 일정 수립, 7월 안에 데모 웹앱 MVP 완성"]),
-    ("데이터 전략 회의", "2026년 8월 8일, 15:00 ~ 17:00", "영남대학교", [
+    ("데이터 전략 회의", "2026년 8월 8일, 15:00 ~ 17:00", "영남대학교", "meet_data.png", "회의 자료 — KOREN 자원별 역할 분담과 AI Hub 실데이터 함정 정리", [
         "KOREN AI Cloud 교육(8/7) 내용 공유: MIG는 메모리는 넉넉하고 연산이 부족 → 영상 CNN 대신 랜드마크 트랜스포머",
         "AI Hub 원본 구조 확인 결과 공유(7z 통짜 압축, 메타 중첩, 파일명 표기 FS·WORD 불일치) → 스트리밍 ETL로 처리",
         "평가는 수어자 분리로 고정, 발표하는 숫자는 측정 스크립트가 다시 계산한 값만 쓴다",
         "자원별 역할 확정: AI Cloud 학습 · HPC 전처리 · KOREN VM 상시 서버"]),
-    ("중간평가 대비 회의", "2026년 8월 17일, 13:00 ~ 16:00", "영남대학교", [
+    ("중간평가 대비 회의", "2026년 8월 17일, 13:00 ~ 16:00", "영남대학교", "meet_midterm.png", "회의 자료 — 중간평가 발표자료(표지 · 일정 준수와 팀 협업)", [
         "중간보고서 수치 점검(인식 iso-v2 13,576종, 번역 표현률, 오역 회귀 사례)",
         "복지관 2곳 현장 시연 결과 정리 — 화면 크기, 세대·지역 차이, 눌러서 묻기 경로",
         "아직 안 되는 것(연속 수어·지문자·표정)을 숨기지 않고 먼저 밝히기로 결정",
         "9월 당사자 평가 대상 기관으로 경산시장애인종합복지관 선정"]),
-    ("최종평가 준비 회의", "2026년 10월 10일, 14:00 ~ 16:00", "영남대학교", [
+    ("최종평가 준비 회의", "2026년 10월 10일, 14:00 ~ 16:00", "영남대학교", "meet_final.png", "회의 자료 — 최종보고서 구성(표지 · 목차)과 핵심 성능 지표 검토", [
         "경산시장애인종합복지관 당사자 평가 결과 공유와 반영 사항 정리",
         "KOREN 활용 보강: Core·Edge·단말 3계층 설계 정리, KOREN VM 상시 운영 점검",
         "최종보고서·과제개요(10/18), 발표자료·시연 영상(10/28) 분담과 일정 확정"]),
 ]
-for i, (name, when, where, items) in enumerate(MEETINGS):
+for i, (name, when, where, img, cap, items) in enumerate(MEETINGS):
     if i:
         page_break()
     para(f"■ {name}", bold=True, size=BIG - 1)
@@ -762,7 +762,11 @@ for i, (name, when, where, items) in enumerate(MEETINGS):
     for it in items:
         bullet(it, 1)
     para("2. 회의 사진", bold=True, indent=0.4)
-    para("[[회의 사진 첨부]]", align="c")
+    q = doc.add_paragraph()
+    q.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    q.paragraph_format.keep_with_next = True
+    q.add_run().add_picture(str(IMG / img), width=Cm(15.5))
+    para(cap, size=10.5, align="c")
 
 page_numbers()
 OUT.parent.mkdir(parents=True, exist_ok=True)

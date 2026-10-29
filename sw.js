@@ -22,8 +22,8 @@
  * 뒤에서 다시 받는 비용은 크지 않다 — 조건부 요청이라 안 바뀌었으면 304로 끝난다
  * (`public/_headers`가 must-revalidate로 잡아 둔다).
  */
-const VERSION = 'sb-BrSKl1Ck'
-const CORE = ["./","./manifest.webmanifest","./icon-192.png","./icon-512.png","./assets/AskMode-D8MI0jME.js","./assets/Avatar3D-CZIGFJTG.js","./assets/DirectionMap-H1A3rWy3.js","./assets/Landing-ywOHLFvO.js","./assets/MyInfoPanel-D7jOBQZw.js","./assets/RecognizedWords-D47w1Do5.js","./assets/SignInputPanel-Buasi7L4.js","./assets/SosScreen-Dw7L_I6A.js","./assets/TalkMode-Cx_iCtEc.js","./assets/UserApp-ByZm0F74.js","./assets/avatars-Bq_OQb0p.js","./assets/disasterAgent-DMk4caRQ.js","./assets/glossToKorean-BecKXImj.js","./assets/index-BrSKl1Ck.css","./assets/index-Dq475rt_.js","./assets/kiosk-DidyeIMo.js","./assets/model.tfjs-DtgJpbPW.js","./assets/myInfo-Qid5z_l5.js","./assets/nearby-DCb1yXpn.js","./assets/onnxRecognizer-CgBaGvPs.js","./assets/ort.wasm.bundle.min-B0MOZBmC.js","./assets/ortSelfTest-BUu8OSqP.js","./assets/react-three-fiber.esm-CokYYNZT.js","./assets/safetyGuides-C1af-_AE.js","./assets/useDialog-DM8NYxRc.js","./assets/useOnScreen-Cz__FyP9.js","./assets/useSignPlayer-A2NNJwf-.js","./assets/useSpeechInput-DOI1AIdz.js","./assets/useSpeechOutput-Dq3-Mmk_.js"]
+const VERSION = 'sb-v1'
+const CORE = ['./', './manifest.webmanifest', './icon-192.png', './icon-512.png']
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()))

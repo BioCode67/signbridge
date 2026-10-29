@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { glossLabel } from '../agents/glossLabel'
 import { motion } from 'framer-motion'
 import SectionHeading from '../ui/SectionHeading'
-import { API_URL } from '../config'
+import { API_URL, API_IS_REMOTE } from '../config'
 import { useSpeechInput } from '../hooks/useSpeechInput'
 import { DictSignAgent } from '../agents/dictSignAgent'
 import { composeGlosses, type BankIndex } from './sign/composeLocal'
@@ -206,7 +206,9 @@ export default function SignAvatarDemo() {
 
   // 브라우저 단독 경로 — 사전으로 번역하고 정적 동작 조각을 이어 붙인다.
   // 조각은 한 번 받으면 캐시한다(같은 단어가 문장마다 반복되므로 효과가 크다).
-  const serverDownRef = useRef(false)
+  // 정적 배포(GitHub Pages 등)에서는 로컬 서버가 없으므로 처음부터 브라우저 경로로.
+  // fetch 시도 → 타임아웃 대기(~2초) 없이 바로 사전 번역이 시작된다.
+  const serverDownRef = useRef(!API_IS_REMOTE)
   const dictAgentRef = useRef<DictSignAgent | null>(null)
   const bankRef = useRef<BankIndex | null>(null)
   const glossCacheRef = useRef(new Map<string, SignData>())
@@ -320,24 +322,27 @@ export default function SignAvatarDemo() {
       setAiNote(`${how}${skipped}`)
     }
 
-    try {
-      const ctrl = new AbortController()
-      const timer = setTimeout(() => ctrl.abort(), 15000)
-      const res = await fetch(`${API_URL}/compose`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: ctrl.signal,
-        body: JSON.stringify({ text }),
-      })
-      clearTimeout(timer)
-      if (!res.ok) throw new Error(String(res.status))
-      const json = await res.json()
-      if (json.error) throw new Error(json.error)
-      show(json, json.gloss_missing ?? [], 'AI 번역 모델(KoBART)로 생성')
-      setAiBusy(false) // 이 경로엔 finally가 없다 — 여기서 풀지 않으면 버튼이 잠긴 채 남는다
-      return
-    } catch {
-      // 서버가 없거나 느림 — 브라우저 사전으로 간다. 사용자에게는 실패가 아니다.
+    // 정적 배포(localhost API 없음)에서는 서버 fetch를 건너뛰어 즉시 사전 경로로.
+    if (API_IS_REMOTE) {
+      try {
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), 15000)
+        const res = await fetch(`${API_URL}/compose`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: ctrl.signal,
+          body: JSON.stringify({ text }),
+        })
+        clearTimeout(timer)
+        if (!res.ok) throw new Error(String(res.status))
+        const json = await res.json()
+        if (json.error) throw new Error(json.error)
+        show(json, json.gloss_missing ?? [], 'AI 번역 모델(KoBART)로 생성')
+        setAiBusy(false)
+        return
+      } catch {
+        // 서버가 없거나 느림 — 브라우저 사전으로 간다. 사용자에게는 실패가 아니다.
+      }
     }
 
     try {

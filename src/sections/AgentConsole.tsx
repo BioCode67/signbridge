@@ -181,8 +181,8 @@ export default function AgentConsole() {
                 />
                 Q&A 백본으로 KoGPT2 사용
                 {useKoGPT2 && serverOk !== null && (
-                  <span className={serverOk ? 'text-lime-300' : 'text-red-300'}>
-                    {serverOk ? '· 서버 연결됨' : '· 서버 응답 없음(템플릿 폴백)'}
+                  <span className={serverOk ? 'text-lime-300' : 'text-slate-400'}>
+                    {serverOk ? '· 서버 연결됨' : '· 오프라인 모드 · 내장 데이터'}
                   </span>
                 )}
               </label>

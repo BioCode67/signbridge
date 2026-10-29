@@ -25,9 +25,9 @@ const LSH = 5, LEL = 6, LWR = 7
 
 const CONF_MIN = 0.15
 const SMOOTH = 0.4 // slerp factor for arms/body (0..1; higher = snappier)
-const SMOOTH_FINGER = 0.16 // fingers move gentler to kill jitter/popping
+const SMOOTH_FINGER = 0.20 // 0.16→0.20: 조금 올려 프레임간 꺾임 완화
 const CONF_FINGER = 0.4 // fingers need higher confidence before they move
-const FINGER_MAX_ANGLE = 1.5 // cap per-joint finger bend (~86°) → no snapping/folding
+const FINGER_MAX_ANGLE = 1.22 // 1.5→1.22 (~70°): 해부학적 DIP 한계에 맞춤
 const ARM_MAX_ANGLE = 2.7 // cap arm bend to avoid impossible folds
 
 const AXIS_R = new THREE.Vector3(-1, 0, 0)

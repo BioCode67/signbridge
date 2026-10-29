@@ -12,8 +12,8 @@ import { segDir, segDir3D, segDir3Dreal, restLen, smoothInto } from './retarget'
 const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
 // Higher = tighter tracking of the actual sign (less lag), lower = smoother.
-// Tuned up from 0.4/0.16 so hand-shapes reach the keypoint pose more faithfully.
-const SMOOTH = 0.46, SMOOTH_FINGER = 0.26
+// 0.30으로 올려 급격한 프레임 변화("꺾임")를 줄인다. 0.26에서는 노이즈가 보였다.
+const SMOOTH = 0.46, SMOOTH_FINGER = 0.30
 const ARM_MAX = 2.7
 
 // Map our logical bone keys → RPM/Mixamo bone-name suffix.
@@ -35,8 +35,20 @@ interface BoneInfo {
   abduct?: THREE.Vector3 // MCP spread axis (palm normal) in bone-local frame
   restLat?: number // rest lateral angle of this finger in the hand plane (rad)
 }
-const FINGER_FLEX_MAX = 1.5 // cap per-joint curl (~86°)
+// 해부학적 관절 각도 제한 (라디안). 사람 손에서 나올 수 없는 자세를 막는다.
+// MCP(뿌리): 최대 ~90°, PIP(가운데): 최대 ~100°, DIP(끝): 최대 ~70°.
+// 엄지는 구조가 달라 별도. 이전 단일값 1.5(86°)에서 마디별로 세분화.
+const JOINT_FLEX_MAX: Record<string, number[]> = {
+  Thumb:  [1.05, 0.87, 0.52],  // CMC ~60°, MCP ~50°, IP ~30°
+  Index:  [1.57, 1.75, 1.22],  // MCP ~90°, PIP ~100°, DIP ~70°
+  Middle: [1.57, 1.75, 1.22],
+  Ring:   [1.48, 1.75, 1.22],
+  Pinky:  [1.40, 1.75, 1.22],
+}
+const FINGER_FLEX_MAX = 1.75 // 전체 상한 (위 테이블과 병용)
 const FINGER_SPREAD_MAX = 0.42 // cap MCP lateral spread (~24°)
+// 역굽힘(hyperextension) 허용 각도. 사람 손가락은 뒤로 약간 젖힐 수 있다.
+const HYPEREXT_MAX = 0.17 // ~10° — 이보다 더 뒤로 꺾이면 부자연스럽다
 
 export interface GLBRig {
   get(key: string): BoneInfo | undefined
@@ -478,16 +490,37 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
       }
       const rawSum = raw.reduce((t, v) => t + (v > 0 ? v : 0), 0)
       const share = FLEX_SHARE[fg]
-      const useRaw = usable >= 2 && rawSum > 0.15
+      // 마디별 측정을 쓰려면: 2개 이상 측정 가능하고 총 각도가 충분히 커야 한다.
+      // 0.15→0.25로 올려 노이즈가 작을 때 해부학 비율을 쓰게 한다.
+      // 마디 간 각도 편차가 너무 크면(한 마디만 극단적) 해부학 비로 돌아간다.
+      const rawMax = Math.max(...raw.filter(v => v > 0))
+      const rawMin = Math.min(...raw.filter(v => v > 0))
+      const ratioOK = rawMax < rawMin * 8 // 한 마디가 나머지보다 8배 크면 노이즈
+      const useRaw = usable >= 2 && rawSum > 0.25 && ratioOK
 
+      // 마디별 각도를 구한 뒤, 해부학 제한과 커플링을 적용한다.
+      const jointAngles: number[] = [0, 0, 0]
+      const perJointMax = JOINT_FLEX_MAX[fg]
       for (let k = 0; k < 3; k++) {
-        const info = rig.get(`${Side}Hand${fg}${k + 1}`)
-        if (!info || !info.flex) continue
-        // 이 마디가 받을 몫 — 측정이 믿을 만하면 측정 비, 아니면 해부학 비.
         const w = useRaw && raw[k] > 0
           ? raw[k] / rawSum
           : share[k] / (share[0] + share[1] + share[2])
-        const ang = Math.min(FINGER_FLEX_MAX, curl * (share[0] + share[1] + share[2]) * w)
+        jointAngles[k] = curl * (share[0] + share[1] + share[2]) * w
+      }
+      // ── 해부학 커플링: DIP(끝마디)는 PIP(가운데)보다 더 굽을 수 없다.
+      //    사람 손의 건이 연결돼 있어서 DIP가 단독으로 크게 굽지 않는다.
+      //    이 제약이 없으면 끝마디만 뚝 꺾여 부자연스러운 모양이 된다.
+      // 이음(ieum) 프로젝트 참고: 끝마디는 가운데마디의 2/3 정도로 연동.
+      // 사람 손가락 힘줄 구조상 DIP가 PIP보다 독립적으로 크게 굽을 수 없다.
+      if (fg !== 'Thumb' && jointAngles[2] > jointAngles[1] * 0.67) {
+        jointAngles[2] = jointAngles[1] * 0.67
+      }
+      for (let k = 0; k < 3; k++) {
+        const info = rig.get(`${Side}Hand${fg}${k + 1}`)
+        if (!info || !info.flex) continue
+        // 마디별 상한 + 전체 상한 + 역굽힘 방지
+        const maxForJoint = Math.min(FINGER_FLEX_MAX, perJointMax[k])
+        const ang = Math.max(-HYPEREXT_MAX, Math.min(maxForJoint, jointAngles[k]))
         _fq.setFromAxisAngle(info.flex, -ang) // 손바닥 쪽으로만 굽는다
 
         let spread = 0

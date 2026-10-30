@@ -34,7 +34,7 @@ const metrics = [
 
 export default function ImpactSection() {
   return (
-    <section id="impact" className="section-pad relative">
+    <section id="impact" className="section-pad section-divider relative">
       <div className="mx-auto max-w-content">
         <SectionHeading
           eyebrow="IMPACT & 상용화"

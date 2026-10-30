@@ -82,7 +82,7 @@ const TONE: Record<string, { chip: string; bar: string }> = {
 
 export default function LimitsSection() {
   return (
-    <section id="limits" className="section-pad relative">
+    <section id="limits" className="section-pad section-divider relative">
       <div className="mx-auto max-w-content">
         <SectionHeading
           eyebrow="HONEST · 한계"

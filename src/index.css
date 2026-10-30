@@ -129,6 +129,20 @@
     @apply px-6 py-24 sm:px-8 md:py-32 lg:px-12;
   }
 
+  /* 섹션 상단 그래디언트 구분선 — 섹션이 자연스럽게 나뉘어 보이게 */
+  .section-divider {
+    @apply relative;
+  }
+  .section-divider::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.15), transparent);
+  }
+
   /* Cyan timeline scrubber used by the sign-avatar demo */
   .seek {
     -webkit-appearance: none;

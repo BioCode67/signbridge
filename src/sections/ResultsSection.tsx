@@ -76,7 +76,7 @@ const FIXED = [
 
 export default function ResultsSection() {
   return (
-    <section id="results" className="section-pad relative">
+    <section id="results" className="section-pad section-divider relative">
       {/* 은은한 바닥 광원 — 카드가 어두운 배경에서 떠 보이게 한다 */}
       <div
         aria-hidden

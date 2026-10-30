@@ -45,7 +45,7 @@ const korenAssets = [
 
 export default function HowItWorks() {
   return (
-    <section id="how" className="section-pad relative bg-space-900/40">
+    <section id="how" className="section-pad section-divider relative bg-space-900/40">
       <div className="mx-auto max-w-content">
         <SectionHeading
           eyebrow="AGENTIC AI · HOW IT WORKS"

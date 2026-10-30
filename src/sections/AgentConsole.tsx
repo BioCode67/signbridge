@@ -118,7 +118,7 @@ export default function AgentConsole() {
   }
 
   return (
-    <section id="agents" className="relative border-t border-white/5 py-24 sm:py-32">
+    <section id="agents" className="section-divider relative py-24 sm:py-32">
       <div className="mx-auto max-w-content px-6 lg:px-12">
         <SectionHeading
           eyebrow="4-에이전트 · Agentic Pipeline"

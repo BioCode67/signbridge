@@ -575,7 +575,7 @@ export default function SignAvatarDemo() {
                     type="button"
                     onClick={() => composeText()}
                     disabled={aiBusy || !aiText.trim()}
-                    className="shrink-0 rounded-lg border border-cyan-glow/50 bg-cyan-glow/10 px-4 py-2 text-sm font-semibold text-cyan-soft transition-all hover:bg-cyan-glow/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="shrink-0 rounded-lg border border-cyan-glow/60 bg-cyan-glow/15 px-4 py-2.5 text-sm font-bold text-cyan-soft shadow-[0_0_12px_rgba(34,211,238,0.2)] transition-all hover:bg-cyan-glow/25 hover:shadow-[0_0_20px_rgba(34,211,238,0.35)] disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none"
                   >
                     {aiBusy ? '번역 중…' : 'AI 수어 번역'}
                   </button>

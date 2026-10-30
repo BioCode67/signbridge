@@ -148,10 +148,10 @@ export default function LiveConsole({ translate, playing }: Props) {
           type="button"
           onClick={() => { setLive((v) => !v); if (live) setStage('idle') }}
           aria-pressed={live}
-          className={`rounded-lg border px-4 py-2 text-sm font-semibold transition-all ${
+          className={`rounded-lg border px-4 py-2.5 text-sm font-bold transition-all ${
             live
-              ? 'border-red-400/70 bg-red-500/15 text-red-200'
-              : 'border-cyan-glow/50 bg-cyan-glow/10 text-cyan-soft hover:bg-cyan-glow/20'
+              ? 'border-red-400/70 bg-red-500/15 text-red-200 shadow-[0_0_12px_rgba(248,113,113,0.2)]'
+              : 'border-cyan-glow/60 bg-cyan-glow/15 text-cyan-soft shadow-[0_0_12px_rgba(34,211,238,0.2)] hover:bg-cyan-glow/25 hover:shadow-[0_0_20px_rgba(34,211,238,0.35)]'
           }`}
         >
           {live ? '■ 수신 중지' : '▶ 실시간 재난문자 수신'}

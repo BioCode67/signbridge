@@ -30,9 +30,10 @@ export default function Hero() {
       id="top"
       className="relative flex min-h-[100svh] w-full items-center overflow-hidden"
     >
-      {/* 3D globe — fills the section, sits behind the copy */}
-      <div className="absolute inset-0 z-0">
-        <Suspense fallback={<div className="h-full w-full bg-space-950" />}>
+      {/* 3D globe — fills the section, sits behind the copy.
+          WebGL이 안 뜰 때도 hero-fallback-bg 그래디언트가 깔린다. */}
+      <div className="absolute inset-0 z-0 hero-fallback-bg">
+        <Suspense fallback={<div className="h-full w-full" />}>
           <HeroScene />
         </Suspense>
       </div>

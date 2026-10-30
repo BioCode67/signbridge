@@ -68,7 +68,11 @@ export default function WhySection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-60px' }}
               transition={{ duration: 0.55, delay: i * 0.12, ease }}
-              className="relative rounded-2xl border border-white/10 bg-space-800/40 p-7"
+              className={`relative rounded-2xl border p-7 ${
+                i === 2
+                  ? 'border-cyan-glow/30 bg-space-800/60 ring-1 ring-cyan-glow/10'
+                  : 'border-white/10 bg-space-800/40'
+              }`}
             >
               <div className="grid h-12 w-12 place-items-center rounded-xl border border-cyan-glow/25 bg-space-900 text-cyan-soft">
                 <svg

@@ -22,8 +22,8 @@
  * 뒤에서 다시 받는 비용은 크지 않다 — 조건부 요청이라 안 바뀌었으면 304로 끝난다
  * (`public/_headers`가 must-revalidate로 잡아 둔다).
  */
-const VERSION = 'sb-v1'
-const CORE = ['./', './manifest.webmanifest', './icon-192.png', './icon-512.png']
+const VERSION = 'sb-DvlmgyGL'
+const CORE = ["./","./manifest.webmanifest","./icon-192.png","./icon-512.png","./assets/AskMode-TzMo2Nj0.js","./assets/Avatar3D-BzL4PPUt.js","./assets/DirectionMap-LfrjcNOt.js","./assets/HeroScene-DH5XcB03.js","./assets/MyInfoPanel-BZwFjIci.js","./assets/RecognitionDemo-CWb8YJDP.js","./assets/RecognizedWords-DtEoiX4t.js","./assets/SignInputPanel-BE5nXp4Y.js","./assets/SosScreen-C1owDQN8.js","./assets/TalkMode-DGfja7dA.js","./assets/UserApp-CCe_NWMQ.js","./assets/chunk-CMxvf4Kt.js","./assets/dist-BFRl094e.js","./assets/glossToKorean-If6E2iP7.js","./assets/index-DvlmgyGL.js","./assets/index-TuJWUP89.css","./assets/myInfo-BOCHRtG-.js","./assets/nearby-DCb1yXpn.js","./assets/onnxRecognizer-C8GdhBEx.js","./assets/ort.wasm.bundle.min-Co2YvB_3.js","./assets/ortSelfTest-BWOZpiLu.js","./assets/safetyGuides-C1af-_AE.js","./assets/useRecognizer-ZqYZkakc.js","./assets/useSignPlayer-DuJ9dwx8.js","./assets/useSpeechOutput-B3Lg6so7.js","./ort/ort-wasm-simd-threaded.wasm","./ort/ort-wasm-simd-threaded.mjs"]
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()))

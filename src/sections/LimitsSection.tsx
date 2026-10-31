@@ -104,7 +104,7 @@ export default function LimitsSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={viewport}
                 transition={{ duration: 0.5, delay: i * 0.1, ease }}
-                className="relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-space-800/40 p-7"
+                className="glass-card relative flex flex-col overflow-hidden rounded-2xl p-7"
               >
                 {/* 위쪽 가는 띠 — 카드마다 성격을 색으로 구분한다 */}
                 <span

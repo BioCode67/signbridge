@@ -25,7 +25,7 @@ export default function SectionHeading({
           initial={{ opacity: 0, y: 12 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={viewport}
-          className="text-xs font-semibold uppercase tracking-[0.25em] text-cyan-soft"
+          className="text-[11px] font-bold uppercase tracking-[0.3em] text-cyan-soft/90"
         >
           {eyebrow}
         </motion.span>
@@ -35,7 +35,7 @@ export default function SectionHeading({
         whileInView={{ opacity: 1, y: 0 }}
         viewport={viewport}
         transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-        className="text-3xl font-bold leading-tight tracking-tight text-white sm:text-4xl md:text-5xl"
+        className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl md:text-[2.8rem]"
       >
         {title}
       </motion.h2>

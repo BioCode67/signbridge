@@ -76,7 +76,7 @@ const FIXED = [
 
 export default function ResultsSection() {
   return (
-    <section id="results" className="section-pad section-divider relative">
+    <section id="results" className="section-pad section-divider section-glow relative">
       {/* 은은한 바닥 광원 — 카드가 어두운 배경에서 떠 보이게 한다 */}
       <div
         aria-hidden
@@ -102,7 +102,7 @@ export default function ResultsSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={viewport}
               transition={{ duration: 0.5, delay: i * 0.08, ease }}
-              className="rounded-2xl border border-white/10 bg-space-800/40 p-6 transition-colors hover:border-cyan-glow/40"
+              className="glass-card rounded-2xl p-6"
             >
               <div className="flex items-baseline gap-1.5">
                 <span className="text-4xl font-extrabold tracking-tight text-cyan-soft text-glow">
@@ -161,7 +161,7 @@ export default function ResultsSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={viewport}
                 transition={{ duration: 0.5, delay: i * 0.1, ease }}
-                className="flex flex-col rounded-2xl border border-white/10 bg-space-800/40 p-6"
+                className="glass-card flex flex-col rounded-2xl p-6"
               >
                 <span className="self-start rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-bold text-amber-200">
                   {f.tag}

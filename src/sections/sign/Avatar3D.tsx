@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, OrbitControls, useGLTF } from '@react-three/drei'
+import { EffectComposer, Bloom, Vignette, N8AO } from '@react-three/postprocessing'
 import { VRMLoaderPlugin, VRMUtils, type VRM } from '@pixiv/three-vrm'
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
@@ -137,6 +138,27 @@ function headOffset(data: SignData | undefined, frame: number): { x: number; y: 
   return g.head === 'nod' ? { x: a * 0.13, y: 0 } : { x: 0, y: a * 0.17 }
 }
 
+/** Subtle circular gradient platform — grounds the avatar on a professional stage. */
+function StagePlatform() {
+  const mesh = useRef<THREE.Mesh>(null)
+  const geo = useMemo(() => new THREE.CircleGeometry(1.2, 64), [])
+  const mat = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 256
+    canvas.height = 256
+    const ctx = canvas.getContext('2d')!
+    const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128)
+    grad.addColorStop(0, 'rgba(34,211,238,0.08)')
+    grad.addColorStop(0.5, 'rgba(20,100,120,0.04)')
+    grad.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = grad
+    ctx.fillRect(0, 0, 256, 256)
+    const tex = new THREE.CanvasTexture(canvas)
+    return new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false })
+  }, [])
+  return <mesh ref={mesh} rotation-x={-Math.PI / 2} position={[0, 0.001, 0]} geometry={geo} material={mat} />
+}
+
 /** Frames the upper body and gives a gentle cyan-lit studio look. */
 function Rig() {
   const { camera, size, controls } = useThree()
@@ -224,44 +246,61 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
       camera={{ fov: 37, near: 0.1, far: 20, position: [0, 1.28, 2.0] }}
       style={{ width: '100%', height: '100%' }}
       onCreated={({ gl }) => {
-        gl.toneMappingExposure = 1.0 // neutral exposure for realistic skin (no wash-out)
+        gl.toneMapping = THREE.ACESFilmicToneMapping
+        gl.toneMappingExposure = 1.05
       }}
     >
       <Rig />
 
-      {/* Neutral studio rig tuned for realistic PBR skin: soft white key + fill,
-          and only a faint cyan rim for separation (no cyan cast on the face). */}
-      <ambientLight intensity={0.8} color="#eef4ff" />
+      {/* Professional 3-point studio lighting for realistic PBR skin.
+          Key (warm white) + Fill (neutral) + Rim (cyan accent) + Hair light. */}
+      <ambientLight intensity={0.6} color="#f0f4ff" />
+      {/* Key light — warm, main illumination from front-right */}
       <directionalLight
-        position={[2, 3, 3]}
-        intensity={2.0}
-        color="#fff4ea"
+        position={[2.5, 3.5, 3]}
+        intensity={2.2}
+        color="#fff2e0"
         castShadow
-        shadow-mapSize={[1024, 1024]}
-        shadow-bias={-0.0004}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0003}
+        shadow-radius={4}
       />
-      <directionalLight position={[-2.5, 1.4, 1.5]} intensity={0.7} color="#ffffff" />
-      <directionalLight position={[-3, 1.8, -2.5]} intensity={0.5} color="#22d3ee" />
+      {/* Fill light — softer, from front-left */}
+      <directionalLight position={[-2.5, 1.8, 2]} intensity={0.8} color="#f5f0ff" />
+      {/* Rim/back light — cyan accent for silhouette separation */}
+      <directionalLight position={[-2, 2.5, -3]} intensity={0.7} color="#22d3ee" />
+      {/* Hair/top light — subtle overhead for depth */}
+      <directionalLight position={[0.5, 4, 0]} intensity={0.4} color="#ffffff" />
 
       {/* Image-based lighting for soft, realistic skin + clean eye speculars. */}
-      <Environment resolution={128}>
-        <Lightformer intensity={1.6} color="#ffffff" position={[2, 3, 2]} scale={[5, 5, 1]} />
-        <Lightformer intensity={1.0} color="#fff0e6" position={[-3, 1, 2]} scale={[5, 5, 1]} />
-        <Lightformer intensity={0.5} color="#22d3ee" position={[0, 2, -4]} scale={[6, 3, 1]} />
+      <Environment resolution={256}>
+        <Lightformer intensity={1.8} color="#ffffff" position={[2, 3, 2]} scale={[5, 5, 1]} />
+        <Lightformer intensity={1.2} color="#fff0e6" position={[-3, 1, 2]} scale={[5, 5, 1]} />
+        <Lightformer intensity={0.6} color="#22d3ee" position={[0, 2.5, -4]} scale={[8, 4, 1]} />
+        <Lightformer intensity={0.3} color="#e0f0ff" position={[0, 4, 0]} scale={[10, 1, 1]} rotation-x={Math.PI / 2} />
       </Environment>
 
       <Suspense fallback={null}>
         <VRMModel key={modelUrl} url={modelUrl} data={data} frame={frame} animate={animate} />
+        <StagePlatform />
         {/* Soft contact shadow grounds the figure. */}
         <ContactShadows
           position={[0, 0.0, 0]}
-          opacity={0.45}
+          opacity={0.5}
           scale={4}
-          blur={2.6}
-          far={2}
-          color="#04111a"
+          blur={2.4}
+          far={2.5}
+          color="#041520"
         />
       </Suspense>
+
+      {/* Post-processing: subtle cinematic polish without killing performance. */}
+      <EffectComposer multisampling={0}>
+        <N8AO aoRadius={0.5} intensity={1.0} distanceFalloff={0.8} halfRes />
+        <Bloom luminanceThreshold={0.9} luminanceSmoothing={0.4} intensity={0.15} mipmapBlur />
+        <Vignette offset={0.3} darkness={0.4} />
+      </EffectComposer>
+
       <OrbitControls
         makeDefault
         target={[0, 1.24, 0]}

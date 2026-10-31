@@ -101,6 +101,44 @@
     text-shadow: 0 0 24px rgba(34, 211, 238, 0.45);
   }
 
+  /* Premium gradient text for hero headline */
+  .text-gradient-cyan {
+    background: linear-gradient(135deg, #67e8f9 0%, #22d3ee 40%, #06b6d4 70%, #0891b2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Elevated glass card — deeper frosted effect with subtle glow on hover */
+  .glass-card {
+    background: rgba(10, 14, 26, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.08);
+    transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  }
+  .glass-card:hover {
+    border-color: rgba(34, 211, 238, 0.25);
+    box-shadow: 0 0 30px -8px rgba(34, 211, 238, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  /* Subtle radial glow behind sections — alternates to create depth */
+  .section-glow {
+    position: relative;
+  }
+  .section-glow::after {
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    width: 60%;
+    height: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(34, 211, 238, 0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+  }
+
   /* Hero WebGL 폴백 — 글로브가 안 뜰 때도 배경이 밋밋하지 않게 */
   .hero-fallback-bg {
     background: radial-gradient(ellipse 80% 60% at 70% 50%, rgba(34, 211, 238, 0.06) 0%, transparent 70%),
@@ -137,10 +175,20 @@
     content: '';
     position: absolute;
     top: 0;
-    left: 10%;
-    right: 10%;
+    left: 5%;
+    right: 5%;
     height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(34, 211, 238, 0.15), transparent);
+    background: linear-gradient(90deg, transparent 0%, rgba(34, 211, 238, 0.2) 30%, rgba(34, 211, 238, 0.3) 50%, rgba(34, 211, 238, 0.2) 70%, transparent 100%);
+  }
+  .section-divider::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 40px;
+    background: linear-gradient(180deg, rgba(34, 211, 238, 0.03) 0%, transparent 100%);
+    pointer-events: none;
   }
 
   /* Cyan timeline scrubber used by the sign-avatar demo */

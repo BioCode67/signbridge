@@ -59,11 +59,11 @@ export default function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1, ease }}
-            className="mt-6 text-5xl font-extrabold leading-[1.05] tracking-tight text-white sm:text-6xl md:text-7xl"
+            className="mt-6 text-5xl font-extrabold leading-[1.02] tracking-tight text-white sm:text-6xl md:text-[5.5rem]"
           >
             들리지 않아도,
             <br />
-            <span className="text-cyan-soft text-glow">닿습니다.</span>
+            <span className="text-gradient-cyan text-glow">닿습니다.</span>
           </motion.h1>
 
           <motion.div
@@ -106,7 +106,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.55, ease }}
-            className="mt-12 grid max-w-lg grid-cols-3 gap-4 border-t border-white/10 pt-6"
+            className="mt-12 grid max-w-lg grid-cols-3 gap-5 border-t border-white/[0.06] pt-8"
           >
             {[
               // **문제 하나, 성과 둘.** 왜 필요한지를 먼저 두고, 바로 옆에 재어 본
@@ -116,10 +116,10 @@ export default function Hero() {
               { v: '인식 78.2%', l: 'top-1 · 13,576 클래스 (수어자 분리)' },
             ].map((s) => (
               <div key={s.l}>
-                <dt className="text-xl font-extrabold tracking-tight text-cyan-soft sm:text-2xl">
+                <dt className="text-2xl font-extrabold tracking-tight text-cyan-soft sm:text-[1.7rem]">
                   {s.v}
                 </dt>
-                <dd className="mt-1 text-[11px] leading-snug text-slate-400 sm:text-xs">{s.l}</dd>
+                <dd className="mt-1.5 text-[11px] leading-snug text-slate-500 sm:text-xs">{s.l}</dd>
               </div>
             ))}
           </motion.dl>

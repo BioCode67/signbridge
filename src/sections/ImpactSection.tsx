@@ -54,7 +54,7 @@ export default function ImpactSection() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-60px' }}
               transition={{ duration: 0.55, delay: i * 0.12, ease }}
-              className="rounded-2xl border border-white/10 bg-space-800/40 p-7"
+              className="glass-card rounded-2xl p-7"
             >
               <div className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-xl border border-cyan-glow/25 bg-space-900 text-cyan-soft">

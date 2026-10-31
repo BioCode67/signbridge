@@ -5,8 +5,9 @@ export default function Footer() {
     <footer className="relative border-t border-white/10 bg-space-950">
       {/* CTA band */}
       <div className="mx-auto max-w-content px-6 py-20 lg:px-12">
-        <div className="glass relative overflow-hidden rounded-3xl px-8 py-14 text-center">
-          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-glow/10 via-transparent to-transparent" />
+        <div className="relative overflow-hidden rounded-3xl border border-cyan-glow/15 bg-space-800/50 px-8 py-16 text-center backdrop-blur-xl">
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-cyan-glow/8 via-transparent to-cyan-deep/5" />
+          <div className="pointer-events-none absolute -top-px left-[10%] right-[10%] h-px bg-gradient-to-r from-transparent via-cyan-glow/40 to-transparent" />
           <h3 className="relative text-3xl font-extrabold tracking-tight text-white sm:text-4xl">
             들리지 않아도, <span className="text-cyan-soft text-glow">닿습니다.</span>
           </h3>

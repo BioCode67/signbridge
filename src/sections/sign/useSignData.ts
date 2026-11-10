@@ -17,10 +17,13 @@ type LoadState =
  * Adding a new sentence is zero-code: drop `sign_N.json` into `public/data/`
  * and add its filename to `manifest.json` — a new tab appears automatically.
  */
-export function useSignData(): LoadState {
+export function useSignData(enabled = true): LoadState {
   const [state, setState] = useState<LoadState>({ status: 'loading', sentences: [] })
 
   useEffect(() => {
+    // **필요할 때 받는다.** 수록 문장 17개는 합쳐 약 15MB다. 예전에는 소개 페이지를 여는
+    // 순간 전부 받아서, 폰으로 첫 화면만 보고 나가는 방문자도 8초 안에 22MB를 썼다(실측).
+    if (!enabled) return
     let disposed = false
     const base = import.meta.env.BASE_URL
 
@@ -55,7 +58,7 @@ export function useSignData(): LoadState {
     return () => {
       disposed = true
     }
-  }, [])
+  }, [enabled])
 
   return state
 }

@@ -36,7 +36,19 @@ function cleanGloss(g: string): string {
 // 서버가 없어도 수록 문장 재생·아바타는 그대로 동작한다.
 
 export default function SignAvatarDemo() {
-  const load = useSignData()
+  // 데모 칸이 화면 가까이(위아래 한 화면 반) 오면 그때 수록 문장을 받는다 — 첫 화면만 보는
+  // 폰 방문자에게 15MB를 미리 쓰게 하지 않는다. `#demo`로 바로 오면 곧바로 받는다.
+  const sectionRef = useRef<HTMLElement>(null)
+  const [near, setNear] = useState(() => typeof IntersectionObserver === 'undefined')
+  useEffect(() => {
+    const el = sectionRef.current
+    if (!el || near) return
+    const io = new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) setNear(true) },
+      { rootMargin: '150% 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [near])
+  const load = useSignData(near)
 
   // AI 합성 결과 — 수록 문장 목록 맨 앞에 탭으로 끼어든다.
   const [composed, setComposed] = useState<(typeof load.sentences)[number] | null>(null)
@@ -471,7 +483,7 @@ export default function SignAvatarDemo() {
   }, [data, activeGloss])
 
   return (
-    <section id="demo" className="section-pad relative">
+    <section id="demo" ref={sectionRef} className="section-pad relative">
       {/* ambient glow behind the stage */}
       <div className="pointer-events-none absolute left-1/2 top-1/3 -z-0 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-cyan-glow/10 blur-[120px]" />
 

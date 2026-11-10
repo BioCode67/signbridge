@@ -45,8 +45,9 @@ export default function Hero() {
       {/* Copy */}
       <div className="relative z-10 mx-auto w-full max-w-content px-6 lg:px-12">
         <div className="max-w-xl">
-          {/* 해커톤 심사 진입로 — 루트 주소로 들어온 사람이 바로 찾도록 맨 위에 둔다.
-              소개 페이지의 나머지는 그대로다(다른 대회가 이 주소를 본다). */}
+          {/* 이음 진입로 — 루트 주소로 들어온 사람이 바로 찾도록 맨 위에 둔다.
+              이 주소는 여러 대회(KEIT AI 라이프 솔루션 챌린지 대국민 투표 등)가 함께 보므로
+              특정 대회 이름을 넣지 않는다. */}
           <motion.a
             href="#/ieum"
             data-ieum-banner
@@ -58,7 +59,7 @@ export default function Hero() {
             <span className="text-2xl" aria-hidden>📄</span>
             <span className="min-w-0 flex-1">
               <span className="block text-[11px] font-semibold tracking-wide text-amber-300">
-                Upstage AI Agent 해커톤 · 팀 이음
+                새 기능 · 이음
               </span>
               <span className="block text-base font-extrabold leading-snug text-white sm:text-lg">
                 서류를 수어로 보기 — 영수증·고지서·복약안내문

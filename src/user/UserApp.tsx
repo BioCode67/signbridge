@@ -44,6 +44,11 @@ const TalkMode = lazy(() => import('./TalkMode'))
  *  대화 화면은 5분 손대지 않으면 스스로 초기화되므로(앞사람 대화가 남지 않는다)
  *  키오스크에 필요한 나머지는 이미 갖춰져 있다. */
 const KIOSK = typeof window !== 'undefined' && /[?&]kiosk=1/.test(window.location.hash)
+/** 소개 화면의 "직접 해 보기"로 들어왔는가(`#/app?try=1`).
+ *  처음 온 사람에게는 **한 번 누르면 바로** 재난문자 한 건이 수어로 나와야 한다 —
+ *  지난번에 쓴 탭(대화·사전)이 기억돼 있어도 받기 화면으로 열고, 첫 문자를 기다리지 않고 튼다.
+ *  모듈이 아니라 화면이 뜰 때 읽는다 — 소개 화면에서 해시만 바꿔 넘어오기 때문이다. */
+const isTry = () => typeof window !== 'undefined' && /[?&]try=1/.test(window.location.hash)
 
 /** 사전 첫 화면에 놓는 낱말 — **한 글자도 안 치고 시작할 수 있게.**
  *
@@ -75,8 +80,10 @@ export default function UserApp() {
   // 받기(재난문자→수어) · 대화(창구) · 질문(내 수어로 묻기) · 사전.
   // **마지막에 쓴 탭을 기억한다** — 병원에 가는 사람은 앱을 열자마자 대화 화면을
   // 원하지 재난문자를 원하지 않는다. 매번 탭을 찾아 누르게 하는 것은 그 자체로 장벽이다.
+  const [tryMode] = useState(isTry)
   const [tab, setTab] = useState<'watch' | 'speak' | 'dict' | 'place'>(() => {
     if (KIOSK) return 'place'
+    if (tryMode) return 'watch'
     const saved = localStorage.getItem('sb-tab')
     return saved === 'place' || saved === 'speak' || saved === 'dict' ? saved : 'watch'
   })
@@ -167,12 +174,14 @@ export default function UserApp() {
     // 돌리느라, 정작 사용자가 기다리는 수어가 늦어진다. 돌아오면 이어서 받는다.
     if (tab !== 'watch') return
     if (!auto || playing || pausedMidway || busy || feed.length === 0) return
+    // 첫 문자는 "직접 해 보기"로 왔으면 곧바로 — 나머지는 읽을 틈을 두고 다음 문자를 받는다.
+    const wait = cursor === 0 && tryMode ? 150 : 2200
     const t = window.setTimeout(() => {
       setCursor((c) => c + 1)
       void playItem(feed[cursor % feed.length])
-    }, 2200)
+    }, wait)
     return () => window.clearTimeout(t)
-  }, [tab, auto, playing, frame, busy, feed, cursor, playItem])
+  }, [tab, auto, playing, frame, busy, feed, cursor, playItem, tryMode])
 
   // 사전 탭 — bank 색인에서 찾고, 고르면 받기 화면에서 그 단어 수어를 재생한다.
   const [dictQuery, setDictQuery] = useState('')

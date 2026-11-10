@@ -28,7 +28,10 @@ export default function Hero() {
   return (
     <section
       id="top"
-      className="relative flex min-h-[100svh] w-full items-center overflow-hidden"
+      // 폰에서는 **위에서부터** 쌓는다. 가운데 정렬이면 내용이 화면보다 길 때 위로 넘쳐
+      // 고정 상단바(약 60px) 밑으로 들어간다 — 실측(375×667)에서 이음 배너가 로고와 겹쳐
+      // 글자가 읽히지 않았다. 상단바 높이만큼 비우고 시작한다.
+      className="relative flex min-h-[100svh] w-full items-start overflow-hidden pb-12 pt-[76px] md:items-center md:pb-0 md:pt-0"
     >
       {/* 3D globe — fills the section, sits behind the copy.
           WebGL이 안 뜰 때도 hero-fallback-bg 그래디언트가 깔린다. */}
@@ -74,14 +77,14 @@ export default function Hero() {
             className="inline-flex items-center gap-2 rounded-full border border-cyan-glow/30 bg-cyan-glow/10 px-4 py-1.5 text-xs font-medium tracking-wide text-cyan-soft"
           >
             <span className="h-1.5 w-1.5 animate-pulse-glow rounded-full bg-cyan-glow" />
-            KOREN 기반 실시간 재난방송 AI 수어 통역
+            재난문자·창구 대화를 3D 수어 아바타로
           </motion.span>
 
           <motion.h1
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1, ease }}
-            className="mt-6 text-5xl font-extrabold leading-[1.02] tracking-tight text-white sm:text-6xl md:text-[5.5rem]"
+            className="mt-4 text-5xl font-extrabold leading-[1.02] tracking-tight text-white sm:mt-6 sm:text-6xl md:text-[5.5rem]"
           >
             들리지 않아도,
             <br />
@@ -92,7 +95,7 @@ export default function Hero() {
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25, ease }}
-            className="mt-6 h-16 max-w-md sm:h-14"
+            className="mt-4 h-16 max-w-md sm:mt-6 sm:h-14"
           >
             <AnimatePresence mode="wait">
               <motion.p
@@ -109,18 +112,38 @@ export default function Hero() {
             </AnimatePresence>
           </motion.div>
 
+          {/* **직접 해 보기** — 첫 화면에서 한 번 누르면 재난문자 한 건이 아바타 수어로 나온다.
+              이 주소를 여는 사람 다수는 폰으로 들어와 몇 초 안에 판단한다. 소개를 끝까지
+              읽고 데모 칸을 찾아 내려가게 하지 않는다 — 받기 화면(#/app)이 첫 문자를 곧바로 튼다. */}
           <motion.div
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.4, ease }}
-            className="mt-10 flex flex-wrap items-center gap-4"
+            className="mt-5 flex flex-col gap-3 sm:mt-10"
           >
-            <Button href="#demo" variant="primary">
-              수어 데모 보기
-            </Button>
-            <Button href="#why" variant="ghost">
-              왜 필요한가
-            </Button>
+            <a
+              href="#/app?try=1"
+              data-try-cta
+              className="group flex w-full items-center gap-4 rounded-2xl bg-gradient-to-r from-cyan-glow to-cyan-deep px-5 py-4 text-white shadow-[0_0_32px_rgba(34,211,238,0.4)] transition-all hover:-translate-y-0.5 hover:shadow-[0_0_44px_rgba(34,211,238,0.6)] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/80 active:scale-[0.98] sm:w-auto sm:self-start sm:pr-7"
+            >
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/20 text-xl" aria-hidden>
+                ▶
+              </span>
+              <span className="min-w-0">
+                <span className="block text-lg font-extrabold leading-tight">직접 해 보기</span>
+                <span className="block text-sm font-medium leading-snug text-white/90">
+                  재난문자가 수어로 바뀌는 걸 바로 봅니다
+                </span>
+              </span>
+            </a>
+            <div className="flex flex-wrap items-center gap-3">
+              <Button href="#demo" variant="ghost">
+                수어 데모 보기
+              </Button>
+              <Button href="#why" variant="ghost">
+                왜 필요한가
+              </Button>
+            </div>
           </motion.div>
 
           {/* Quick stats — the case at a glance */}

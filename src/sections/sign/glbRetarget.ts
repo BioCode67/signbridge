@@ -7,14 +7,48 @@
  */
 import * as THREE from 'three'
 import type { SignData } from './signTypes'
-import { segDir, segDir3D, segDir3Dreal, restLen, smoothInto } from './retarget'
+import { segDir, segDir3D, segDir3Dreal, restLen } from './retarget'
 
 const RSH = 2, REL = 3, RWR = 4
 const LSH = 5, LEL = 6, LWR = 7
 // Higher = tighter tracking of the actual sign (less lag), lower = smoother.
 // 0.30으로 올려 급격한 프레임 변화("꺾임")를 줄인다. 0.26에서는 노이즈가 보였다.
-const SMOOTH = 0.46, SMOOTH_FINGER = 0.30
+//
+// 2026-11-10: 팔 0.46 → 0.80 · 손가락 0.30 → 0.40 (아래 `tuning`).
+// 떨림은 이제 문장 전체를 앞뒤로 보는 평활(`prefilter`, 지연 없음)이 먼저 걷어
+// 내므로, 뒤따라가기만 하는 slerp 평활은 덜 걸어도 된다. slerp는 떨림을 줄이는
+// 대가로 **늦게 따라간다** — 30fps에서 계수 a의 평균 지연은 (1-a)/a 프레임이라
+//     팔   0.46 → 39ms   ·  0.80 → 8ms
+//     손가락 0.30 → 78ms ·  0.40 → 50ms
+// 손 모양이 바뀌는 순간이 늦어지면 수어가 뭉개진다. 값은 문장 4건(2,513프레임)에서
+// 81가지 조합을 재서 골랐다(DECISIONS.md 2026-11-10).
 const ARM_MAX = 2.7
+
+/** 계측용 손잡이 — 평소에는 건드리지 않는다.
+ *
+ *  `raw`를 켜면 시간 평활(slerp)을 끄고 그 프레임의 목표 자세로 곧장 간다.
+ *  평활이 얼마나 늦게 따라가는지(지연)를 재려면 "평활 없는 자세"라는 기준이
+ *  있어야 해서 둔다. 화면에서는 항상 false다. */
+export const tuning = {
+  raw: false,
+  // 아래는 계측에서 값을 바꿔 가며 견주기 위한 자리다. 화면에서는 기본값 그대로 쓴다.
+  smooth: 0.8,
+  smoothFinger: 0.4,
+  sigmaArm: 2.2,
+  sigmaHand: 1.6,
+  sigmaZ: 1.9,
+}
+
+/** 평활 계수를 **갱신 간격에 맞춰** 바꾼다.
+ *
+ *  slerp 계수(smooth 등)는 "한 번 갱신할 때 목표 쪽으로 몇 % 다가가나"다. 그래서
+ *  예전에는 화면이 초당 몇 번 그리느냐에 따라 같은 수어가 다르게 나왔다 — 60Hz 폰은
+ *  30Hz 기기보다 두 배 빨리 따라붙고, 120Hz는 또 다르다. 계수는 30Hz 기준으로 두고
+ *  실제 간격(dt)만큼 거듭제곱해 **초당 따라붙는 양이 같게** 맞춘다.
+ *
+ *      30Hz에서 a  →  간격 dt에서 1 - (1-a)^(dt·30) */
+let _steps = 1
+const alpha = (a: number) => (tuning.raw ? 1 : 1 - Math.pow(1 - a, _steps))
 
 // Map our logical bone keys → RPM/Mixamo bone-name suffix.
 const FINGERS = ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']
@@ -55,6 +89,8 @@ export interface GLBRig {
   head?: THREE.Object3D
   hips?: THREE.Object3D
   faceMeshes: THREE.Mesh[]
+  /** 숨쉬기에 쓰는 가슴 뼈 — [뼈, 원래 회전, 진폭(rad)] */
+  spine: [THREE.Object3D, THREE.Quaternion, number][]
   /** Per-hand rest frame (in hand-local space): forward / palm-normal / side. */
   handFrame: Map<string, { fwd: THREE.Vector3; normal: THREE.Vector3; side: THREE.Vector3 }>
 }
@@ -172,6 +208,10 @@ export function prepareGLBRig(root: THREE.Object3D): GLBRig {
     head: byName.get('Head'),
     hips: byName.get('Hips'),
     faceMeshes,
+    spine: ([['Spine1', 0.005], ['Spine2', 0.007]] as [string, number][]).flatMap(([n, a]) => {
+      const b = byName.get(n)
+      return b ? [[b, b.quaternion.clone(), a] as [THREE.Object3D, THREE.Quaternion, number]] : []
+    }),
     handFrame,
   }
 }
@@ -235,7 +275,7 @@ function aim(
         _qc.identity().slerp(_q, maxAngle / ang)
         _q.copy(_qc)
       }
-      if (Number.isFinite(_q.x + _q.y + _q.z + _q.w)) info.smooth.slerp(_q, smooth)
+      if (Number.isFinite(_q.x + _q.y + _q.z + _q.w)) info.smooth.slerp(_q, alpha(smooth))
     }
   }
   info.smooth.normalize()
@@ -312,7 +352,7 @@ function aimHand(
       _mRest.transpose() // orthonormal → inverse
       _mTar.multiply(_mRest)
       _hq.setFromRotationMatrix(_mTar)
-      if (Number.isFinite(_hq.x + _hq.y + _hq.z + _hq.w)) info.smooth.slerp(_hq, SMOOTH_FINGER + 0.06)
+      if (Number.isFinite(_hq.x + _hq.y + _hq.z + _hq.w)) info.smooth.slerp(_hq, alpha(tuning.smoothFinger + 0.06))
     }
   }
   info.smooth.normalize()
@@ -334,14 +374,18 @@ export function setBlinkGLB(rig: GLBRig, amount: number) {
 }
 
 /** Apply a keypoint frame to a GLB humanoid rig. */
-export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
-  const f = Math.max(0, Math.min(frame, data.num_frames - 1))
+export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number, dt = 1 / 30) {
+  // 소수 프레임을 받는다 — 화면이 60Hz로 그릴 때 30fps 데이터 사이를 메운다.
+  const ff = Math.max(0, Math.min(frame, data.num_frames - 1))
+  const f = Math.round(ff)
+  _steps = Math.max(0.05, Math.min(6, dt * 30))
   const use3d = !!data.keypoints3d
   const k = data.keypoints3d ?? data.keypoints
-  const pose = use3d ? smooth3d(k.pose, f, scratchPose3) : smoothInto(data.keypoints.pose, f, scratchPose)
+  const pre = use3d ? null : prefilter(data)
+  const pose = use3d ? smooth3d(k.pose, f, scratchPose3) : sampleInto(pre!.pose, ff, scratchPose, 3)
   if (!pose) return
-  const hr = use3d ? smooth3d(k.hand_right, f, scratchHR3) : data.keypoints.hand_right && (smoothInto(data.keypoints.hand_right, f, scratchHR) ?? undefined)
-  const hl = use3d ? smooth3d(k.hand_left, f, scratchHL3) : data.keypoints.hand_left && (smoothInto(data.keypoints.hand_left, f, scratchHL) ?? undefined)
+  const hr = use3d ? smooth3d(k.hand_right, f, scratchHR3) : pre!.hr && (sampleInto(pre!.hr, ff, scratchHR, 3) ?? undefined)
+  const hl = use3d ? smooth3d(k.hand_left, f, scratchHL3) : pre!.hl && (sampleInto(pre!.hl, ff, scratchHL, 3) ?? undefined)
 
   const poseDir = (a: number, b: number, key: string) =>
     use3d ? segDir3Dreal(pose, a, b) : segDir3D(pose, a, b, restLen(data, data.keypoints.pose, a, b, key))
@@ -351,10 +395,12 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
    *  조각과 섞일 때 기준이 달라져 팔이 튄다(그래서 원래 3D를 통째로 안 실었다).
    *  손가락은 조각 안에서만 쓰는 값이라 섞여도 튀지 않는다. */
   const handZ = (side: 'hand_left' | 'hand_right'): number[] | null => {
-    const rows = data.hand_z?.[side]
+    // 깊이도 앞뒤 평활을 거친 값을 쓴다(예전에는 날값이라 손가락 굽힘이 프레임마다 떨렸다).
+    const rows = pre ? (side === 'hand_left' ? pre.zl : pre.zr) : data.hand_z?.[side]
     if (!rows || !rows.length) return null
-    const idx = Math.min(rows.length - 1, Math.max(0, Math.round(f)))
-    const row = rows[idx]
+    const row = pre
+      ? sampleInto(rows, Math.min(rows.length - 1, ff), side === 'hand_left' ? scratchZL : scratchZR, 1)
+      : rows[Math.min(rows.length - 1, Math.max(0, f))]
     return row && row.length >= 21 ? row : null
   }
 
@@ -390,7 +436,7 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
     ['Left', 'left', hl, LSH, LEL, LWR],
   ] as const) {
     const foreWorld = aimChain(rig, [`${Side}Arm`, `${Side}ForeArm`],
-      [poseDir(sh, el, `${Side}U`), poseDir(el, wr, `${Side}L`)], SMOOTH, ARM_MAX)
+      [poseDir(sh, el, `${Side}U`), poseDir(el, wr, `${Side}L`)], tuning.smooth, ARM_MAX)
     if (!foreWorld) continue
     const h = hand as number[] | undefined
     const handWorld = new THREE.Quaternion()
@@ -537,7 +583,7 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
         } else {
           _bq.copy(info.bind).multiply(_fq)
         }
-        if (Number.isFinite(_bq.x + _bq.y + _bq.z + _bq.w)) info.smooth.slerp(_bq, SMOOTH_FINGER)
+        if (Number.isFinite(_bq.x + _bq.y + _bq.z + _bq.w)) info.smooth.slerp(_bq, alpha(tuning.smoothFinger))
         info.bone.quaternion.copy(info.smooth)
       }
     }
@@ -549,6 +595,127 @@ export function applyPoseToGLB(rig: GLBRig, data: SignData, frame: number) {
 const scratchPose: number[] = []
 const scratchHR: number[] = []
 const scratchHL: number[] = []
+const scratchZL: number[] = []
+const scratchZR: number[] = []
+
+// ── 앞뒤를 함께 보는 평활 (문장 하나에 한 번)
+//
+// 예전에는 프레임마다 앞뒤 한 칸씩(0.25·0.5·0.25)만 섞고, 나머지 떨림은 slerp가
+// 걷어 냈다. slerp는 **과거만 보고 따라가는** 평활이라 떨림을 줄이는 만큼 늦어진다.
+// 그런데 우리는 재생 전에 문장 전체 동작을 이미 갖고 있다 — 실시간 영상이 아니다.
+// 그러면 앞뒤를 똑같이 보는(중심 대칭) 가우시안으로 떨림을 걷어 낼 수 있고,
+// 이 평활은 **지연을 만들지 않는다.** 그만큼 slerp를 덜 걸어 손이 제때 움직인다.
+//
+// 폭은 부위마다 다르다. 팔은 넓게(σ=2.2프레임 ≈ 73ms), 손가락은 손 모양이
+// 바뀌는 순간을 뭉개면 안 되니 좁게(σ=1.6 ≈ 53ms, 깊이 1.9). 미검출 점(0)·낮은 신뢰도
+// 점은 평균에서 빼서 멀쩡한 점을 원점 쪽으로 끌지 않게 한다.
+const CONF_OK = 0.15
+interface Pre { pose: number[][]; hr?: number[][]; hl?: number[][]; zr?: number[][]; zl?: number[][] }
+const preCache = new WeakMap<SignData, Pre & { key: string }>()
+
+function kernel(sigma: number): number[] {
+  if (sigma <= 0) return [1]
+  const r = Math.ceil(sigma * 2.5)
+  const w: number[] = []
+  for (let i = -r; i <= r; i++) w.push(Math.exp(-(i * i) / (2 * sigma * sigma)))
+  return w
+}
+
+/** [x,y,신뢰도]가 이어진 프레임열을 중심 대칭 가우시안으로 평활. 신뢰도는 그 프레임 값을 둔다. */
+function gauss3(frames: number[][], sigma: number): number[][] {
+  const w = kernel(sigma)
+  const r = (w.length - 1) / 2
+  const out: number[][] = []
+  for (let f = 0; f < frames.length; f++) {
+    const cur = frames[f]
+    if (!cur) { out.push(cur); continue }
+    const row = cur.slice()
+    for (let j = 0; j + 2 < cur.length; j += 3) {
+      if (cur[j + 2] < CONF_OK || (cur[j] === 0 && cur[j + 1] === 0)) continue
+      let x = 0, y = 0, ws = 0
+      for (let i = -r; i <= r; i++) {
+        const fr = frames[f + i]
+        if (!fr || fr[j + 2] < CONF_OK || (fr[j] === 0 && fr[j + 1] === 0)) continue
+        const wt = w[i + r]
+        x += fr[j] * wt; y += fr[j + 1] * wt; ws += wt
+      }
+      if (ws > 0) { row[j] = x / ws; row[j + 1] = y / ws }
+    }
+    out.push(row)
+  }
+  return out
+}
+
+/** 손 깊이(점마다 값 하나, 0=미검출) 평활. 미검출은 끝까지 0으로 둔다 — 없는 깊이를 지어내지 않는다. */
+function gauss1(frames: number[][], sigma: number): number[][] {
+  const w = kernel(sigma)
+  const r = (w.length - 1) / 2
+  return frames.map((cur, f) => {
+    if (!cur) return cur
+    return cur.map((v, j) => {
+      if (v === 0) return 0
+      let s = 0, ws = 0
+      for (let i = -r; i <= r; i++) {
+        const fv = frames[f + i]?.[j]
+        if (!fv) continue
+        s += fv * w[i + r]; ws += w[i + r]
+      }
+      return ws > 0 ? s / ws : v
+    })
+  })
+}
+
+function prefilter(data: SignData): Pre {
+  const { sigmaArm, sigmaHand, sigmaZ } = tuning
+  const key = `${sigmaArm}/${sigmaHand}/${sigmaZ}`
+  let p = preCache.get(data)
+  if (p && p.key === key) return p
+  const k = data.keypoints
+  p = {
+    key,
+    pose: gauss3(k.pose, sigmaArm),
+    hr: k.hand_right ? gauss3(k.hand_right, sigmaHand) : undefined,
+    hl: k.hand_left ? gauss3(k.hand_left, sigmaHand) : undefined,
+    zr: data.hand_z?.hand_right ? gauss1(data.hand_z.hand_right, sigmaZ) : undefined,
+    zl: data.hand_z?.hand_left ? gauss1(data.hand_z.hand_left, sigmaZ) : undefined,
+  }
+  preCache.set(data, p)
+  return p
+}
+
+/** 소수 프레임 f를 앞뒤 두 프레임 사이 선형 보간으로 꺼낸다.
+ *  `stride`가 3이면 [x,y,신뢰도] — 신뢰도는 낮은 쪽을 따른다. 한쪽이 미검출(0)이면 가까운 쪽 값을 쓴다. */
+function sampleInto(frames: number[][], f: number, buf: number[], stride: 1 | 3): number[] | null {
+  const i0 = Math.floor(f)
+  const a = frames[i0]
+  if (!a) return null
+  const u = f - i0
+  const b = frames[i0 + 1]
+  buf.length = a.length
+  if (u < 1e-3 || !b) {
+    for (let j = 0; j < a.length; j++) buf[j] = a[j]
+    return buf
+  }
+  if (stride === 1) {
+    for (let j = 0; j < a.length; j++) {
+      buf[j] = a[j] === 0 || b[j] === 0 ? (u < 0.5 ? a[j] : b[j]) : a[j] + (b[j] - a[j]) * u
+    }
+    return buf
+  }
+  for (let j = 0; j + 2 < a.length; j += 3) {
+    const aMiss = a[j] === 0 && a[j + 1] === 0
+    const bMiss = b[j] === 0 && b[j + 1] === 0
+    if (aMiss || bMiss) {
+      const src = u < 0.5 ? a : b
+      buf[j] = src[j]; buf[j + 1] = src[j + 1]; buf[j + 2] = src[j + 2]
+    } else {
+      buf[j] = a[j] + (b[j] - a[j]) * u
+      buf[j + 1] = a[j + 1] + (b[j + 1] - a[j + 1]) * u
+      buf[j + 2] = Math.min(a[j + 2], b[j + 2])
+    }
+  }
+  return buf
+}
 const scratchPose3: number[] = []
 const scratchHR3: number[] = []
 const scratchHL3: number[] = []

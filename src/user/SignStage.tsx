@@ -3,7 +3,7 @@
 // 대화 화면에서는 화면의 절반만 아바타에 줄 수 있어(나머지는 대화 기록과 답 카드)
 // `compact`로 자막을 한 줄로 줄인다. 무대의 문법은 두 화면에서 같아야 한다 —
 // 같은 앱 안에서 아바타가 있는 곳마다 다르게 보이면 사용자가 매번 다시 배운다.
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { glossLabel } from '../agents/glossLabel'
 import { APP_MODEL_URL } from '../sections/sign/avatars'
 import type { SignPlayer } from './useSignPlayer'
@@ -24,6 +24,22 @@ interface Props {
 
 export default function SignStage({ player, compact, fontScale = 1, idle, badges }: Props) {
   const { data, frame, playing, busy, nowGloss, time, setPlaying, restart } = player
+  // 자막 띠가 가리는 높이(px) — 아바타 카메라가 손을 그 위에 두도록 알려 준다.
+  // 띠 높이는 문장마다 조금씩 다르다. 그대로 따라가면 문장이 바뀔 때마다 카메라가
+  // 들썩이므로 **커지기만** 한다(한 번 정해지면 같은 화면에서는 고정).
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const [inset, setInset] = useState(0)
+  useEffect(() => {
+    const el = overlayRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(() => {
+      // 맨 위 40px(pt-10)은 투명 그라디언트 — 손이 비쳐 보이므로 가림으로 세지 않는다.
+      const h = Math.max(0, Math.round(el.getBoundingClientRect().height) - 40)
+      setInset((v) => (h > v ? h : v))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [data])
 
   return (
     // data-* 는 자동 검증용 계측이다. 화면만 보고는 "재생되는 중"과 "합성 실패라 한 장짜리"를
@@ -62,7 +78,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
             onKeyDown={(e) => e.key === ' ' && data.num_frames > 1 && setPlaying((v) => !v)}
             className="h-full w-full cursor-pointer"
           >
-            <Avatar3D data={data} frame={frame} animate modelUrl={APP_MODEL_URL} />
+            <Avatar3D data={data} frame={frame} animate modelUrl={APP_MODEL_URL} bottomInset={inset} />
             {!playing && data.num_frames > 1 && (
               <div className="pointer-events-none absolute inset-0 grid place-items-center">
                 <span className="rounded-full bg-space-900/80 px-8 py-6 text-5xl">▶</span>
@@ -93,7 +109,7 @@ export default function SignStage({ player, compact, fontScale = 1, idle, badges
       )}
 
       {data && (
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-space-950 via-space-950/85 to-transparent px-3 pb-2 pt-10 text-center">
+        <div ref={overlayRef} className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-space-950 via-space-950/85 to-transparent px-3 pb-2 pt-10 text-center">
           {badges}
           {/* 낱말 카드 — 동작으로 표현하지 못한 낱말(지명·기관명)을 큰 글씨로 */}
           {!!data.gloss_missing?.length && (

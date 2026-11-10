@@ -79,6 +79,25 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
     if (rig.head && rig.hips) frameScene(scene, rig.head, rig.hips)
   }, [vrm, gltf])
 
+  /** 프레임 사이 메우기 — 수어 데이터는 초당 30장인데 폰 화면은 60~120번 그린다.
+   *  정수 프레임만 쓰면 같은 자세를 두세 번 그리다 툭 넘어가는 계단이 생긴다.
+   *  다음 프레임이 언제 올지는 **직전 간격**으로 어림한다(느린 재생·느린 기기도 따라간다).
+   *  멈춰 있으면 다음 프레임까지만 가고 더 나가지 않는다. */
+  const frac = useRef({ frame: -1, at: 0, interval: 1 / 30 })
+  const subFrame = (t: number, d: SignData | undefined): number => {
+    const fr = frac.current
+    if (frame !== fr.frame) {
+      if (fr.frame >= 0 && frame > fr.frame) {
+        fr.interval = Math.min(0.5, Math.max(1 / 240, (t - fr.at) / (frame - fr.frame)))
+      }
+      fr.frame = frame
+      fr.at = t
+    }
+    if (!d || !animate) return frame
+    const u = Math.min(1, (t - fr.at) / fr.interval)
+    return Math.min(d.num_frames - 1, frame + u)
+  }
+
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime
     if (vrm) {
@@ -93,25 +112,109 @@ function VRMModel({ url, data, frame, animate }: VRMModelProps) {
       return
     }
     const rig = rigRef.current
-    if (rig) {
-      if (animate && data) applyPoseToGLB(rig, data, frame)
-      const phase = t % 4.2
-      const blink = phase > 4.05 ? Math.sin(((phase - 4.05) / 0.15) * Math.PI) : 0
-      setBlinkGLB(rig, blink)
-      // 고개 동작 — **절대값으로 준다.** 매 프레임 더하면 흔들림이 쌓여 고개가
-      // 돌아가 버린다. 처음 자세를 한 번 기억해 두고 거기서 얼마나 돌릴지 정한다.
-      if (rig.head) {
-        if (!headRestRef.current) {
-          headRestRef.current = rig.head.rotation.clone()
-        }
-        const rest = headRestRef.current
-        const off = animate ? headOffset(data, frame) : { x: 0, y: 0 }
-        rig.head.rotation.set(rest.x + off.x, rest.y + off.y, rest.z)
-      }
-    }
+    if (rig) stepGLB(rig, headRestRef, data, subFrame(t, data), animate, t, delta)
   })
 
+  // 계측(자동 검사 전용) — `window.__SB_PROBE`가 있을 때만 붙는다. 평소에는 아무 일도 안 한다.
+  const { camera, size } = useThree()
+  const dataRef = useRef(data)
+  useEffect(() => {
+    dataRef.current = data
+  }, [data])
+  useEffect(() => {
+    const w = window as unknown as { __SB_PROBE?: unknown; __sbAvatar?: unknown }
+    if (!w.__SB_PROBE || vrm || !rigRef.current) return
+    const rig = rigRef.current
+    void import('./avatarProbe').then(({ attachProbe }) => {
+      w.__sbAvatar = attachProbe({
+        scene: gltf.scene,
+        camera,
+        size,
+        getData: () => dataRef.current,
+        step: (d, f, t, dt) => stepGLB(rig, headRestRef, d, f, true, t, dt),
+        fractional: true,
+      })
+    })
+  }, [vrm, gltf, camera, size])
+
   return <primitive object={vrm ? vrm.scene : gltf.scene} />
+}
+
+/** GLB 아바타 한 번 갱신 — 화면 루프와 계측이 **같은 함수**를 쓴다.
+ *
+ *  `frame`은 소수일 수 있다(화면이 데이터보다 자주 그릴 때 프레임 사이를 메운다).
+ *  `dt`는 지난 갱신과의 간격(초) — 평활 세기를 주사율과 무관하게 맞추는 데 쓴다. */
+function stepGLB(
+  rig: GLBRig,
+  headRestRef: { current: THREE.Euler | null },
+  data: SignData | undefined,
+  frame: number,
+  animate: boolean,
+  t: number,
+  dt: number,
+) {
+  // 숨쉬기 — **팔을 맞추기 전에** 가슴을 움직인다. 팔은 어깨의 실제 자세를 기준으로
+  // 방향을 잡으므로, 순서를 바꾸면 손이 숨 따라 흔들린다(손 위치는 수어의 뜻이다).
+  breathe(rig, t)
+  if (animate && data) applyPoseToGLB(rig, data, frame, dt)
+  setBlinkGLB(rig, blinkAt(t))
+  // 고개 동작 — **절대값으로 준다.** 매 프레임 더하면 흔들림이 쌓여 고개가
+  // 돌아가 버린다. 처음 자세를 한 번 기억해 두고 거기서 얼마나 돌릴지 정한다.
+  if (rig.head) {
+    if (!headRestRef.current) {
+      headRestRef.current = rig.head.rotation.clone()
+    }
+    const rest = headRestRef.current
+    const off = animate ? headOffset(data, frame) : { x: 0, y: 0 }
+    // 살아 있는 사람의 고개는 완전히 멈춰 있지 않다 — 아주 작게(±0.5° 남짓) 천천히 흔든다.
+    // 끄덕임(±7.4°)·젓기(±9.7°)보다 한 자릿수 작아 그 뜻을 흐리지 않는다.
+    const mx = 0.006 * Math.sin(t * 1.31) + 0.004 * Math.sin(t * 2.17 + 1.3)
+    const my = 0.008 * Math.sin(t * 0.83 + 0.4) + 0.004 * Math.sin(t * 1.91)
+    rig.head.rotation.set(rest.x + off.x + mx, rest.y + off.y + my, rest.z)
+  }
+}
+
+/** 숨쉬기 — 가슴(Spine1·Spine2)을 4.2초 주기로 아주 조금(최대 0.7°) 젖힌다.
+ *  가만히 선 아바타가 "멈춘 그림"처럼 보이는 가장 큰 이유가 숨을 안 쉬는 것이다. */
+const _bq = new THREE.Quaternion()
+const _ax = new THREE.Vector3(1, 0, 0)
+function breathe(rig: GLBRig, t: number) {
+  const b = Math.sin((t * 2 * Math.PI) / 4.2)
+  for (const [bone, rest, amp] of rig.spine) {
+    _bq.setFromAxisAngle(_ax, -b * amp)
+    bone.quaternion.copy(rest).multiply(_bq)
+  }
+}
+
+/** 눈 깜박임 — 2.2~5.5초 사이 들쭉날쭉한 간격, 가끔(15%) 두 번 연달아.
+ *
+ *  예전에는 4.2초마다 정확히 한 번이었다. 사람은 그렇게 깜박이지 않아서, 오래 보면
+ *  기계가 시계에 맞춰 깜박이는 것처럼 보인다. 감는 데 70ms, 뜨는 데 150ms —
+ *  실제 깜박임도 감을 때가 빠르다. 간격은 시드 고정 난수라 계측 때마다 같다. */
+const blinkTimes: number[] = []
+let blinkSeed = 12345
+function rand() {
+  blinkSeed = (blinkSeed * 1103515245 + 12345) & 0x7fffffff
+  return blinkSeed / 0x7fffffff
+}
+function blinkAt(t: number): number {
+  while (!blinkTimes.length || blinkTimes[blinkTimes.length - 1] < t + 6) {
+    const last = blinkTimes.length ? blinkTimes[blinkTimes.length - 1] : 0.8
+    const next = last + 2.2 + rand() * 3.3
+    blinkTimes.push(next)
+    if (rand() < 0.15) blinkTimes.push(next + 0.32)
+  }
+  const tm = t % 100000
+  for (let i = blinkTimes.length - 1; i >= 0; i--) {
+    const s = blinkTimes[i]
+    if (s > tm) continue
+    const u = tm - s
+    if (u > 0.25) return 0
+    if (u < 0.07) return Math.sin((u / 0.07) * (Math.PI / 2))
+    if (u < 0.1) return 1
+    return Math.cos(((u - 0.1) / 0.15) * (Math.PI / 2))
+  }
+  return 0
 }
 
 /** 지금 프레임에서 고개를 얼마나 움직일지 — 부정은 젓고, 당부는 끄덕인다.
@@ -160,7 +263,7 @@ function StagePlatform() {
 }
 
 /** Frames the upper body and gives a gentle cyan-lit studio look. */
-function Rig() {
+function Rig({ bottomInset = 0 }: { bottomInset?: number }) {
   const { camera, size, controls } = useThree()
   useEffect(() => {
     // **수어 공간이 다 들어와야 한다.**
@@ -189,7 +292,15 @@ function Rig() {
     const fov = (camera as THREE.PerspectiveCamera).fov
     const half = Math.tan((fov * Math.PI) / 360)
     const need = WIDE / (2 * Math.max(0.2, aspect) * half)
-    const z = Math.max(2.0, Math.min(3.2, need))
+    // **자막 띠 아래로 손이 숨으면 안 된다.** 당사자 화면은 무대 아래쪽에 자막·낱말
+    // 진행을 얹는다(폰 164px, 데스크톱 146px). 그 밑으로 내려간 손은 그려져도 안 보인다.
+    // 실측: 데스크톱에서 수어하는 손(오른손)이 4.4% 프레임에서 띠 밑에 있었다.
+    // 그래서 띠를 뺀 나머지 높이에 TOP_Y~BOTTOM_Y가 들어가도록 카메라를 물린다.
+    // BOTTOM_Y 0.80m는 실측한 오른손 가장 낮은 점의 하위 5% 높이(0.79~0.80m)다.
+    const BOTTOM_Y = 0.8
+    const visH = Math.max(0.3, (size.height - bottomInset) / Math.max(1, size.height))
+    const needV = bottomInset > 0 ? (1.91 - BOTTOM_Y) / (visH * 2 * half) : 0
+    const z = Math.max(2.0, Math.min(3.2, Math.max(need, needV)))
 
     // 카메라를 물리면 **세로도 함께 넓어진다.** 그대로 두면 머리 위가 텅 빈다
     // (실측: 무대 세로의 40%가 빈 공간이었다). 위쪽 경계를 예전에 맞춰 둔 값
@@ -218,7 +329,7 @@ function Rig() {
       orbit.target.set(0, centerY, 0)
       orbit.update?.()
     }
-  }, [camera, controls, size.width, size.height])
+  }, [camera, controls, size.width, size.height, bottomInset])
   return null
 }
 
@@ -228,10 +339,12 @@ interface Avatar3DProps {
   animate: boolean
   /** Which avatar model to load (defaults to the bundled VRoid). */
   modelUrl?: string
+  /** 캔버스 아래쪽을 가리는 자막 띠 높이(px). 손이 그 위에 오도록 카메라를 물린다. */
+  bottomInset?: number
 }
 
 /** R3F canvas hosting the rigged VRM avatar. Fills its parent. */
-export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }: Avatar3DProps) {
+export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL, bottomInset = 0 }: Avatar3DProps) {
   const dpr = useMemo<[number, number]>(() => {
     if (typeof window === 'undefined') return [1, 1.5]
     // Cap pixel ratio lower on phones to keep the WebGL frame budget healthy.
@@ -250,7 +363,7 @@ export default function Avatar3D({ data, frame, animate, modelUrl = MODEL_URL }:
         gl.toneMappingExposure = 1.05
       }}
     >
-      <Rig />
+      <Rig bottomInset={bottomInset} />
 
       {/* Professional 3-point studio lighting for realistic PBR skin.
           Key (warm white) + Fill (neutral) + Rim (cyan accent) + Hair light. */}

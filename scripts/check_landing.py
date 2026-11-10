@@ -13,6 +13,7 @@
   · Q&A에서 질문을 누르면 아바타가 실제로 재생되는가(프레임 수로 확인)
   · 에이전트 콘솔이 단계를 채우는가
   · 콘솔 오류가 없는가
+  · 폰(375×667) 첫 화면에 '직접 해 보기'가 보이고, 한 번 누르면 재난문자 수어가 재생되는가
 """
 from __future__ import annotations
 
@@ -93,6 +94,44 @@ def main() -> int:
             wide = pg.evaluate("() => document.body.scrollWidth > window.innerWidth + 2")
             ok("가로 스크롤 없음", not wide)
             ok("콘솔 오류 없음", not errs, str(errs[:2]) if errs else "")
+            ctx.close()
+
+            # 5) 폰 첫 화면 — "직접 해 보기"가 스크롤 없이 보이고, **한 번 누르면**
+            #    재난문자 한 건이 아바타 수어로 재생되는가. 방문자 다수가 폰으로 와서
+            #    첫 화면만 보고 판단한다. 버튼이 접힌 아래에 있거나, 눌렀는데 빈 화면에
+            #    "시작" 버튼이 또 나오면 그 사람은 수어를 못 보고 떠난다.
+            ctx = b.new_context(viewport={"width": 375, "height": 667}, service_workers="block",
+                                is_mobile=True, has_touch=True)
+            pg = ctx.new_page()
+            errs2: list[str] = []
+            pg.on("pageerror", lambda e: errs2.append(str(e)[:120]))
+            # 지난번에 쓴 탭이 '대화'로 기억돼 있어도 받기 화면으로 열려야 한다.
+            pg.add_init_script("localStorage.setItem('sb-tab','speak')")
+            pg.goto(f"http://127.0.0.1:{PORT}/", wait_until="domcontentloaded")
+            pg.wait_for_timeout(2500)
+            box = pg.evaluate("""() => { const e = document.querySelector('[data-try-cta]')
+                if (!e) return null
+                const r = e.getBoundingClientRect(); return [Math.round(r.top), Math.round(r.bottom), Math.round(r.width)] }""")
+            ok("폰(375): '직접 해 보기'가 첫 화면 안", bool(box) and box[0] >= 0 and box[1] <= 667,
+               f"top {box[0]}px · bottom {box[1]}px · 폭 {box[2]}px" if box else "없음")
+            ok("폰(375): 가로 스크롤 없음",
+               not pg.evaluate("() => document.documentElement.scrollWidth > window.innerWidth + 1"),
+               f"{pg.evaluate('() => document.documentElement.scrollWidth')}px")
+            if box:
+                t0 = time.time()
+                pg.click("[data-try-cta]")
+                frames = 0
+                for _ in range(120):
+                    pg.wait_for_timeout(500)
+                    frames = pg.evaluate("""() => { const e = document.querySelector('[data-sign-frames]')
+                        return e ? +e.dataset.signFrames : 0 }""")
+                    if frames > 20:
+                        break
+                took = time.time() - t0
+                ok("폰(375): 한 번 누르면 재난문자 수어가 재생됨", frames > 20,
+                   f"프레임 {frames} · 누른 뒤 {took:.1f}초(소프트웨어 렌더링 기준)")
+                ok("폰(375): 받기 화면으로 열림", pg.evaluate("localStorage.getItem('sb-tab')") == "watch")
+            ok("폰(375): 콘솔 오류 없음", not errs2, str(errs2[:2]) if errs2 else "")
             ctx.close(); b.close()
     finally:
         srv.terminate()

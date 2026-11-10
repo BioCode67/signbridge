@@ -67,7 +67,11 @@ node --experimental-strip-types --import ./scripts/ts-register.mjs \
 node --experimental-strip-types --import ./scripts/ts-register.mjs \
      scripts/check_categories.mjs               # 재난 갈래에 한국어 이름이 있는가
 python -m ml.tools.ctc_parity                   # CTC 디코딩 파이썬==브라우저
+python3 scripts/measure_avatar.py               # 아바타 떨림·지연·주사율 의존·손이 화면/자막 띠 위에 있는 비율
 ```
+
+아바타 움직임(평활·보간·카메라)을 건드리면 `measure_avatar.py`로 **고치기 전 빌드와 견준다.**
+떨림만 보고 평활을 세게 걸면 지연이 늘어 손 모양이 늦게 바뀐다 — 둘을 함께 본다(2026-11-10 기록).
 
 ### 부정을 잃지 마라
 

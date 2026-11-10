@@ -18,7 +18,7 @@ const RecognitionDemo = lazy(() => import('./sections/RecognitionDemo'))
 // 수어 이용자 전용 화면(#/app) — 소개 페이지와 완전히 분리된 풀스크린 도구.
 const UserApp = lazy(() => import('./user/UserApp'))
 
-// 이음(#/ieum) — Upstage AI Agent 해커톤 시연 화면: 서류 → 쉬운 안내 → 수어 아바타.
+// 이음(#/ieum) — 생활 서류 수어 안내 화면: 서류 → 쉬운 안내 → 수어 아바타.
 const IeumPage = lazy(() => import('./ieum/IeumPage'))
 
 function useHashRoute(): string {

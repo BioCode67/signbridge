@@ -1,6 +1,6 @@
 // 이음 — 서류를 수어로 (#/ieum)
 //
-// Upstage AI Agent 해커톤(자유주제) 제출작 「농인을 위한 공공·의료 서류 읽기 도우미」의
+// 생활 서류 도우미 「농인을 위한 공공·의료 서류 읽기 도우미」의
 // 다음 단계를 보여 주는 화면이다. 흐름은 한 줄이다:
 //
 //     받은 서류 → (Studio 워크플로우) 쉬운 안내 → 수어 아바타
@@ -67,7 +67,7 @@ export default function IeumPage() {
 
   useEffect(() => {
     const before = document.title
-    document.title = '이음 — 서류를 수어로 | Upstage AI Agent 해커톤'
+    document.title = '이음 — 서류를 수어로 | SignBridge'
     window.scrollTo(0, 0)
     return () => { document.title = before }
   }, [])
@@ -171,7 +171,7 @@ export default function IeumPage() {
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-lg">🤟</span>
             <div className="min-w-0">
               <p className="text-[11px] font-semibold tracking-wide text-amber-300">
-                Upstage AI Agent 해커톤 · 자유주제 · 팀 이음
+                SignBridge · 생활 서류 수어 안내
               </p>
               <h1 className="text-lg font-extrabold leading-tight tracking-tight text-white sm:text-xl">
                 이음 — 서류를 수어로
@@ -220,7 +220,7 @@ export default function IeumPage() {
           ))}
         </ol>
         <p className="mt-2 text-xs leading-relaxed text-slate-400">
-          앞의 네 단계는 Upstage Studio 워크플로우(제출·게시 완료)이고, 마지막 단계가 이 페이지의 시연입니다.
+          앞의 네 단계는 Upstage Studio로 만든 문서 이해 워크플로우이고, 마지막 단계가 이 페이지의 시연입니다.
         </p>
 
         {/* 문서 고르기 */}
@@ -269,8 +269,8 @@ export default function IeumPage() {
               />
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-              해커톤 테스트용 <strong className="text-slate-400">가상 문서</strong>입니다. 기관·인물·번호는 실제와 관계없습니다.
-              (제출 데이터셋 {sample.set})
+              시연용 <strong className="text-slate-400">가상 문서</strong>입니다. 기관·인물·번호는 실제와 관계없습니다.
+              (예시 {sample.set})
             </p>
           </section>
 
@@ -445,7 +445,7 @@ export default function IeumPage() {
             <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-slate-300">
               <li>
                 <span className="mr-2 rounded bg-emerald-400/15 px-1.5 py-0.5 text-xs font-bold text-emerald-300">완료</span>
-                Upstage Studio 워크플로우 — 제출·게시 완료{' '}
+                Upstage Studio 문서 이해 워크플로우 — 게시 완료{' '}
                 <a href={STUDIO_URL} target="_blank" rel="noreferrer" className="text-cyan-soft underline underline-offset-2">
                   라이브러리에서 보기
                 </a>

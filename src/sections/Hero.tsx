@@ -46,8 +46,7 @@ export default function Hero() {
       <div className="relative z-10 mx-auto w-full max-w-content px-6 lg:px-12">
         <div className="max-w-xl">
           {/* 이음 진입로 — 루트 주소로 들어온 사람이 바로 찾도록 맨 위에 둔다.
-              이 주소는 여러 대회(KEIT AI 라이프 솔루션 챌린지 대국민 투표 등)가 함께 보므로
-              특정 대회 이름을 넣지 않는다. */}
+              이 주소는 여러 곳에 함께 소개되므로 특정 행사 이름을 넣지 않는다. */}
           <motion.a
             href="#/ieum"
             data-ieum-banner

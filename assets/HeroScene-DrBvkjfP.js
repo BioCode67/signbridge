@@ -1,4 +1,4 @@
-import{o as e}from"./chunk-CMxvf4Kt.js";import{_ as t,h as n}from"./index-BNri_cwH.js";import{$t as r,Lt as i,S as a,T as o,Wt as s,X as c,a as l,b as u,d,i as f,kt as p,l as m,n as h,y as g,zt as _}from"./dist-BpYx9tEq.js";var v=parseInt(`184`.replace(/\D+/g,``)),y=e(t()),b=class extends _{constructor(){super({uniforms:{time:{value:0},fade:{value:1}},vertexShader:`
+import{o as e}from"./chunk-CMxvf4Kt.js";import{_ as t,h as n}from"./index-DqvkjKzl.js";import{$t as r,Lt as i,S as a,T as o,Wt as s,X as c,a as l,b as u,d,i as f,kt as p,l as m,n as h,y as g,zt as _}from"./dist-Bh04VSoG.js";var v=parseInt(`184`.replace(/\D+/g,``)),y=e(t()),b=class extends _{constructor(){super({uniforms:{time:{value:0},fade:{value:1}},vertexShader:`
       uniform float time;
       attribute float size;
       varying vec3 vColor;

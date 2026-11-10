@@ -152,6 +152,8 @@ src/                 React + three.js 프런트엔드 (아바타·웹캠 인식 
     askIntent.ts     수어 낱말 묶음 → 의도(후보까지 보고 판정)
     nearby.ts        주변 장소 · 거리 · 방위 · 답변 문장
     DirectionMap.tsx 타일 없는 방향 지도(오프라인)
+  ieum/              이음(#/ieum) — 서류 → 쉬운 안내 → 수어 아바타 (Upstage 해커톤 시연)
+                     samples.ts의 항목은 제출 정답표 값 그대로다. Studio를 실시간으로 부르지 않는다
 server/app.py        KoGPT2 Q&A FastAPI (선택)
 ml/                  ★ 학습 파이프라인 (지금 작업 중인 곳)
   signbridge/        features · models · dataset · openpose · naming · pack
@@ -168,6 +170,7 @@ scripts/check_translation_cases.mjs  오역 회귀 검사(사례 40건)
 scripts/check_intent.mjs   수어 낱말 묶음 → 의도 판정 검사(오검출 포함 27건)
 scripts/check_nearby.mjs   길찾기 계산 — 거리·방위·어림수·답변 문장·너무 먼 곳 차단
 scripts/check_landing.py   소개 페이지 — 섹션 10개·Q&A·에이전트가 실제로 채워지는가
+scripts/check_ieum.py      이음 화면 — 예시 문서 6건이 실제로 수어를 재생하는가(--full은 끝 문장까지)
 scripts/check_filenames.mjs 윈도우에서 압축이 풀리는 이름인가
 scripts/demo_rehearsal.py  시연 대본 조작을 그대로 눌러 보는 리허설
   jobs/              check_workspace · train_* · pbs_extract

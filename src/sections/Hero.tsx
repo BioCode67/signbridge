@@ -45,6 +45,28 @@ export default function Hero() {
       {/* Copy */}
       <div className="relative z-10 mx-auto w-full max-w-content px-6 lg:px-12">
         <div className="max-w-xl">
+          {/* 해커톤 심사 진입로 — 루트 주소로 들어온 사람이 바로 찾도록 맨 위에 둔다.
+              소개 페이지의 나머지는 그대로다(다른 대회가 이 주소를 본다). */}
+          <motion.a
+            href="#/ieum"
+            data-ieum-banner
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease }}
+            className="mb-5 flex items-center gap-3 rounded-2xl border-2 border-amber-400/60 bg-amber-400/10 px-4 py-3 backdrop-blur-sm transition-colors hover:bg-amber-400/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+          >
+            <span className="text-2xl" aria-hidden>📄</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-semibold tracking-wide text-amber-300">
+                Upstage AI Agent 해커톤 · 팀 이음
+              </span>
+              <span className="block text-base font-extrabold leading-snug text-white sm:text-lg">
+                서류를 수어로 보기 — 영수증·고지서·복약안내문
+              </span>
+            </span>
+            <span className="shrink-0 text-xl font-bold text-amber-300" aria-hidden>→</span>
+          </motion.a>
+
           <motion.span
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -131,7 +153,8 @@ export default function Hero() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 1, duration: 0.8 }}
-        className="absolute bottom-8 left-1/2 z-10 -translate-x-1/2"
+        // 좁은 화면에서는 숨긴다 — 맨 위 배너만큼 본문이 길어져 수치 줄과 겹쳤다(375px 실측 사진).
+        className="absolute bottom-8 left-1/2 z-10 hidden -translate-x-1/2 sm:block"
       >
         <div className="flex flex-col items-center gap-2 text-slate-500">
           <span className="text-[10px] uppercase tracking-[0.3em]">Scroll</span>
